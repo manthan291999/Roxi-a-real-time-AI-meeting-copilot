@@ -1,0 +1,19 @@
+{
+  "name": "gateway",
+  "version": "1.0.0",
+  "description": "",
+  "main": "pcm-consumer.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@speechmatics/auth": "^0.1.0",
+    "@speechmatics/real-time-client": "^8.5.1",
+    "assemblyai": "^4.6.0",
+    "better-sqlite3": "^13.0.3",
+    "dotenv": "^16.4.5"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true
+  }
+}
