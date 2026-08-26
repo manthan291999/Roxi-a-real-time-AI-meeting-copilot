@@ -20,6 +20,7 @@ const STATES = { CLOSED: 'closed', DEGRADED: 'degraded', OPEN: 'open' };
 const MODES = { FULL: 'full', DEGRADED: 'degraded', MINIMAL: 'minimal', PROBE: 'probe' };
 
 const AGENT_TIERS = {
+  transcript_cleaner: 'core',
   context_manager: 'core',
   explanation: 'standard',
   technical: 'standard',
@@ -35,11 +36,11 @@ function envInt(name, fallback) {
 
 class CircuitBreaker {
   constructor({ softLimit, hardLimit, probeCooldownMs } = {}) {
-    this.softLimit = softLimit != null ? softLimit : envInt('GROQ_BUDGET_SOFT', 180);
-    this.hardLimit = hardLimit != null ? hardLimit : envInt('GROQ_BUDGET_HARD', 200);
+    this.softLimit = softLimit != null ? softLimit : envInt('LLM_BUDGET_SOFT', 60);
+    this.hardLimit = hardLimit != null ? hardLimit : envInt('LLM_BUDGET_HARD', 80);
     this.probeCooldownMs = probeCooldownMs != null
       ? probeCooldownMs
-      : envInt('GROQ_PROBE_COOLDOWN_MS', 15 * 60 * 1000);
+      : envInt('LLM_PROBE_COOLDOWN_MS', 15 * 60 * 1000);
     this.used = 0;
     this.nextProbeAt = 0;
   }

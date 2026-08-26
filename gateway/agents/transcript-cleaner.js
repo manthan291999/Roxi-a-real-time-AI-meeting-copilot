@@ -1,49 +1,50 @@
-const { callGroq } = require('../llm/groq-client');
-const { AGENT_CONFIG } = require('../config/agent-config');
-const { log } = require('../infrastructure/logger');
+const { callLLM } = require('../llm/openai-client.js');
+const { AGENT_CONFIG } = require('../config/agent-config.js');
+const { log } = require('../infrastructure/logger.js');
 
-/**
- * @implements {import('../interfaces/ITranscriptCleaner')}
- */
 class TranscriptCleaner {
   constructor() {
     this.config = AGENT_CONFIG.transcript_cleaner;
   }
 
-  /**
-   * @param {string} text 
-   * @returns {Promise<{action: 'keep'|'drop'|'translate', text: string, reason?: string}>}
-   */
   async clean(text) {
-    const prompt = `You are an AI transcript cleaner.
-Your job is to evaluate the following STT transcript chunk and determine if it is a hallucination/noise, non-English, or clean English.
+    const messages = [
+      { role: 'system', content: `You are an AI transcript cleaner operating within a real-time STT pipeline.` },
+      { role: 'user', content: `## Objective
+Evaluate the following STT transcript chunk to determine if it is a hallucination/noise,
+non-English, or clean English.
 
-Rules:
-1. If it's obvious hallucination (e.g., "Thanks for watching!", "Please subscribe", subtitle credits, weird repeated noises like "Um um um um"): output DROP.
+## Input
+Transcript chunk: "${text}"
+
+## Rules
+1. If it's an obvious hallucination (e.g., "Thanks for watching!", "Please subscribe", subtitle credits, weird repeated noises like "Um um um um"): output DROP.
 2. If it is mostly non-English text: output TRANSLATE and provide the English translation.
 3. If it is valid, normal English meeting speech: output KEEP and provide the exact original text.
 
-Format your response exactly as JSON:
+## Output Format
+Return strictly valid JSON matching this schema exactly:
 {
   "action": "keep" | "drop" | "translate",
   "text": "The final english text (empty if dropped)",
   "reason": "Brief reason for your decision"
 }
 
-Transcript chunk:
-"${text}"
-`;
+## Safety / Validation
+Before outputting, verify:
+1. The JSON is perfectly valid.
+2. You only DROP if it is clearly garbage or STT hallucination.` }
+    ];
 
     try {
-      const result = await callGroq({
-        model: this.config.model,
-        messages: [{ role: 'user', content: prompt }],
-        jsonMode: true,
-        timeoutMs: this.config.timeoutMs
+      const result = await callLLM({
+        messages,
+        expectJson: true,
+        tag: 'transcript_cleaner',
+        ...this.config
       });
 
       if (!result || !result.data) {
-        // Fallback to keep if LLM fails
         return { action: 'keep', text, reason: 'llm_fallback' };
       }
 

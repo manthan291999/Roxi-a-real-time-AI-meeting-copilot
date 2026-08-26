@@ -50,6 +50,10 @@ function emitBilling(snapshot) {
   emit('Billing', { items: { snapshot } });
 }
 
+function emitCostAnomaly(rule, label, value, threshold) {
+  emit('CostAnomaly', { rule, label, value, threshold });
+}
+
 function emitProviderStatus(provider, state) {
   emit('ProviderStatus', { provider, state });
 }
@@ -88,4 +92,5 @@ module.exports = {
   emitApiHealth,
   emitError,
   emitSpeakerRevision,
+  emitCostAnomaly,
 };

@@ -11,7 +11,8 @@
     "@speechmatics/real-time-client": "^8.5.1",
     "assemblyai": "^4.6.0",
     "better-sqlite3": "^13.0.3",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "openai": "^4.0.0"
   },
   "allowScripts": {
     "better-sqlite3@13.0.3": true

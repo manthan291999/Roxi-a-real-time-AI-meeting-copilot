@@ -31,7 +31,8 @@ function getSpeakerStats() {
 }
 
 function getTopSpeakers(speakerStats, limit = 5) {
-  return Object.values(speakerStats)
+  return speakerStats
+    .slice()
     .sort((a, b) => b.chunkCount - a.chunkCount)
     .slice(0, limit);
 }

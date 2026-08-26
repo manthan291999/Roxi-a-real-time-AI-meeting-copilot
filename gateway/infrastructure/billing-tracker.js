@@ -8,12 +8,15 @@
 // Prices per 1,000,000 tokens (USD)
 // Based on Groq pricing 2025
 const MODEL_PRICES = {
+  'gpt-5.6-luna': { input: 0.15, output: 0.60 },
   'openai/gpt-oss-20b': { input: 0.20, output: 0.60 },
   'openai/gpt-oss-120b': { input: 0.90, output: 0.90 },
   'llama-3.3-70b-versatile': { input: 0.59, output: 0.79 },
   'gemma2-9b-it': { input: 0.20, output: 0.20 },
   'default': { input: 0.50, output: 0.50 }, // fallback
 };
+
+const costAnomalyDetector = require('./cost-anomaly-detector.js');
 
 const billingState = {
   session_total_usd: 0,
@@ -53,6 +56,8 @@ function recordCall(agentName, model, usage) {
   billingState.session_completion_tokens += completionTokens;
   billingState.session_total_usd += cost;
   billingState.calls_made += 1;
+
+  costAnomalyDetector.record(cost, promptTokens + completionTokens);
 
   // Update per-agent stats
   if (!billingState.per_agent[agentName]) {

@@ -16,6 +16,7 @@ class SemanticBuffer {
     this.flushChain = Promise.resolve();
     this.flushActive = false;
     this.flushAgain = false;
+    this.draining = false;
   }
 
   totalWordCount() {
@@ -55,6 +56,7 @@ class SemanticBuffer {
   }
 
   onTranscriptReceived() {
+    if (this.draining) return;
     const words = this.totalWordCount();
     if (words > FLUSH_WORD_THRESHOLD || Date.now() - this.lastFlushTime > FLUSH_WALL_MS) {
       if (this.flushTimer) { clearTimeout(this.flushTimer); this.flushTimer = null; }
@@ -99,6 +101,7 @@ class SemanticBuffer {
   }
 
   async drain() {
+    this.draining = true;
     if (this.flushTimer) { clearTimeout(this.flushTimer); this.flushTimer = null; }
     await this.flushChain;
     await this.flushNow('shutdown');

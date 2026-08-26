@@ -6,13 +6,11 @@ const { AssemblyAIProvider } = require('./providers/assemblyai.js');
 const { SpeechmaticsProvider } = require('./providers/speechmatics.js');
 const { validateTranscriptEvent } = require('./infrastructure/validate.js');
 const { log } = require('./infrastructure/logger.js');
-const { getPool } = require('./llm/groq-key-pool.js');
-const { DiarizationLayer } = require('./stt/diarization-layer.js');
 const { SemanticBuffer } = require('./audio/semantic-buffer.js');
+const { DiarizationLayer } = require('./stt/diarization-layer.js');
 const { PcmDeframer } = require('./audio/pcm-deframer.js');
 const { shutdown } = require('./lifecycle/shutdown.js');
 const sanitizer = require('./stt/transcript-sanitizer.js');
-const { discovery } = require('./llm/model-discovery.js');
 const { AGENT_CONFIG } = require('./config/agent-config.js');
 
 const { runChunk } = require('./pipeline/chunk-runner.js');
@@ -27,10 +25,9 @@ if (ctxIdx !== -1 && process.argv[ctxIdx + 1]) {
 
 const assemblyaiKey  = process.env.ASSEMBLYAI_API_KEY;
 const speechmaticsKey = process.env.SPEECHMATICS_API_KEY;
-const groqKey = process.env.GROQ_API_KEY_1 || process.env.GROQ_API_KEY;
 
 const missing = [];
-if (!groqKey) missing.push('GROQ_API_KEY_1 (or GROQ_API_KEY)');
+if (!process.env.OPENAI_API_KEY) missing.push('OPENAI_API_KEY');
 if (!assemblyaiKey && !speechmaticsKey) {
   missing.push('ASSEMBLYAI_API_KEY or SPEECHMATICS_API_KEY');
 }
@@ -39,13 +36,7 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-const keyPool = getPool();
 let diarization = null;
-
-const healthInterval = setInterval(() => {
-  const snap = keyPool.getHealthSnapshot();
-  console.log(JSON.stringify({ type: 'ApiHealth', keys: snap }));
-}, 30_000).unref();
 
 const semanticBuffer = new SemanticBuffer(runChunk);
 
@@ -118,10 +109,6 @@ async function start() {
   try {
     await db.initDB(meetingContext);
     diarization = new DiarizationLayer(db);
-    
-    // Discover and apply dynamic Groq models
-    await discovery.discover();
-    discovery.applyToConfig(AGENT_CONFIG);
   } catch (err) {
     console.log(JSON.stringify({ type: 'Error', message: `Database init failed: ${err.message}` }));
     log('error', 'sidecar', 'db_init_failed', { message: (err.message || '').slice(0, 300) });

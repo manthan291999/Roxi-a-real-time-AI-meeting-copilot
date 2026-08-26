@@ -1,7 +1,7 @@
 const { createCircuitBreaker, MODES } = require('../infrastructure/circuit-breaker.js');
 const { validateChunkInput } = require('../infrastructure/validate.js');
 const { log, metrics, textPreview } = require('../infrastructure/logger.js');
-const { callGroq } = require('../llm/groq-client.js');
+const { callLLM } = require('../llm/openai-client.js');
 
 const {
   meetingState,
@@ -37,44 +37,87 @@ const breaker = createCircuitBreaker();
 async function generateMeetingSummary() {
   const started = Date.now();
   const messages = [
-    { role: 'system', content: `You are a Senior Consultant at McKinsey & Company.
-Generate a polished, executive-level meeting summary suitable for sharing with
-C-suite stakeholders. Be concise, structured, and action-oriented.` },
-    { role: 'user', content: `Generate a comprehensive meeting summary.
+    { role: 'system', content: `You are a Senior Management Consultant at a Big 4 advisory firm, specializing in
+enterprise technology programs. You produce executive-level meeting summaries that
+are immediately actionable for C-suite and VP-level stakeholders — clear, structured,
+evidence-based, and decision-ready.` },
+    { role: 'user', content: `## Objective
+Generate a polished, structured meeting summary from the complete conversation
+history, extracted artifacts, and detected risks — suitable for distribution to
+executive stakeholders who were not in the meeting.
 
-[MEETING TOPIC]: ${meetingState.current_topic}
+## Input
+[MEETING TOPIC]
+${meetingState.current_topic}
+
+[MEETING BRIEFING]
 ${buildMeetingContextBlock()}
 
-[FULL CONVERSATION HISTORY — last ${meetingState.recent_chunks.length} exchanges]:
+[FULL CONVERSATION — last ${meetingState.recent_chunks.length} exchanges]
 ${buildRecentConversationBlock()}
 
-[SPEAKER PROFILES]:
+[SPEAKER PROFILES]
 ${buildSpeakerProfilesBlock()}
 
-[KNOWN TERMS]:
+[DETECTED RISKS]
+${meetingState.risks.map((r) => `[${(r.severity || 'unknown').toUpperCase()}] ${r.category || 'GENERAL'}: ${r.text}`).join('\n') || 'None identified.'}
+
+[KNOWN TERMINOLOGY]
 ${buildGlossaryBlock()}
 
-[DETECTED RISKS]:
-${meetingState.risks.map((r) => `[${(r.severity || 'unknown').toUpperCase()}] ${r.category || 'GENERAL'}: ${r.text}`).join('\n') || 'None detected.'}
+## Rules
+- Only include decisions, actions, and risks that are evidenced in the conversation.
+- Do not editorialize or add recommendations beyond what was discussed.
+- Use plain business English — avoid engineering jargon in the executive section.
+- Action items must include the assignee and deadline if they were stated.
+- Every section must be present even if empty (use "None identified" for empty sections).
 
-Generate a summary with these sections:
-1. Meeting Overview (1-2 sentences)
-2. Key Discussion Points (bullet points)
-3. Decisions Made (bullet points, with who decided if known)
-4. Action Items (with assignees and deadlines if mentioned)
-5. Risks & Concerns (if any)
-6. Recommended Next Steps
+## Output Format
+Return as plain text with markdown headings in exactly this structure:
 
-Output as plain text with markdown headings.` },
+# Meeting Summary
+
+## 1. Meeting Overview
+[1-2 sentences: who met, main purpose, outcome]
+
+## 2. Key Discussion Points
+- [Bullet per major topic discussed]
+
+## 3. Decisions Made
+- [Decision — Owner if stated]
+- None identified (if empty)
+
+## 4. Action Items
+- [Task — Assignee — Deadline]
+- None identified (if empty)
+
+## 5. Risks & Concerns
+- [SEVERITY] CATEGORY: Description
+- None identified (if empty)
+
+## 6. Recommended Next Steps
+- [Concrete next step based on meeting outcomes]
+
+## Edge Cases
+- Very short meeting (< 5 chunks) → write a briefer summary, still using all 6 sections.
+- No decisions made → state "None identified" in section 3.
+- Meeting was exploratory/discussion-only → note that in section 1.
+
+## Safety / Validation
+Before outputting, verify:
+1. Every decision listed was explicitly agreed upon in the transcript.
+2. Every action item has a textual basis — no invented tasks.
+3. The overview accurately reflects what the meeting was about.
+4. Markdown is well-formed and all 6 sections are present.` },
   ];
 
   try {
-    const { data, latencyMs, attempts } = await callGroq({
+    const { data, latencyMs, attempts } = await callLLM({
       messages,
       expectJson: false,
       timeoutMs: 30000,
+      maxTokens: 1024,
       retries: 2,
-      model: AGENT_CONFIG.analyst.model,
       tag: 'summary',
     });
     log('info', 'agent', 'summary_ok', { latencyMs, attempts });
@@ -104,6 +147,8 @@ async function analyseChunk(chunkText, speaker = 'Speaker') {
     degraded: false,
     errors: [],
     api_calls_used: 0,
+    prompt_tokens: 0,
+    completion_tokens: 0,
     breaker: breaker.snapshot(),
   };
 
@@ -138,6 +183,10 @@ async function analyseChunk(chunkText, speaker = 'Speaker') {
     output.chunk_significance = 'medium'; // Triggers UI rendering
 
     const cmRes = await runAgent(contextManagerAgent, text, speakerLabel, mode, calls, breaker);
+    if (cmRes.usage) {
+      output.prompt_tokens += cmRes.usage.prompt_tokens || 0;
+      output.completion_tokens += cmRes.usage.completion_tokens || 0;
+    }
     let newTerms = {};
 
     if (cmRes.ok) {
@@ -169,6 +218,13 @@ async function analyseChunk(chunkText, speaker = 'Speaker') {
       runAgent(riskDetectorAgent, text, speakerLabel, mode, calls, breaker),
       runAgent(responseAgent, text, speakerLabel, mode, calls, breaker),
     ]);
+    
+    for (const res of [explRes, techRes, analystRes, riskRes, respRes]) {
+      if (res.usage) {
+        output.prompt_tokens += res.usage.prompt_tokens || 0;
+        output.completion_tokens += res.usage.completion_tokens || 0;
+      }
+    }
 
     if (explRes.ok) {
       output.current_explanation = explRes.data || null;
