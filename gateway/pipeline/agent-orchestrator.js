@@ -211,32 +211,45 @@ async function analyseChunk(chunkText, speaker = 'Speaker') {
       return output;
     }
 
-    const [explRes, techRes, analystRes, riskRes, respRes] = await Promise.all([
+    const [explRes, techRes, analystRes, riskRes] = await Promise.all([
       runAgent(explanationAgent, text, speakerLabel, mode, calls, breaker),
       runAgent(technicalAgent, text, speakerLabel, mode, calls, breaker),
       runAgent(meetingAnalystAgent, text, speakerLabel, mode, calls, breaker),
       runAgent(riskDetectorAgent, text, speakerLabel, mode, calls, breaker),
-      runAgent(responseAgent, text, speakerLabel, mode, calls, breaker),
     ]);
     
-    for (const res of [explRes, techRes, analystRes, riskRes, respRes]) {
-      if (res.usage) {
-        output.prompt_tokens += res.usage.prompt_tokens || 0;
-        output.completion_tokens += res.usage.completion_tokens || 0;
-      }
+    // Sanitize function to handle stray quotes and NONE tags
+    function sanitizeTextOutput(text) {
+      if (typeof text !== 'string') return null;
+      let cleaned = text.replace(/^["'=]+|["'=]+$/g, '').trim();
+      if (!cleaned || cleaned.toUpperCase() === '[NONE]' || cleaned.toUpperCase() === '[NON_TECHNICAL]') return null;
+      return cleaned;
     }
 
     if (explRes.ok) {
-      output.current_explanation = explRes.data || null;
+      output.current_explanation = sanitizeTextOutput(explRes.data) || null;
     } else if (!explRes.skipped) {
       output.errors.push(explRes.error);
     }
 
     if (techRes.ok) {
-      const techText = typeof techRes.data === 'string' ? techRes.data.trim() : '';
-      output.technical_explanation = techText && techText !== '[NON_TECHNICAL]' ? techText : null;
+      output.technical_explanation = sanitizeTextOutput(techRes.data) || null;
     } else if (!techRes.skipped) {
       output.errors.push(techRes.error);
+    }
+    
+    const extraContext = {
+      explanation: output.current_explanation,
+      technical: output.technical_explanation
+    };
+    
+    const respRes = await runAgent(responseAgent, text, speakerLabel, mode, calls, breaker, extraContext);
+
+    for (const res of [explRes, techRes, analystRes, riskRes, respRes]) {
+      if (res.usage) {
+        output.prompt_tokens += res.usage.prompt_tokens || 0;
+        output.completion_tokens += res.usage.completion_tokens || 0;
+      }
     }
 
     if (analystRes.ok) {
@@ -256,12 +269,30 @@ async function analyseChunk(chunkText, speaker = 'Speaker') {
     }
 
     if (respRes.ok) {
-      const reply = typeof respRes.data === 'string' ? respRes.data : '';
-      if (reply.trim()) {
-        const isDuplicate = hasDuplicateSuggestion(reply);
-        if (!isDuplicate) {
-          addSuggestion(reply);
-          output.suggested_response = reply;
+      const raw = typeof respRes.data === 'string' ? respRes.data.trim() : '';
+      if (raw) {
+        // Parse the intent tag
+        let replyType = 'reply';  // default
+        let replyText = sanitizeTextOutput(raw) || '';
+
+        if (replyText.startsWith('[ANSWER]')) {
+          replyType = 'answer';
+          replyText = replyText.replace('[ANSWER]', '').trim();
+        } else if (replyText.startsWith('[QUESTION]')) {
+          replyType = 'question';
+          replyText = replyText.replace('[QUESTION]', '').trim();
+        } else if (replyText.startsWith('[DECISION]')) {
+          replyType = 'decision';
+          replyText = replyText.replace('[DECISION]', '').trim();
+        }
+
+        if (replyText) {
+          const isDuplicate = hasDuplicateSuggestion(replyText);
+          if (!isDuplicate) {
+            addSuggestion(replyText);
+            output.suggested_response = replyText;
+            output.suggested_response_type = replyType;
+          }
         }
       }
     } else if (!respRes.skipped) {

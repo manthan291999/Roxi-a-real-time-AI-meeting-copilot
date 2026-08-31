@@ -7,7 +7,7 @@ const AGENT_CONFIG = {
   technical:          { timeoutMs: 20000, retries: 1, maxTokens: 400, tier: 'standard' },
   analyst:            { timeoutMs: 20000, retries: 1, maxTokens: 512, tier: 'deep' },
   risk:               { timeoutMs: 20000, retries: 1, maxTokens: 400, tier: 'deep' },
-  response:           { timeoutMs: 15000, retries: 1, maxTokens: 150, tier: 'standard' },
+  response:           { timeoutMs: 15000, retries: 1, maxTokens: 300, tier: 'standard' },
 };
 
 module.exports = {

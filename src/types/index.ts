@@ -12,7 +12,14 @@ export interface TxLine {
 
 export interface SCard { id: string; text: string; sig: Significance; time: string; speaker: string; speakerIdx: number }
 export interface TCard { id: string; text: string; sig: Significance; time: string; speaker: string; speakerIdx: number }
-export interface RCard { id: string; text: string; type?: 'reply' | 'decision' | 'action'; assignee?: string; speaker?: string; speakerIdx?: number }
+export interface RCard {
+  id: string
+  text: string
+  type?: 'reply' | 'answer' | 'question' | 'decision' | 'action'
+  assignee?: string
+  speaker?: string
+  speakerIdx?: number
+}
 
 export interface DbMeeting {
   id: number

@@ -1,0 +1,176 @@
+{
+  "meta": {
+    "title": "LLM & API Call Map",
+    "authoredFrom": "Manual codebase audit of gateway/ and chatbot/ (see dashboard/README.md)",
+    "lastUpdated": "2026-08-28",
+    "notes": "Every LLM call in this project funnels through one of the choke points below, so per-request recording needs exactly one hook per subsystem. The capture pipeline fires up to 6 LLM calls per transcript chunk (context_manager first, then explanation/technical/analyst/risk in parallel, then response) plus one summary call at meeting end. The chatbot fires 1-4 calls per question depending on the RAG path taken."
+  },
+  "llm": {
+    "provider": "OpenAI-compatible (official openai SDK)",
+    "endpoint": "https://api.openai.com/v1/chat/completions",
+    "defaultModel": "gpt-5.6-luna",
+    "modelNote": "gpt-5.6-luna is locked in the gateway (no override) and rejects temperature overrides, so neither client sends temperature. Token cap goes through max_completion_tokens.",
+    "chokePoints": [
+      {
+        "source": "gateway",
+        "file": "gateway/llm/openai-client.js",
+        "function": "callLLM()",
+        "recordedBy": "gateway/infrastructure/usage-store.js",
+        "description": "Single choke point for ALL capture-pipeline LLM calls. Retries 429/5xx/timeouts with exponential backoff, emits llm_latency_ms metrics. Every success and final failure is persisted to llm_usage.db."
+      },
+      {
+        "source": "chatbot",
+        "file": "chatbot/src/infrastructure/llm/OpenAiLlmGateway.js",
+        "function": "OpenAiLlmGateway.complete()",
+        "recordedBy": "chatbot/src/infrastructure/usage/UsageRecorder.js",
+        "description": "PRIMARY chatbot adapter (CHATBOT_LLM_ADAPTER=openai, the default). Budget gating via CallCountBudgetGuard, 2 retries, lenient JSON parsing. Reads completion.usage and persists every call."
+      },
+      {
+        "source": "chatbot",
+        "file": "chatbot/src/infrastructure/llm/LangchainLlmGateway.js",
+        "function": "LangchainLlmGateway.complete()",
+        "recordedBy": "chatbot/src/infrastructure/usage/UsageRecorder.js",
+        "description": "ALTERNATIVE adapter (CHATBOT_LLM_ADAPTER=langchain) using LangChain ChatOpenAI. Token usage is extracted from response_metadata/usage_metadata and persisted."
+      }
+    ],
+    "callSites": [
+      {
+        "source": "gateway",
+        "tag": "context_manager",
+        "file": "gateway/agents/context-manager.js",
+        "invokedBy": "gateway/pipeline/agent-orchestrator.js → analyseChunk() (sequential, runs first)",
+        "purpose": "Tracks the live meeting topic, maintains a rolling summary, extracts glossary terms and grades chunk significance (none|low|medium|high). Its output gates the other agents.",
+        "expectJson": true,
+        "config": { "timeoutMs": 8000, "retries": 1, "maxTokens": 400, "tier": "core" }
+      },
+      {
+        "source": "gateway",
+        "tag": "explanation",
+        "file": "gateway/agents/explanation.js",
+        "invokedBy": "gateway/pipeline/agent-orchestrator.js → analyseChunk() (parallel fan-out)",
+        "purpose": "Plain-language breakdown of the chunk for non-technical listeners.",
+        "expectJson": false,
+        "config": { "timeoutMs": 10000, "retries": 1, "maxTokens": 300, "tier": "standard" }
+      },
+      {
+        "source": "gateway",
+        "tag": "technical",
+        "file": "gateway/agents/technical.js",
+        "invokedBy": "gateway/pipeline/agent-orchestrator.js → analyseChunk() (parallel fan-out)",
+        "purpose": "Detailed technical explanation of complex topics in the chunk.",
+        "expectJson": false,
+        "config": { "timeoutMs": 20000, "retries": 1, "maxTokens": 400, "tier": "standard" }
+      },
+      {
+        "source": "gateway",
+        "tag": "analyst",
+        "file": "gateway/agents/analyst.js",
+        "invokedBy": "gateway/pipeline/agent-orchestrator.js → analyseChunk() (parallel fan-out)",
+        "purpose": "Extracts concrete decisions and action items (assignee + deadline) as JSON.",
+        "expectJson": true,
+        "config": { "timeoutMs": 20000, "retries": 1, "maxTokens": 512, "tier": "deep" }
+      },
+      {
+        "source": "gateway",
+        "tag": "risk",
+        "file": "gateway/agents/risk-detector.js",
+        "invokedBy": "gateway/pipeline/agent-orchestrator.js → analyseChunk() (parallel fan-out)",
+        "purpose": "Detects risks, blockers and concerns with category + severity as JSON.",
+        "expectJson": true,
+        "config": { "timeoutMs": 20000, "retries": 1, "maxTokens": 400, "tier": "deep" }
+      },
+      {
+        "source": "gateway",
+        "tag": "response",
+        "file": "gateway/agents/response.js",
+        "invokedBy": "gateway/pipeline/agent-orchestrator.js → analyseChunk() (after explanation/technical)",
+        "purpose": "Formulates a contextual suggested reply with an intent tag ([ANSWER]/[QUESTION]/[DECISION]).",
+        "expectJson": false,
+        "config": { "timeoutMs": 15000, "retries": 1, "maxTokens": 300, "tier": "standard" }
+      },
+      {
+        "source": "gateway",
+        "tag": "transcript_cleaner",
+        "file": "gateway/agents/transcript-cleaner.js",
+        "invokedBy": "DISABLED — not wired into the pipeline (saves LLM calls)",
+        "purpose": "Would clean/normalize raw STT text before analysis. Currently dormant.",
+        "expectJson": true,
+        "config": { "timeoutMs": 2000, "retries": 0, "maxTokens": 256, "tier": "core" }
+      },
+      {
+        "source": "gateway",
+        "tag": "summary",
+        "file": "gateway/pipeline/agent-orchestrator.js",
+        "invokedBy": "generateMeetingSummary() at meeting end (gateway/lifecycle/shutdown.js), 12s deadline race vs fallback template",
+        "purpose": "Executive Big-4-style meeting summary (6 fixed markdown sections) from full history + artifacts + risks.",
+        "expectJson": false,
+        "config": { "timeoutMs": 30000, "retries": 2, "maxTokens": 1024, "tier": "end-of-meeting" }
+      },
+      {
+        "source": "chatbot",
+        "tag": "analyze_query",
+        "file": "chatbot/src/application/nodes/analyzeQueryNode.js",
+        "invokedBy": "LangGraph node 'analyze_query' (first node of every chat question)",
+        "purpose": "Converts the user question into safe FTS5 keywords and flags ambiguity. Degrades to naive keyword extraction if the LLM fails.",
+        "expectJson": true,
+        "config": { "timeoutMs": 30000, "retries": 2, "maxTokens": 400, "tier": "chat" }
+      },
+      {
+        "source": "chatbot",
+        "tag": "grade_documents",
+        "file": "chatbot/src/application/nodes/gradeDocumentsNode.js",
+        "invokedBy": "LangGraph node 'grade_documents' (after retrieve)",
+        "purpose": "Grades retrieved meeting snippets for relevance to the question (returns relevant indices).",
+        "expectJson": true,
+        "config": { "timeoutMs": 30000, "retries": 2, "maxTokens": 300, "tier": "chat" }
+      },
+      {
+        "source": "chatbot",
+        "tag": "rewrite_query",
+        "file": "chatbot/src/application/nodes/rewriteQueryNode.js",
+        "invokedBy": "LangGraph node 'rewrite_query' (corrective loop when grading finds nothing, max 2 rewrites)",
+        "purpose": "Rewrites the search keywords when the first retrieval attempt missed.",
+        "expectJson": true,
+        "config": { "timeoutMs": 30000, "retries": 2, "maxTokens": 300, "tier": "chat" }
+      },
+      {
+        "source": "chatbot",
+        "tag": "clarify",
+        "file": "chatbot/src/application/nodes/clarifyNode.js",
+        "invokedBy": "LangGraph conditional edge when the question is ambiguous",
+        "purpose": "Shows what was found and asks ONE clarifying question.",
+        "expectJson": true,
+        "config": { "timeoutMs": 30000, "retries": 2, "maxTokens": 500, "tier": "chat" }
+      },
+      {
+        "source": "chatbot",
+        "tag": "generate",
+        "file": "chatbot/src/application/nodes/generateNode.js",
+        "invokedBy": "LangGraph node 'generate' (grounded answer path)",
+        "purpose": "Generates the grounded answer with [M#] meeting citations from the graded evidence.",
+        "expectJson": true,
+        "config": { "timeoutMs": 30000, "retries": 2, "maxTokens": 1200, "tier": "chat" }
+      }
+    ]
+  },
+  "otherApis": [
+    {
+      "name": "AssemblyAI",
+      "kind": "Streaming speech-to-text (PRIMARY)",
+      "file": "gateway/providers/assemblyai.js",
+      "protocol": "WebSocket (assemblyai SDK, Universal-3.5-Pro streaming config)",
+      "auth": "ASSEMBLYAI_API_KEY",
+      "trackedHere": false,
+      "note": "Billed per audio minute, not per token — intentionally NOT recorded in llm_usage.db. Orchestrated by gateway/stt/provider-manager.js."
+    },
+    {
+      "name": "Speechmatics",
+      "kind": "Streaming speech-to-text (automatic FALLBACK)",
+      "file": "gateway/providers/speechmatics.js",
+      "protocol": "WebSocket (@speechmatics/real-time-client, wss://global.rt.speechmatics.com/v2/, short-lived JWT via @speechmatics/auth)",
+      "auth": "SPEECHMATICS_API_KEY",
+      "trackedHere": false,
+      "note": "Failover target when AssemblyAI errors; same normalized event contract. Also billed per audio minute."
+    }
+  ]
+}

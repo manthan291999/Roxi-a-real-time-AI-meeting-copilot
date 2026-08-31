@@ -1,6 +1,7 @@
 const db = require('../db/index.js');
 const { generateMeetingSummary } = require('../pipeline/agent-orchestrator.js');
 const { log } = require('../infrastructure/logger.js');
+const usageStore = require('../infrastructure/usage-store.js');
 
 const SUMMARY_DEADLINE_MS = 12000;
 
@@ -81,6 +82,8 @@ async function shutdown(reason, status, manager, semanticBuffer) {
   }
 
   try { await manager.close(); } catch (_) { }
+
+  usageStore.close(); // flush the LLM usage DB (best effort)
 
   log('info', 'sidecar', 'shutdown_complete', { reason });
   process.exit(status === 'ended' ? 0 : 1);

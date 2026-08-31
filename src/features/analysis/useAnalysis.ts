@@ -65,8 +65,8 @@ export function useAnalysis(lastActiveSpeakerRef: React.MutableRefObject<string 
     }).then(u => unsubs.push(u));
 
     eventBus.onSuggestedResponse(e => {
-      const { text, speaker } = e;
-      setReplies(prev => [...prev, { id: newId(), text, type: 'reply', speaker: speaker || 'System', speakerIdx: speakerRepo.resolveIndex(speaker || 'System') }]);
+      const { text, speaker, type } = e;
+      setReplies(prev => [...prev, { id: newId(), text, type: type || 'reply', speaker: speaker || 'System', speakerIdx: speakerRepo.resolveIndex(speaker || 'System') }]);
     }).then(u => unsubs.push(u));
 
     return () => {

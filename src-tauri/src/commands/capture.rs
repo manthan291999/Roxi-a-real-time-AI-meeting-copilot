@@ -8,9 +8,10 @@ pub async fn start_capture(
     app: AppHandle,
     capture_use_case: State<'_, Arc<CaptureUseCase>>,
     context: Option<String>,
+    role: Option<String>,
 ) -> Result<(), String> {
     let app_clone = app.clone();
-    capture_use_case.start(context, Box::new(move |text| {
+    capture_use_case.start(context, role, Box::new(move |text| {
         event_router::route_sidecar_event(&app_clone, &text);
     })).map_err(|e| e.to_string())
 }

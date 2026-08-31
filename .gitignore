@@ -38,6 +38,9 @@ src-tauri/gen/
 gateway/.env
 gateway/.env.*
 !gateway/.env.example
+chatbot/.env
+chatbot/.env.*
+!chatbot/.env.example
 
 # =============================================================================
 # Databases & Local Meeting Data

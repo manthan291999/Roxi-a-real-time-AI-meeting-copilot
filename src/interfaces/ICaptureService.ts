@@ -1,5 +1,5 @@
 export interface ICaptureService {
-  startCapture(context: string): Promise<void>;
+  startCapture(context: string, role?: string): Promise<void>;
   stopCapture(): Promise<void>;
   checkBlackHoleInstalled(): Promise<boolean>;
 }

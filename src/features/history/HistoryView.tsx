@@ -5,8 +5,8 @@ import { EmptySlate, SpeakerChip } from '../../components/Shared'
 import { SPEAKER_COLORS } from '../../constants'
 import { ServicesContext } from '../../context/ServicesContext'
 
-export function HistoryView({ onClose }: { onClose: () => void }) {
-  const { meetings, selected, details, loading, loadingDetails, selectMeeting } = useHistory()
+export function HistoryView({ onClose, initialMeetingId }: { onClose: () => void; initialMeetingId?: number | null }) {
+  const { meetings, selected, details, loading, loadingDetails, selectMeeting } = useHistory(initialMeetingId)
   const services = useContext(ServicesContext)
 
   const resolveSpeakerIdx = (speakerName: string) => {

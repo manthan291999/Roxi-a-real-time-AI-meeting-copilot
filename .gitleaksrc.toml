@@ -1,0 +1,26 @@
+title = "Roxi AI gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "assemblyai-key"
+description = "AssemblyAI API Key"
+regex = '''assemblyai[_-]?api[_-]?key\s*=\s*[a-f0-9]{32}'''
+tags = ["assemblyai"]
+
+[[rules]]
+id = "speechmatics-key"
+description = "Speechmatics API Key"
+regex = '''speechmatics[_-]?api[_-]?key\s*=\s*[A-Za-z0-9]{20,}'''
+tags = ["speechmatics"]
+
+[allowlist]
+  paths = [
+    ".env.example",
+    "gateway/.env.example",
+    "chatbot/.env.example",
+    "package-lock.json",
+    "gateway/package-lock.json",
+    "chatbot/package-lock.json"
+  ]

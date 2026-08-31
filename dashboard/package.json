@@ -1,0 +1,19 @@
+{
+  "name": "llm-usage-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Developer dashboard for LLM usage: per-request tokens, latency, cost, payloads, and the project's API call map.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node scripts/seed-demo.js",
+    "smoke": "node scripts/smoke-recorder.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "express": "^4.21.2"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true
+  }
+}

@@ -8,6 +8,13 @@ const MAX_PAST_SUGGESTIONS = 20;
 
 const meetingState = {
   user_context: '',
+  user_profile: {
+    role: 'Senior AI Engineer',
+    company: 'Google',
+    experience_years: 5,
+    expertise_level: 'expert',
+    technical_depth: 'high',
+  },
   current_topic: 'Unknown',
   conversation_summary: '',
   technical_terms: new Map(), // LRU: term -> definition (insertion order)
@@ -20,6 +27,15 @@ const meetingState = {
 function setMeetingContext(context) {
   meetingState.user_context = context || '';
   meetingState.current_topic = context || 'Unknown';
+}
+
+function setUserProfile(profile) {
+  if (!profile) return;
+  if (profile.role) meetingState.user_profile.role = profile.role;
+  if (profile.company) meetingState.user_profile.company = profile.company;
+  if (profile.experience_years) meetingState.user_profile.experience_years = profile.experience_years;
+  if (profile.expertise_level) meetingState.user_profile.expertise_level = profile.expertise_level;
+  if (profile.technical_depth) meetingState.user_profile.technical_depth = profile.technical_depth;
 }
 
 function getMeetingState() {
@@ -70,11 +86,19 @@ function addSuggestion(text) {
 }
 
 function hasDuplicateSuggestion(text) {
-  return exceedsSimilarityThreshold(meetingState.past_suggestions, text, 0.6);
+  const recentWindow = meetingState.past_suggestions.slice(-5);
+  return exceedsSimilarityThreshold(recentWindow, text, 0.82);
 }
 
 function reset() {
   meetingState.user_context = '';
+  meetingState.user_profile = {
+    role: 'Senior AI Engineer',
+    company: 'Google',
+    experience_years: 5,
+    expertise_level: 'expert',
+    technical_depth: 'high',
+  };
   meetingState.current_topic = 'Unknown';
   meetingState.conversation_summary = '';
   meetingState.technical_terms.clear();
@@ -88,6 +112,7 @@ module.exports = {
 
   meetingState,
   setMeetingContext,
+  setUserProfile,
   updateFromContextManager,
   addRecentChunk,
   mergeGlossary,

@@ -1,5 +1,5 @@
 use tauri::{AppHandle, Emitter};
-use super::events::{SidecarEvent, TranscriptPayload, ExplanationPayload};
+use super::events::{SidecarEvent, TranscriptPayload, ExplanationPayload, ResponsePayload};
 
 pub fn route_sidecar_event(app: &AppHandle, text: &str) {
     if let Ok(event) = serde_json::from_str::<SidecarEvent>(text) {
@@ -51,7 +51,7 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
             "Response" => {
                 if let Some(t) = event.text {
                     let s = event.speaker.unwrap_or_else(|| "Unknown".to_string());
-                    let _ = app.emit("suggested_response", ExplanationPayload { text: t, speaker: s });
+                    let _ = app.emit("suggested_response", ResponsePayload { text: t, speaker: s, reply_type: event.reply_type });
                 }
             }
             "CircuitBreaker" => {

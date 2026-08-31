@@ -20,6 +20,12 @@ export interface TextPayload {
   speaker: string;
 }
 
+export interface ResponsePayload {
+  text: string;
+  speaker: string;
+  type?: 'reply' | 'answer' | 'question' | 'decision';
+}
+
 export interface Decision {
   text: string;
   confidence: number;
@@ -62,7 +68,7 @@ export interface IEventBus {
   onChunkSignificance(handler: IEventHandler<string>): Promise<UnsubscribeFn>;
   onMeetingDecisions(handler: IEventHandler<Decision[]>): Promise<UnsubscribeFn>;
   onMeetingActionItems(handler: IEventHandler<ActionItem[]>): Promise<UnsubscribeFn>;
-  onSuggestedResponse(handler: IEventHandler<TextPayload>): Promise<UnsubscribeFn>;
+  onSuggestedResponse(handler: IEventHandler<ResponsePayload>): Promise<UnsubscribeFn>;
   onCircuitBreaker(handler: IEventHandler<any>): Promise<UnsubscribeFn>;
   onApiHealth(handler: IEventHandler<ApiHealthPayload>): Promise<UnsubscribeFn>;
   onCaptureError(handler: IEventHandler<string>): Promise<UnsubscribeFn>;

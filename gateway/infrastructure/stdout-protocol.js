@@ -38,8 +38,8 @@ function emitRisks(items) {
   emit('Risks', { items });
 }
 
-function emitSuggestedResponse(text, speaker) {
-  emit('Response', { text, speaker });
+function emitSuggestedResponse(text, speaker, reply_type) {
+  emit('Response', { text, speaker, reply_type });
 }
 
 function emitCircuitBreakerState(snapshot) {

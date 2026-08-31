@@ -67,6 +67,46 @@ export function RepliesPane({ cards }: { cards: RCard[] }) {
                     </div>
                   )
                 }
+                // ANSWER card — Green
+                if (c.type === 'answer') {
+                  const hasSpeaker = !!c.speaker;
+                  const idx = hasSpeaker ? c.speakerIdx! : 0;
+                  return (
+                    <div key={c.id} className="bg-emerald-50 rounded-lg border border-emerald-200 p-3 animate-slide-in-right relative group">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px]">✅</span>
+                          <span className="font-mono text-[9px] font-semibold uppercase tracking-widest text-emerald-600">Answer</span>
+                        </div>
+                        {hasSpeaker && <SpeakerChip name={c.speaker!} idx={idx} />}
+                      </div>
+                      <p className="text-[13px] text-gray-700 leading-relaxed">{c.text}</p>
+                      <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-emerald-50/90 rounded backdrop-blur-sm">
+                        <CopyButton text={c.text} />
+                      </div>
+                    </div>
+                  );
+                }
+                // QUESTION card — Blue
+                if (c.type === 'question') {
+                  const hasSpeaker = !!c.speaker;
+                  const idx = hasSpeaker ? c.speakerIdx! : 0;
+                  return (
+                    <div key={c.id} className="bg-blue-50 rounded-lg border border-blue-200 p-3 animate-slide-in-right relative group">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px]">❓</span>
+                          <span className="font-mono text-[9px] font-semibold uppercase tracking-widest text-blue-600">Question</span>
+                        </div>
+                        {hasSpeaker && <SpeakerChip name={c.speaker!} idx={idx} />}
+                      </div>
+                      <p className="text-[13px] text-gray-700 leading-relaxed">{c.text}</p>
+                      <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-50/90 rounded backdrop-blur-sm">
+                        <CopyButton text={c.text} />
+                      </div>
+                    </div>
+                  );
+                }
                 // default: reply
                 const hasSpeaker = !!c.speaker;
                 const idx = hasSpeaker ? c.speakerIdx! : 0;

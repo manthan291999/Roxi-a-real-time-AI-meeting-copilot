@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLM Usage Dashboard — Meeting Interpreter</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <div>
+        <h1>LLM Usage Dashboard</h1>
+        <p class="sub">Meeting Interpreter · per-request tokens, latency, cost &amp; prompts</p>
+      </div>
+    </div>
+    <nav class="tabs">
+      <a href="#/overview" data-tab="overview">📊 Overview</a>
+      <a href="#/requests" data-tab="requests">📋 Requests</a>
+      <a href="#/detail" data-tab="detail">🔎 Request Detail</a>
+      <a href="#/codemap" data-tab="codemap">🗺️ API Call Map</a>
+    </nav>
+    <div class="topbar-actions">
+      <span id="db-status" class="db-status">checking…</span>
+      <button id="refresh-btn" title="Reload current tab">⟳ Refresh</button>
+    </div>
+  </header>
+
+  <main id="view" class="view">
+    <div class="loading">Loading…</div>
+  </main>
+
+  <footer class="foot">
+    Data: <code>gateway/llm_usage.db</code> (written by gateway + chatbot, opened read-only here) ·
+    privacy: <code>LLM_TRACK_PAYLOADS=0</code> disables prompt storage
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

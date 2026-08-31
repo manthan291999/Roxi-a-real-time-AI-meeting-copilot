@@ -84,6 +84,7 @@ export function TopBar({
   onStopCapture,
   onShowHistory,
   onShowRename,
+  onShowChat,
   apiKeys = [],
   billing,
 }: {
@@ -93,6 +94,7 @@ export function TopBar({
   onStopCapture: () => void
   onShowHistory: () => void
   onShowRename: () => void
+  onShowChat: () => void
   apiKeys?: ApiKey[]
   billing?: any
 }) {
@@ -107,6 +109,18 @@ export function TopBar({
       <div className="flex items-center gap-2">
         {billing && <BillingBadge billing={billing} />}
         {apiKeys.length > 0 && <ApiHealthStrip keys={apiKeys} />}
+        <button
+          onClick={onShowChat}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors"
+          title="Ask Roxi about your meeting history"
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M13.5 8a5.5 5.5 0 0 1-5.5 5.5c-1 0-2-.27-2.83-.75L2.5 13.5l.75-2.67A5.5 5.5 0 1 1 13.5 8z" strokeLinejoin="round" />
+            <path d="M6.2 6.2a1.8 1.8 0 1 1 2.6 1.62c-.5.24-.8.6-.8 1.13v.05" strokeLinecap="round" />
+            <path d="M8 11.2h.01" strokeLinecap="round" strokeWidth="2" />
+          </svg>
+          Ask Roxi
+        </button>
         <button
           onClick={onShowHistory}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"

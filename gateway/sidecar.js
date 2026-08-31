@@ -1,5 +1,8 @@
-require('dotenv').config();
+// Load .env from the gateway/ folder regardless of cwd (Rust spawns node
+// with a different working directory, so we must use __dirname explicitly).
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const { setMeetingContext } = require('./pipeline/agent-orchestrator.js');
+const { setUserProfile } = require('./state/meeting-state.js');
 const db = require('./db/index.js');
 const { ProviderManager } = require('./stt/provider-manager.js');
 const { AssemblyAIProvider } = require('./providers/assemblyai.js');
@@ -21,6 +24,22 @@ if (ctxIdx !== -1 && process.argv[ctxIdx + 1]) {
   meetingContext = process.argv[ctxIdx + 1];
   setMeetingContext(meetingContext);
   log('info', 'sidecar', 'meeting_context_set', { preview: meetingContext.slice(0, 80) });
+}
+
+const ROLE_PROFILES = {
+  pm:         { role: 'Project Manager',      expertise_level: 'business', technical_depth: 'low',    experience_years: 5 },
+  tech_lead:  { role: 'Technical Lead',       expertise_level: 'expert',   technical_depth: 'high',   experience_years: 8 },
+  client:     { role: 'Client / Stakeholder', expertise_level: 'business', technical_depth: 'low',    experience_years: 3 },
+  designer:   { role: 'Designer',             expertise_level: 'medium',   technical_depth: 'medium', experience_years: 4 },
+  executive:  { role: 'Executive',            expertise_level: 'business', technical_depth: 'low',    experience_years: 10 },
+};
+
+const roleIdx = process.argv.indexOf('--role');
+if (roleIdx !== -1 && process.argv[roleIdx + 1]) {
+  const roleKey = process.argv[roleIdx + 1];
+  const profile = ROLE_PROFILES[roleKey] || ROLE_PROFILES['tech_lead'];
+  setUserProfile(profile);
+  log('info', 'sidecar', 'user_profile_set', { role: profile.role });
 }
 
 const assemblyaiKey  = process.env.ASSEMBLYAI_API_KEY;

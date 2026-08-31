@@ -21,7 +21,7 @@ function broadcastChunkEvents(result, speaker) {
     protocol.emitRisks(result.risks);
   }
   if (result.suggested_response) {
-    protocol.emitSuggestedResponse(result.suggested_response, speaker);
+    protocol.emitSuggestedResponse(result.suggested_response, speaker, result.suggested_response_type);
   }
   if (result.breaker && (result.breaker.state === 'degraded' || result.breaker.state === 'open')) {
     protocol.emitCircuitBreakerState(result.breaker);

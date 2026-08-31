@@ -20,13 +20,13 @@ impl CaptureUseCase {
         }
     }
 
-    pub fn start(&self, context: Option<String>, on_event: Box<dyn Fn(String) + Send + 'static>) -> Result<()> {
+    pub fn start(&self, context: Option<String>, role: Option<String>, on_event: Box<dyn Fn(String) + Send + 'static>) -> Result<()> {
         if self.gateway_client.is_running() {
             return Err(anyhow!("Capture session is already running"));
         }
 
         // 1. Start node sidecar
-        let writer = self.gateway_client.start_session(context, on_event)?;
+        let writer = self.gateway_client.start_session(context, role, on_event)?;
 
         // 2. Wrap it in a StreamingSink
         let sink = StreamingSink::new(writer);

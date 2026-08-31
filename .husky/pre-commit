@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "Pre-commit checks running..."
+
+# Block .env files
+if git diff --cached --name-only | grep -qE '\.env$|\.env\.local$'; then
+  echo "BLOCKED: Attempt to commit a .env file."
+  echo "Run: git restore --staged <file>"
+  exit 1
+fi
+
+# Block obvious API key patterns
+if git diff --cached | grep -qE '(ASSEMBLYAI_API_KEY\s*=\s*[a-f0-9]{20,}|SPEECHMATICS_API_KEY\s*=\s*\S{20,}|OPENAI_API_KEY\s*=\s*sk-\S+)'; then
+  echo "BLOCKED: Potential API key detected in staged changes."
+  echo "Review with: git diff --cached"
+  exit 1
+fi
+
+# TypeScript check
+npx tsc --noEmit || { echo "TypeScript errors found."; exit 1; }
+
+echo "Pre-commit checks passed."

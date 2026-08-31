@@ -8,7 +8,6 @@
 
 The project follows these rules:
 
-```text
 Presentation
     ↓
 Application

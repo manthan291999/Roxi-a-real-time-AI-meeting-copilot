@@ -1,0 +1,53 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+jobs:
+  build-macos:
+    name: Build macOS App
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: rust-release-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+
+      - run: npm ci
+      - run: npm ci
+        working-directory: gateway
+      - run: npm ci
+        working-directory: chatbot
+
+      - name: Run tests before shipping
+        run: npm test
+        working-directory: chatbot
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Roxi AI ${{ github.ref_name }}'
+          releaseBody: |
+            ## Installation
+            1. Download the `.dmg` file below
+            2. Install BlackHole 2ch audio driver (first time only)
+            3. Create `gateway/.env` from `gateway/.env.example`
+          releaseDraft: true
+          prerelease: false

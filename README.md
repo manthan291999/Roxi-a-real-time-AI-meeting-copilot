@@ -13,7 +13,7 @@
 
 **A high-performance, real-time desktop copilot that listens to your meetings, transcribes speech with ultra-low latency, and translates complex discussions into plain-language context, actionable decisions, and suggested replies.**
 
-[Features](#-key-features) • [Architecture](#-architecture) • [Tech Stack](#-tech-stack) • [Quick Start](#-quick-start) • [Configuration](#-configuration) • [Project Structure](#-project-structure) • [Audit](#-code-audit)
+[Features](#-key-features) • [Architecture](#-architecture) • [Tech Stack](#-tech-stack) • [Quick Start](#-quick-start) • [Configuration](#-configuration) • [Project Structure](#-project-structure) • [LLM Usage Dashboard](#-developer-llm-usage-dashboard) • [Audit](#-code-audit)
 
 </div>
 
@@ -347,6 +347,28 @@ CREATE TABLE speaker_profiles (...);
 CREATE TABLE speaker_names (...);
 CREATE TABLE speaker_embeddings (...);
 ```
+
+---
+
+## 📊 Developer LLM Usage Dashboard
+
+Every LLM request made by the capture pipeline and the chatbot is persisted
+(tokens, latency, cost, errors, and the actual prompts) into
+`gateway/llm_usage.db`. A standalone dashboard lets any developer inspect it:
+
+```bash
+cd dashboard
+npm install
+npm run seed    # optional demo data
+npm start       # → http://localhost:3300
+```
+
+Four tabs: **Overview** (totals, tokens/cost over time, per-agent rollup),
+**Requests** (filterable per-request table), **Request Detail** (exact prompt
+sent, params, response preview, and which file/function made the call), and
+**API Call Map** (every LLM call site in the codebase + STT providers).
+See [`dashboard/README.md`](dashboard/README.md) for the data dictionary and
+privacy toggles (`LLM_TRACK_PAYLOADS=0` disables prompt storage).
 
 ---
 

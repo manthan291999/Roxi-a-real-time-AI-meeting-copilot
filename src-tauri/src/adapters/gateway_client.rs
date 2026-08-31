@@ -21,6 +21,7 @@ impl GatewayClient for NodeGatewayClient {
     fn start_session(
         &self,
         context: Option<String>,
+        role: Option<String>,
         on_event: Box<dyn Fn(String) + Send + 'static>,
     ) -> Result<Box<dyn Write + Send>> {
         let mut sidecar_lock = self.sidecar.lock().unwrap();
@@ -37,6 +38,12 @@ impl GatewayClient for NodeGatewayClient {
         if let Some(ctx) = context {
             if !ctx.trim().is_empty() {
                 cmd.arg("--context").arg(ctx);
+            }
+        }
+        
+        if let Some(r) = role {
+            if !r.trim().is_empty() {
+                cmd.arg("--role").arg(r);
             }
         }
 

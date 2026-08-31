@@ -1,0 +1,7 @@
+# Chatbot-owned data (FTS index DBs, WAL/SHM sidecars)
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# Local env overrides (never commit keys)
+.env

@@ -7,7 +7,14 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "dashboard": "npm --prefix dashboard start",
+    "dashboard:seed": "npm --prefix dashboard run seed",
+    "test": "npm --prefix chatbot test",
+    "test:all": "npm run test && npm --prefix gateway test",
+    "lint": "tsc --noEmit",
+    "audit:all": "npm audit && npm --prefix gateway audit && npm --prefix chatbot audit",
+    "prepare": "husky"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
@@ -23,6 +30,8 @@
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.5.4",
+    "eslint": "^8.57.1",
+    "husky": "^9.1.7",
     "tailwindcss": "^3.4.19",
     "typescript": "~5.6.2",
     "vite": "^6.0.3"

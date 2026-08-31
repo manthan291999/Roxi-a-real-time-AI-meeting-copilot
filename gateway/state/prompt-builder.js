@@ -43,9 +43,23 @@ function buildSpeakerProfilesBlock() {
   return lines.join('\n');
 }
 
+function buildUserProfileBlock() {
+  const p = meetingState.user_profile;
+  if (!p || !p.role) return '';
+  return `
+[USER PROFILE — Use this to calibrate your reply]
+Role: ${p.role}
+Expertise Level: ${p.expertise_level}
+Technical Depth: ${p.technical_depth}
+→ If technical_depth is "high": use precise technical terms, technical follow-ups are encouraged
+→ If technical_depth is "low" or "medium": plain business language, avoid jargon
+`;
+}
+
 module.exports = {
   buildMeetingContextBlock,
   buildRecentConversationBlock,
   buildGlossaryBlock,
   buildSpeakerProfilesBlock,
+  buildUserProfileBlock,
 };

@@ -11,7 +11,7 @@ export function useCaptureSession(
   const [isCapturing, setIsCapturing] = useState(false)
   const services = useContext(ServicesContext)
 
-  const handleStartCapture = useCallback(async (ctx: string) => {
+  const handleStartCapture = useCallback(async (ctx: string, role: string = 'tech_lead') => {
     try {
       resetSpeakers()
       setPartialId(null)
@@ -19,7 +19,7 @@ export function useCaptureSession(
       setStatus('connecting')
       setIsCapturing(true)
 
-      await services?.captureService.startCapture(ctx)
+      await services?.captureService.startCapture(ctx, role)
     } catch (err) {
       console.error('Failed to start capture:', err)
       setStatus('unavailable')

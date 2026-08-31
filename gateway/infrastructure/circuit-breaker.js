@@ -36,8 +36,8 @@ function envInt(name, fallback) {
 
 class CircuitBreaker {
   constructor({ softLimit, hardLimit, probeCooldownMs } = {}) {
-    this.softLimit = softLimit != null ? softLimit : envInt('LLM_BUDGET_SOFT', 60);
-    this.hardLimit = hardLimit != null ? hardLimit : envInt('LLM_BUDGET_HARD', 80);
+    this.softLimit = softLimit != null ? softLimit : envInt('LLM_BUDGET_SOFT', 10000);
+    this.hardLimit = hardLimit != null ? hardLimit : envInt('LLM_BUDGET_HARD', 12000);
     this.probeCooldownMs = probeCooldownMs != null
       ? probeCooldownMs
       : envInt('LLM_PROBE_COOLDOWN_MS', 15 * 60 * 1000);

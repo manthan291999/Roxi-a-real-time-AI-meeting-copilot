@@ -254,7 +254,21 @@ A comprehensive code audit was performed on 2026-08-26. Full report: `audit/CODE
 
 The codebase demonstrates clean separation of concerns with hexagonal architecture in Rust and a layered pipeline in Node.js. Primary risks are security configuration rather than architectural flaws.
 
+## Ask Roxi — Meeting History Chatbot (`chatbot/`)
+
+Self-contained LangGraph **Adaptive-RAG** chatbot that answers questions from recorded meeting history. Fully decoupled (hexagonal/SOLID): opens the meeting DB **read-only** and owns its own FTS5 index (`chatbot/data/chat_index.db`) — zero writes to capture data, zero WAL conflicts.
+
+- **Graph:** `analyze_query → retrieve (FTS5/BM25) → grade_documents → decide` with conditional edges: `generate` (grounded answer + `[M#]` citations), `clarify` (show findings + ask ONE clarifying question), `rewrite_query ↺ retrieve` (corrective loop, max 2 rewrites), `respond_no_data` (honest miss; offers recent topics when the question was ambiguous).
+- **Memory:** LangGraph `MemorySaver` per thread + explicit history rehydration from the UI.
+- **LLM:** `OpenAiLlmGateway` (direct SDK; never sends temperature — gpt-5.6-luna quirk) or `LangchainLlmGateway` (`CHATBOT_LLM_ADAPTER=langchain`). Every node degrades gracefully without the LLM.
+- **Budget:** per-process `CallCountBudgetGuard` (`CHATBOT_LLM_BUDGET_SOFT/HARD`).
+- **Rust bridge:** `ports/chat_gateway.rs` → `adapters/chat_client.rs` lazily spawns `node ../chatbot/sidecar.js` (stdio JSON protocol); commands `ask_chat` / `close_chat`; events `chat_thinking` / `chat_reply` / `chat_error`.
+- **UI:** `src/features/chat/ChatPanel.tsx` ("Ask Roxi" button in TopBar) — bubbles, node-progress labels, clickable source cards and `[M#]` chips deep-link into `HistoryView` via `initialMeetingId`.
+- **Ops:** `npm run rebuild-index -- --verify` (no API key), `npm run ask "…"`, `npm run repl`, `npm test` (36 tests incl. full-graph tests with a FakeLlm).
+- **Key files:** `chatbot/src/composition/container.js` (DI root), `chatbot/src/application/graph/buildChatGraph.js` (topology), `chatbot/src/infrastructure/llm/prompts.js` (agent behavior contracts), `chatbot/src/transport/stdioSidecar.js` (protocol).
+
 ## Changelog
+- **[2026-08-28]**: Added Ask Roxi chatbot: new self-contained `chatbot/` package (LangGraph Adaptive-RAG over FTS5 index of meeting history), Rust chat bridge (ask_chat/close_chat + chat events), React ChatPanel with cited sources deep-linking into HistoryView. 36 chatbot tests green; cargo check + tsc + vite build clean.
 - **[2026-08-26]**: Updated Folder Structure, Core Modules, and Data Flow to reflect actual file organization (adapters/, application/, commands/, domain/, ports/, sidecar/ in Rust; audio/, agents/, pipeline/, providers/, stt/, llm/, db/, state/, infrastructure/, lifecycle/, config/ in gateway). Added Code Audit Summary section. Updated README.md with audit information.
 - **[2026-08-22]**: Added `sttLabel` field tracking across JS, Rust, and React layers for speaker renaming.
 - **[2026-08-22]**: Update Project Overview, Tech Stack, Folder Structure, Data Flow, Database, and Env Vars to reflect React/Tailwind UI upgrade, Groq LLM switch, multi-STT provider manager, MFCC diarization layer, and SQLite database migration. Test files purged.

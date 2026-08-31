@@ -1,0 +1,28 @@
+{
+  "name": "roxi-chatbot",
+  "version": "1.0.0",
+  "description": "Ask Roxi — LangGraph Adaptive-RAG chatbot over meeting history (self-contained, hexagonal architecture)",
+  "main": "sidecar.js",
+  "private": true,
+  "scripts": {
+    "ask": "node bin/ask.js",
+    "repl": "node bin/ask.js --repl",
+    "rebuild-index": "node bin/rebuild-index.js",
+    "sidecar": "node sidecar.js",
+    "test": "node --test \"test/*.test.js\"",
+    "test:ci": "node --test --reporter=tap \"test/*.test.js\"",
+    "lint": "eslint . --ext .js --max-warnings=0"
+  },
+  "dependencies": {
+    "@langchain/core": "^0.3.0",
+    "@langchain/langgraph": "^0.2.0",
+    "@langchain/openai": "^0.3.0",
+    "better-sqlite3": "^13.0.3",
+    "dotenv": "^16.4.5",
+    "openai": "^4.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.1"
+  }
+}

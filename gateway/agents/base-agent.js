@@ -2,14 +2,14 @@ const { log, metrics } = require('../infrastructure/logger.js');
 const billingTracker = require('../infrastructure/billing-tracker.js');
 
 
-async function runAgent(agent, chunkText, speaker, mode, calls, breaker) {
+async function runAgent(agent, chunkText, speaker, mode, calls, breaker, extraContext = {}) {
   if (!breaker.allowAgent(agent.name, mode)) {
     return { ok: false, skipped: true, error: { agent: agent.name, code: 'budget_denied' } };
   }
 
   const started = Date.now();
   try {
-    const raw = await agent.run(chunkText, speaker);
+    const raw = await agent.run(chunkText, speaker, extraContext);
     breaker.recordCall(1);
     calls.count++;
     const data = agent.validate ? agent.validate(raw.data) : raw.data;

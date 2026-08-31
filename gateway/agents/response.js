@@ -1,16 +1,19 @@
 const { callLLM } = require('../llm/openai-client.js');
 const { meetingState } = require('../state/meeting-state.js');
-const { buildMeetingContextBlock, buildRecentConversationBlock } = require('../state/prompt-builder.js');
+const { buildMeetingContextBlock, buildRecentConversationBlock, buildUserProfileBlock } = require('../state/prompt-builder.js');
 const { AGENT_CONFIG } = require('../config/agent-config.js');
 
 const responseAgent = {
   name: 'response',
-  async run(chunkText, speaker) {
+  async run(chunkText, speaker, extraContext = {}) {
     const messages = [
-      { role: 'system', content: `You are an Executive Communication Coach operating within an AI Meeting Copilot
-product. You assist non-technical business stakeholders (Project Managers, Product
-Owners, Business Leaders) in formulating confident, relevant, and professionally
-appropriate spoken responses during live technical meetings.` },
+      { role: 'system', content: `You are an AI Meeting Copilot response coach.
+Your job is to help meeting participants formulate confident, contextually accurate,
+and professionally appropriate spoken responses during live meetings.
+Adapt your language depth and vocabulary to the user's role and expertise level.
+${meetingState.user_profile.technical_depth === 'high'
+  ? 'The user is technically proficient — use precise language and technical accuracy.'
+  : 'The user is non-technical — use plain business language without jargon.'}` },
       { role: 'user', content: `## Objective
 Generate one natural, business-focused spoken reply or clarifying question that
 the stakeholder can say immediately in response to the technical discussion —
@@ -20,6 +23,8 @@ productive.
 ## Input
 [MEETING BRIEFING]
 ${buildMeetingContextBlock()}
+
+${buildUserProfileBlock()}
 
 [CONVERSATION HISTORY — last N turns]
 ${buildRecentConversationBlock()}
@@ -32,32 +37,35 @@ Text: "${chunkText}"
 Current Topic: ${meetingState.current_topic}
 Current Summary: ${meetingState.conversation_summary}
 
+[LIVE ANALYSIS OF THIS CHUNK]
+Executive Summary: ${extraContext.explanation || 'None'}
+Technical Analysis: ${extraContext.technical || 'None'}
+
 ## Rules
 - Write in first-person spoken English — it must sound natural when said aloud.
 - Focus on: timelines, deliverables, blockers, business value, ownership, next steps.
-- Never suggest code-level replies or deep technical responses.
+- Calibrate technical depth to match the user profile injected below.
+- For expert/high-depth users: technical precision is preferred.
+- For non-technical users: plain business language only.
 - Maximum 2 sentences. Conversational tone. No formal report language.
 - If no response is genuinely needed (acknowledgment-only context), return exactly: ""
 - Never fabricate project details, names, or deadlines not present in the conversation.
 
 ## Output Format
-Return ONLY the spoken reply text — no quotes, no labels, no JSON, no explanation.
-If no reply is needed, return exactly an empty string: ""
-Max ~30 words.
+You MUST start your response with exactly one of these tags:
+[ANSWER] - when you are providing the answer to a question
+[QUESTION] - when you are suggesting a follow-up question to ask
+[DECISION] - when confirming a decision and suggesting next steps
 
-## Examples
-Input chunk: "We're blocked on the API integration until the third-party vendor provides
-             the sandbox credentials."
-Output: "Can we get a concrete deadline from the vendor by end of week, and is there
-         anything on our side we can unblock in the meantime?"
+After the tag, write the response text.
+If no response is needed, return exactly: ""
 
-Input chunk: "Yeah, I think that architecture will work. Let's go with it."
-Output: ""
+Example outputs:
+[ANSWER] LangChain is a framework for sequential LLM pipelines...
+[QUESTION] Can you explain the trade-offs between latency and accuracy here?
+[DECISION] Sounds good — should we document this and assign an owner?
 
-Input chunk: "The migration will take about two weeks and we'll need to take the
-             service down for 4 hours during the cutover window."
-Output: "Can we schedule the downtime outside business hours, and is there a rollback
-         plan in case something goes wrong during the cutover?"
+
 
 ## Edge Cases
 - Pure casual conversation → return ""

@@ -15,6 +15,7 @@ import { TranscriptPane } from './features/transcript/TranscriptPane'
 import { InterpretationPane } from './features/analysis/InterpretationPane'
 import { RepliesPane } from './features/analysis/RepliesPane'
 import { HistoryView } from './features/history/HistoryView'
+import { ChatPanel } from './features/chat/ChatPanel'
 import { ContextModal } from './features/capture/ContextModal'
 import { SpeakerRenameModal } from './features/transcript/SpeakerRenameModal'
 import { BlackHoleModal } from './features/onboarding/BlackHoleModal'
@@ -23,6 +24,8 @@ import { ConnectingOverlay, ErrorOverlay } from './components/Overlays'
 export default function App() {
   const [status, setStatus] = useState<Status>('idle')
   const [showHistory, setShowHistory] = useState(false)
+  const [showChat, setShowChat] = useState(false)
+  const [historyFocusId, setHistoryFocusId] = useState<number | null>(null)
   const [showContextModal, setShowContextModal] = useState(false)
   const [showRenameModal, setShowRenameModal] = useState(false)
   const [showBlackHoleModal, setShowBlackHoleModal] = useState(false)
@@ -124,6 +127,7 @@ export default function App() {
         onStopCapture={handleStopCapture}
         onShowHistory={() => setShowHistory(true)}
         onShowRename={() => setShowRenameModal(true)}
+        onShowChat={() => setShowChat(true)}
         apiKeys={apiKeys}
         billing={billing}
       />
@@ -174,14 +178,33 @@ export default function App() {
         />
       )}
 
-      {showHistory && <HistoryView onClose={() => setShowHistory(false)} />}
+      {showChat && (
+        <ChatPanel
+          onClose={() => {
+            setShowChat(false)
+            // Stop the chat sidecar so it holds no LLM budget while hidden.
+            services?.chatService.close().catch(() => {})
+          }}
+          onOpenMeeting={(meetingId) => {
+            setHistoryFocusId(meetingId)
+            setShowHistory(true)
+          }}
+        />
+      )}
+
+      {showHistory && (
+        <HistoryView
+          onClose={() => { setShowHistory(false); setHistoryFocusId(null) }}
+          initialMeetingId={historyFocusId}
+        />
+      )}
 
       {showContextModal && (
         <ContextModal
-          onSubmit={(ctx) => {
+          onSubmit={(ctx, role) => {
             setShowContextModal(false)
             setMeetingContext(ctx)
-            handleStartCapture(ctx)
+            handleStartCapture(ctx, role)
           }}
           onCancel={() => setShowContextModal(false)}
         />

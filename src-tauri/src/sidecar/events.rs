@@ -14,6 +14,15 @@ pub struct SidecarEvent {
     pub stt_label: Option<String>,
     pub items: Option<serde_json::Value>,
     pub revision: Option<serde_json::Value>,
+    pub reply_type: Option<String>,
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct ResponsePayload {
+    pub text: String,
+    pub speaker: String,
+    #[serde(rename = "type")]
+    pub reply_type: Option<String>,
 }
 
 #[derive(serde::Serialize, Clone)]

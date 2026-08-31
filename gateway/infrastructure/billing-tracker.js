@@ -93,5 +93,9 @@ function reset() {
 module.exports = {
   recordCall,
   getSnapshot,
-  reset
+  reset,
+  // Exported so the LLM usage store (infrastructure/usage-store.js) prices
+  // persisted requests with the exact same table — single source of truth.
+  calculateCost,
+  MODEL_PRICES,
 };

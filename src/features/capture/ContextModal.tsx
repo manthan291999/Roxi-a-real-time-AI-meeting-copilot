@@ -1,8 +1,17 @@
 import { useState, useEffect } from 'react'
 import { RoxiLogo } from '../../components/Shared'
 
-export function ContextModal({ onSubmit, onCancel }: { onSubmit: (ctx: string) => void, onCancel: () => void }) {
+export function ContextModal({ onSubmit, onCancel }: { onSubmit: (ctx: string, role: string) => void, onCancel: () => void }) {
   const [ctx, setCtx] = useState('')
+  const [selectedRole, setSelectedRole] = useState('tech_lead')
+
+  const roles = [
+    { id: 'pm',         label: '🧑‍💼 Project Manager',     depth: 'low'    },
+    { id: 'tech_lead',  label: '👨‍💻 Technical Lead',       depth: 'high'   },
+    { id: 'client',     label: '🤝 Client / Stakeholder', depth: 'low'    },
+    { id: 'designer',   label: '🎨 Designer',              depth: 'medium' },
+    { id: 'executive',  label: '👔 Executive',             depth: 'low'    },
+  ]
 
   const chips = [
     { label: 'Sprint Planning', text: 'Sprint planning session — focus on velocity, blockers, and story point estimates' },
@@ -18,12 +27,12 @@ export function ContextModal({ onSubmit, onCancel }: { onSubmit: (ctx: string) =
       if (e.key === 'Escape') onCancel()
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
-        onSubmit(ctx)
+        onSubmit(ctx, selectedRole)
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [ctx, onCancel, onSubmit])
+  }, [ctx, selectedRole, onCancel, onSubmit])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -60,15 +69,36 @@ export function ContextModal({ onSubmit, onCancel }: { onSubmit: (ctx: string) =
           </div>
         </div>
 
+        <div className="mb-6">
+          <p className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">
+            Who are you in this meeting?
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {roles.map(r => (
+              <button
+                key={r.id}
+                onClick={() => setSelectedRole(r.id)}
+                className={`px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors
+                  ${selectedRole === r.id
+                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                    : 'bg-gray-100 text-gray-600 border-transparent hover:border-blue-100 hover:bg-blue-50'
+                  }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="flex items-center justify-between mt-8">
           <button
-            onClick={() => onSubmit('')}
+            onClick={() => onSubmit('', selectedRole)}
             className="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
           >
             Skip (no context)
           </button>
           <button
-            onClick={() => onSubmit(ctx)}
+            onClick={() => onSubmit(ctx, selectedRole)}
             className="flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-[#1B4FCC] hover:bg-[#1644B8] rounded-lg transition-colors shadow-sm"
           >
             <span className="w-2 h-2 rounded-full bg-white opacity-90" />
