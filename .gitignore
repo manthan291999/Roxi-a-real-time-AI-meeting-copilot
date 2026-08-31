@@ -1,15 +1,107 @@
+# =============================================================================
+# Dependencies
+# =============================================================================
 node_modules/
-dist/
-src-tauri/target/
-src-tauri/gen/schemas/
 gateway/node_modules/
-chatbot/node_modules/
-dashboard/node_modules/
-*.log
-.DS_Store
-*.env
-*.env.local
+.pnp
+.pnp.js
+
+# =============================================================================
+# Build Outputs & Bundles
+# =============================================================================
+dist/
+dist-ssr/
+build/
+*.local
+
+# Tauri & Rust Targets
+target/
+src-tauri/target/
+src-tauri/gen/
+
+# Compiled native binaries
+*.exe
+*.dll
+*.dylib
+*.so
+*.dmg
+*.msi
+*.deb
+*.app
+
+# =============================================================================
+# Environment Variables & Secrets
+# =============================================================================
+.env
+.env.*
+!.env.example
+gateway/.env
+gateway/.env.*
+!gateway/.env.example
+chatbot/.env
+chatbot/.env.*
+!chatbot/.env.example
+
+# =============================================================================
+# Databases & Local Meeting Data
+# =============================================================================
 *.db
-*.db-shm
+*.db-journal
 *.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+meeting_history.db
+src-tauri/meeting_history.db
+
+# =============================================================================
+# Audio Recordings & Debug Dumps
+# =============================================================================
+*.wav
+*.pcm
+*.raw
+*.mp3
+*.m4a
+output.wav
+
+# =============================================================================
+# Logs
+# =============================================================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# =============================================================================
+# Editor & IDE Configs
+# =============================================================================
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.zcode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swo
+*.swp
+*~
+
+# =============================================================================
+# OS Generated Files
+# =============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# =================================- added for transparency work -
 .git_disabled/
+src-tauri/gen/schemas/
