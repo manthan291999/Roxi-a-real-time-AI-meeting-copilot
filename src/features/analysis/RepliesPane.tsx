@@ -26,7 +26,7 @@ export function RepliesPane({ cards }: { cards: RCard[] }) {
                   return (
                     <div
                       key={c.id}
-                      className="bg-blue-50 rounded-lg border border-blue-100 p-3 animate-slide-in-right relative group"
+                      className="bg-blue-50/40 rounded-lg border border-blue-100/60 p-3 animate-slide-in-right relative group"
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-1.5">
@@ -48,7 +48,7 @@ export function RepliesPane({ cards }: { cards: RCard[] }) {
                   return (
                     <div
                       key={c.id}
-                      className="bg-white/55 backdrop-blur-md rounded-lg border border-white/50 p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] animate-slide-in-right relative group"
+                      className="bg-white/12 rounded-lg border border-white/40 p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] animate-slide-in-right relative group"
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-1.5">
@@ -72,7 +72,7 @@ export function RepliesPane({ cards }: { cards: RCard[] }) {
                   const hasSpeaker = !!c.speaker;
                   const idx = hasSpeaker ? c.speakerIdx! : 0;
                   return (
-                    <div key={c.id} className="bg-emerald-50 rounded-lg border border-emerald-200 p-3 animate-slide-in-right relative group">
+                    <div key={c.id} className="bg-emerald-50/40 rounded-lg border border-emerald-200/60 p-3 animate-slide-in-right relative group">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-1.5">
                           <span className="text-[11px]">✅</span>
@@ -92,7 +92,7 @@ export function RepliesPane({ cards }: { cards: RCard[] }) {
                   const hasSpeaker = !!c.speaker;
                   const idx = hasSpeaker ? c.speakerIdx! : 0;
                   return (
-                    <div key={c.id} className="bg-blue-50 rounded-lg border border-blue-200 p-3 animate-slide-in-right relative group">
+                    <div key={c.id} className="bg-blue-50/40 rounded-lg border border-blue-200/60 p-3 animate-slide-in-right relative group">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-1.5">
                           <span className="text-[11px]">❓</span>
@@ -113,7 +113,7 @@ export function RepliesPane({ cards }: { cards: RCard[] }) {
                 return (
                   <div
                     key={c.id}
-                    className="bg-white/55 backdrop-blur-md rounded-lg border border-white/50 shadow-[0_1px_3px_rgba(0,0,0,0.04)] animate-slide-in-right group overflow-hidden"
+                    className="bg-white/12 rounded-lg border border-white/40 shadow-[0_1px_3px_rgba(0,0,0,0.04)] animate-slide-in-right group overflow-hidden"
                   >
                     {hasSpeaker && (
                       <div className="bg-blue-50/50 px-3 py-1.5 border-b border-gray-100 flex items-center gap-2">

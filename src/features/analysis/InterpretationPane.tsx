@@ -9,7 +9,7 @@ function CardItem({ text, sig, time, speaker, speakerIdx }: { text: string; sig:
   return (
     <div 
       onClick={() => setExpanded(!expanded)}
-      className="bg-white/55 backdrop-blur-md rounded-lg border border-white/50 p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] animate-slide-in-right relative overflow-hidden group cursor-pointer transition-all duration-300"
+      className="bg-white/12 rounded-lg border border-white/40 p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] animate-slide-in-right relative overflow-hidden group cursor-pointer transition-all duration-300"
     >
       <div className="absolute left-0 top-0 bottom-0 w-1 opacity-80" style={{ backgroundColor: c.stripeColor }} />
       <div className="pl-2">

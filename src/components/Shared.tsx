@@ -56,7 +56,7 @@ export function CopyButton({ text }: { text: string }) {
 export function PaneLabel({ children, count, showLegend }: { children: React.ReactNode; count?: number; showLegend?: boolean }) {
   const speakers = Array.from(speakerIndexMap.entries())
   return (
-    <div className="flex items-center justify-between px-4 pt-3 pb-2.5 border-b border-gray-100 flex-shrink-0 bg-white z-10">
+    <div className="flex items-center justify-between px-4 pt-3 pb-2.5 border-b border-white/40 flex-shrink-0 bg-white/10 z-10">
       <div className="flex items-center gap-2">
         <span className="font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-gray-400">
           {count !== undefined && count > 0 ? `── ${count} ${String(children).toUpperCase()} ──` : children}

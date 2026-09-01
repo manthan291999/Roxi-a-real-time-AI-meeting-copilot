@@ -93,6 +93,13 @@
 
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  /* Faint white halo keeps text readable over any background showing
+     through the fully-transparent window. */
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
+}
+
+.no-text-shadow, .no-text-shadow * {
+  text-shadow: none !important;
 }
 
 .font-mono, code, pre {
@@ -112,25 +119,23 @@ html, body, #root {
 /* ── Frosted Glass Tokens ──────────────────────────────────── */
 
 .glass-panel {
-  background: rgba(255, 255, 255, 0.42);
-  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 14px;
-  backdrop-filter: blur(24px) saturate(1.6);
-  -webkit-backdrop-filter: blur(24px) saturate(1.6);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
 }
 
 .glass-modal {
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.38);
+  border: 1px solid rgba(255, 255, 255, 0.50);
   border-radius: 16px;
-  backdrop-filter: blur(36px) saturate(1.7);
-  -webkit-backdrop-filter: blur(36px) saturate(1.7);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(8px) saturate(1.3);
+  -webkit-backdrop-filter: blur(8px) saturate(1.3);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12);
 }
 
 .glass-subtle {
-  background: rgba(255, 255, 255, 0.30);
-  border: 1px solid rgba(255, 255, 255, 0.40);
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.30);
   border-radius: 10px;
 }

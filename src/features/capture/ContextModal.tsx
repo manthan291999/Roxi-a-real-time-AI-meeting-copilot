@@ -36,7 +36,7 @@ export function ContextModal({ onSubmit, onCancel }: { onSubmit: (ctx: string, r
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/20 backdrop-blur-sm animate-fade-in" onClick={onCancel} />
+      <div className="absolute inset-0 bg-black/10 animate-fade-in" onClick={onCancel} />
       <div className="relative glass-modal shadow-2xl w-[520px] max-w-[90vw] p-6 animate-history-in">
         <div className="mb-6">
           <RoxiLogo />
@@ -51,7 +51,7 @@ export function ContextModal({ onSubmit, onCancel }: { onSubmit: (ctx: string, r
           value={ctx}
           onChange={(e) => setCtx(e.target.value)}
           placeholder="e.g. Sprint planning for Q3 backend migration..."
-          className="w-full h-24 p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1B4FCC]/20 focus:border-[#1B4FCC] transition-all resize-none mb-4"
+          className="w-full h-24 p-3 bg-white/25 border border-white/50 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1B4FCC]/20 focus:border-[#1B4FCC] transition-all resize-none mb-4"
         />
 
         <div className="mb-6">

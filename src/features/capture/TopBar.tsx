@@ -143,7 +143,7 @@ export function TopBar({
   billing?: any
 }) {
   return (
-    <div data-tauri-drag-region className="flex items-center justify-between px-5 h-14 border-b border-white/40 bg-white/30 backdrop-blur-xl flex-shrink-0">
+    <div data-tauri-drag-region className="flex items-center justify-between px-5 h-14 border-b border-white/40 bg-white/10 flex-shrink-0">
       <div className="flex items-center gap-4">
         <RoxiLogo />
         <div className="w-px h-4 bg-gray-200" />

@@ -39,7 +39,7 @@ function SourceCard({ source, onOpenMeeting }: { source: ChatSource; onOpenMeeti
   return (
     <button
       onClick={() => onOpenMeeting(source.meetingId)}
-      className="w-full text-left p-2.5 rounded-lg border border-white/50 bg-white/40 hover:border-blue-200 hover:bg-blue-50/40 transition-colors group"
+      className="w-full text-left p-2.5 rounded-lg border border-white/40 bg-white/15 hover:border-blue-200 hover:bg-blue-50/40 transition-colors group"
       title="Open this meeting in History"
     >
       <div className="flex items-center gap-2 mb-1">
@@ -100,7 +100,7 @@ function MessageBubble({ msg, onOpenMeeting, onFollowUp }: {
   return (
     <div className="flex justify-start animate-fade-in">
       <div className="max-w-[92%] space-y-2">
-        <div className="px-3.5 py-2.5 rounded-2xl rounded-bl-md bg-gray-100 border border-gray-200/60">
+        <div className="px-3.5 py-2.5 rounded-2xl rounded-bl-md bg-white/25 border border-white/40">
           {isThinking && <ThinkingDots node={msg.thinkingNode} />}
           {msg.error && (
             <p className="text-[13px] text-red-600 leading-relaxed">⚠ {msg.error}</p>
@@ -167,7 +167,7 @@ export function ChatPanel({ onClose, onOpenMeeting }: {
   return (
     <div className="fixed inset-0 z-50 flex">
       {/* Backdrop */}
-      <div className="flex-1 bg-black/20 backdrop-blur-sm animate-fade-in cursor-pointer" onClick={onClose} />
+      <div className="flex-1 bg-black/10 animate-fade-in cursor-pointer" onClick={onClose} />
 
       {/* Slide-in panel */}
       <div className="w-[680px] max-w-[92vw] h-full glass-modal shadow-2xl flex flex-col animate-history-in">
@@ -203,7 +203,7 @@ export function ChatPanel({ onClose, onOpenMeeting }: {
         </div>
 
         {/* Messages */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto hide-scroll px-5 py-4 space-y-4 bg-gray-50/50">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto hide-scroll px-5 py-4 space-y-4 bg-white/5">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center gap-3 text-center">
               <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
@@ -221,7 +221,7 @@ export function ChatPanel({ onClose, onOpenMeeting }: {
                   <button
                     key={q}
                     onClick={() => submit(q)}
-                    className="px-3 py-1.5 rounded-full text-[11.5px] font-medium text-gray-600 bg-white border border-gray-200 hover:border-blue-200 hover:text-blue-700 hover:bg-blue-50/50 transition-colors shadow-sm"
+                    className="px-3 py-1.5 rounded-full text-[11.5px] font-medium text-gray-600 bg-white/25 border border-white/40 hover:border-blue-200 hover:text-blue-700 hover:bg-blue-50/50 transition-colors shadow-sm"
                   >
                     {q}
                   </button>
@@ -236,7 +236,7 @@ export function ChatPanel({ onClose, onOpenMeeting }: {
         </div>
 
         {/* Input */}
-        <div className="flex-shrink-0 px-5 py-3.5 border-t border-white/40 bg-white/40 backdrop-blur-xl">
+        <div className="flex-shrink-0 px-5 py-3.5 border-t border-white/40 bg-white/15">
           <div className="flex items-center gap-2">
             <input
               ref={inputRef}
@@ -245,7 +245,7 @@ export function ChatPanel({ onClose, onOpenMeeting }: {
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() } }}
               placeholder={thinking ? 'Roxi is answering…' : 'Ask about decisions, issues, topics…'}
               disabled={thinking}
-              className="flex-1 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-[13px] text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-300 focus:bg-white transition-all disabled:opacity-60"
+              className="flex-1 px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white/20 text-[13px] text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-300 focus:bg-white/30 transition-all disabled:opacity-60"
             />
             <button
               onClick={() => submit()}

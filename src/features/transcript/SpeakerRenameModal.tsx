@@ -31,7 +31,7 @@ export function SpeakerRenameModal({ speakers, onClose }: { speakers: SpeakerEnt
   }
 
   return (
-    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center">
+    <div className="fixed inset-0 bg-black/10 z-50 flex items-center justify-center">
       <div className="glass-modal shadow-2xl w-[380px] overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <div>

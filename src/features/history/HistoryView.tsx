@@ -24,7 +24,7 @@ export function HistoryView({ onClose, initialMeetingId }: { onClose: () => void
     <div className="fixed inset-0 z-50 flex">
       {/* Backdrop */}
       <div
-        className="flex-1 bg-black/20 backdrop-blur-sm animate-fade-in cursor-pointer"
+        className="flex-1 bg-black/10 animate-fade-in cursor-pointer"
         onClick={onClose}
       />
 
@@ -121,7 +121,7 @@ export function HistoryView({ onClose, initialMeetingId }: { onClose: () => void
 
                     {/* Executive Summary */}
                     {details.meeting.summary && (
-                      <div className="mb-5 p-4 bg-gray-50 border border-gray-100 rounded-xl">
+                      <div className="mb-5 p-4 bg-white/10 border border-white/40 rounded-xl">
                         <h3 className="font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-gray-400 mb-3">Executive Summary</h3>
                         <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                           {details.meeting.summary}
@@ -150,7 +150,7 @@ export function HistoryView({ onClose, initialMeetingId }: { onClose: () => void
                         <h3 className="font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-gray-400 mb-3">Action Items</h3>
                         <div className="space-y-2">
                           {details.action_items.map((a, i) => (
-                            <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-gray-50">
+                            <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-white/10">
                               <svg className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                                 <rect x="2" y="2" width="12" height="12" rx="2" />
                                 <path d="M5 8l2 2 4-3" strokeLinecap="round" strokeLinejoin="round" />
@@ -173,7 +173,7 @@ export function HistoryView({ onClose, initialMeetingId }: { onClose: () => void
                         <h3 className="font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-gray-400 mb-3">Technical Analysis</h3>
                         <div className="space-y-2">
                           {details.technical_analyses.map((t, i) => (
-                            <div key={i} className="p-3 bg-purple-50/50 rounded-lg border border-purple-100/50">
+                            <div key={i} className="p-3 bg-purple-50/30 rounded-lg border border-purple-100/40">
                               <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{t.description}</p>
                             </div>
                           ))}
@@ -187,7 +187,7 @@ export function HistoryView({ onClose, initialMeetingId }: { onClose: () => void
                         <h3 className="font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-gray-400 mb-3">Suggested Replies</h3>
                         <div className="space-y-2">
                           {details.suggested_replies.map((r, i) => (
-                            <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-green-50/50 border border-green-100/50">
+                            <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-green-50/30 border border-green-100/40">
                               <svg className="w-3.5 h-3.5 text-green-500 mt-0.5 flex-shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                                 <path d="M4 8l3 3 5-5" strokeLinecap="round" strokeLinejoin="round" />
                               </svg>
