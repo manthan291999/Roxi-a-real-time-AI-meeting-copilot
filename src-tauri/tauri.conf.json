@@ -11,11 +11,19 @@
   },
   "app": {
     "withGlobalTauri": true,
+    "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "tauri-app",
-        "width": 800,
-        "height": 600
+        "title": "Roxi",
+        "label": "main",
+        "width": 900,
+        "height": 640,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "resizable": true,
+        "shadow": true,
+        "visible": true
       }
     ],
     "security": {

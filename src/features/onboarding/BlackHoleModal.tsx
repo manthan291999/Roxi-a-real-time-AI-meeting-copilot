@@ -1,7 +1,7 @@
 export function BlackHoleModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] flex items-center justify-center animate-fade-in p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+      <div className="glass-modal shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
         <div className="p-6">
           <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mb-4">
             <svg className="w-6 h-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">

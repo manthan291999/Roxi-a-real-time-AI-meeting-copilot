@@ -1,5 +1,49 @@
+import { useState } from 'react'
 import { Status, ApiKey } from '../../types'
 import { RoxiLogo } from '../../components/Shared'
+
+// Frameless-window controls. `withGlobalTauri` is enabled, so the window API
+// is available on `window.__TAURI__` without an npm import.
+async function tauriWindow(): Promise<any> {
+  const tauri = (window as any).__TAURI__
+  return tauri.window.getCurrentWindow()
+}
+
+function WindowControls() {
+  const [pinned, setPinned] = useState(true)
+
+  const hideWindow = async () => { try { (await tauriWindow()).hide() } catch {} }
+  const minimizeWindow = async () => { try { (await tauriWindow()).minimize() } catch {} }
+  const togglePin = async () => {
+    try {
+      const w = await tauriWindow()
+      const next = !pinned
+      await w.setAlwaysOnTop(next)
+      setPinned(next)
+    } catch {}
+  }
+
+  const btn = 'w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:text-gray-800 hover:bg-black/10 transition-colors'
+  return (
+    <div className="flex items-center gap-0.5 ml-1" data-tauri-drag-region={false}>
+      <button onClick={togglePin} className={btn} title={pinned ? 'Unpin from top' : 'Pin on top'}>
+        <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill={pinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5">
+          <path d="M9.5 2.5l4 4-1.5 1.5-1-.5-2.5 2.5.5 1-1.5 1.5-4-4 1.5-1.5 1 .5L9 5l-.5-1z" strokeLinejoin="round" />
+        </svg>
+      </button>
+      <button onClick={minimizeWindow} className={btn} title="Minimize">
+        <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M3.5 8h9" strokeLinecap="round" />
+        </svg>
+      </button>
+      <button onClick={hideWindow} className={btn} title="Hide (Option+Space to bring back)">
+        <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+        </svg>
+      </button>
+    </div>
+  )
+}
 
 function StatusPill({ status }: { status: Status }) {
   const cfg: Record<Status, { label: string; dot: string; bg: string; text: string; pulse: boolean }> = {
@@ -99,7 +143,7 @@ export function TopBar({
   billing?: any
 }) {
   return (
-    <div className="flex items-center justify-between px-5 h-14 border-b border-gray-200 bg-white flex-shrink-0">
+    <div data-tauri-drag-region className="flex items-center justify-between px-5 h-14 border-b border-white/40 bg-white/30 backdrop-blur-xl flex-shrink-0">
       <div className="flex items-center gap-4">
         <RoxiLogo />
         <div className="w-px h-4 bg-gray-200" />
@@ -163,6 +207,8 @@ export function TopBar({
             Start Capture
           </button>
         )}
+
+        <WindowControls />
       </div>
     </div>
   )

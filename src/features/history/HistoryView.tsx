@@ -29,7 +29,7 @@ export function HistoryView({ onClose, initialMeetingId }: { onClose: () => void
       />
 
       {/* Slide-in panel */}
-      <div className="w-[820px] max-w-[90vw] h-full bg-white shadow-2xl flex flex-col animate-history-in">
+      <div className="w-[820px] max-w-[90vw] h-full glass-modal shadow-2xl flex flex-col animate-history-in">
         {/* Header */}
         <div className="flex items-center justify-between px-5 h-14 border-b border-gray-100 flex-shrink-0">
           <div className="flex items-center gap-2">
@@ -50,7 +50,7 @@ export function HistoryView({ onClose, initialMeetingId }: { onClose: () => void
           </button>
         </div>
 
-        <div className="flex flex-1 min-h-0 bg-white">
+        <div className="flex flex-1 min-h-0 bg-transparent">
           {!selected ? (
             /* Meeting list (Full Width) */
             <div className="w-full flex-shrink-0 overflow-y-auto hide-scroll">
@@ -94,7 +94,7 @@ export function HistoryView({ onClose, initialMeetingId }: { onClose: () => void
             </div>
           ) : (
             /* Meeting detail (Full Width) */
-            <div className="flex-1 min-w-0 overflow-y-auto hide-scroll bg-white">
+            <div className="flex-1 min-w-0 overflow-y-auto hide-scroll bg-transparent">
               <div className="max-w-4xl mx-auto px-6 py-6">
                 <button
                   onClick={() => selectMeeting(null as unknown as DbMeeting)}

@@ -37,7 +37,7 @@ export function ContextModal({ onSubmit, onCancel }: { onSubmit: (ctx: string, r
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/20 backdrop-blur-sm animate-fade-in" onClick={onCancel} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-[520px] max-w-[90vw] p-6 animate-history-in">
+      <div className="relative glass-modal shadow-2xl w-[520px] max-w-[90vw] p-6 animate-history-in">
         <div className="mb-6">
           <RoxiLogo />
         </div>

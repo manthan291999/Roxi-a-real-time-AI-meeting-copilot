@@ -48,7 +48,7 @@ export function RepliesPane({ cards }: { cards: RCard[] }) {
                   return (
                     <div
                       key={c.id}
-                      className="bg-white rounded-lg border border-gray-100 p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] animate-slide-in-right relative group"
+                      className="bg-white/55 backdrop-blur-md rounded-lg border border-white/50 p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] animate-slide-in-right relative group"
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-1.5">
@@ -113,7 +113,7 @@ export function RepliesPane({ cards }: { cards: RCard[] }) {
                 return (
                   <div
                     key={c.id}
-                    className="bg-white rounded-lg border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)] animate-slide-in-right group overflow-hidden"
+                    className="bg-white/55 backdrop-blur-md rounded-lg border border-white/50 shadow-[0_1px_3px_rgba(0,0,0,0.04)] animate-slide-in-right group overflow-hidden"
                   >
                     {hasSpeaker && (
                       <div className="bg-blue-50/50 px-3 py-1.5 border-b border-gray-100 flex items-center gap-2">

@@ -39,7 +39,7 @@ function SourceCard({ source, onOpenMeeting }: { source: ChatSource; onOpenMeeti
   return (
     <button
       onClick={() => onOpenMeeting(source.meetingId)}
-      className="w-full text-left p-2.5 rounded-lg border border-gray-200 bg-white hover:border-blue-200 hover:bg-blue-50/40 transition-colors group"
+      className="w-full text-left p-2.5 rounded-lg border border-white/50 bg-white/40 hover:border-blue-200 hover:bg-blue-50/40 transition-colors group"
       title="Open this meeting in History"
     >
       <div className="flex items-center gap-2 mb-1">
@@ -170,7 +170,7 @@ export function ChatPanel({ onClose, onOpenMeeting }: {
       <div className="flex-1 bg-black/20 backdrop-blur-sm animate-fade-in cursor-pointer" onClick={onClose} />
 
       {/* Slide-in panel */}
-      <div className="w-[680px] max-w-[92vw] h-full bg-white shadow-2xl flex flex-col animate-history-in">
+      <div className="w-[680px] max-w-[92vw] h-full glass-modal shadow-2xl flex flex-col animate-history-in">
         {/* Header */}
         <div className="flex items-center justify-between px-5 h-14 border-b border-gray-100 flex-shrink-0">
           <div className="flex items-center gap-2">
@@ -236,7 +236,7 @@ export function ChatPanel({ onClose, onOpenMeeting }: {
         </div>
 
         {/* Input */}
-        <div className="flex-shrink-0 px-5 py-3.5 border-t border-gray-100 bg-white">
+        <div className="flex-shrink-0 px-5 py-3.5 border-t border-white/40 bg-white/40 backdrop-blur-xl">
           <div className="flex items-center gap-2">
             <input
               ref={inputRef}

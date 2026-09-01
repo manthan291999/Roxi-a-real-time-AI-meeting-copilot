@@ -119,7 +119,7 @@ export default function App() {
   const isError = status === 'unavailable' || status === 'cost-limit'
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#F7F8FA', fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div className="h-screen flex flex-col overflow-hidden" style={{ background: 'transparent', fontFamily: 'Inter, system-ui, sans-serif' }}>
       <TopBar
         status={status}
         isCapturing={isCapturing}

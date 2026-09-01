@@ -98,3 +98,39 @@ body {
 .font-mono, code, pre {
   font-family: 'DM Mono', 'Courier New', monospace;
 }
+
+/* ── Transparent Window Foundation ────────────────────────── */
+/* The native window is transparent + vibrancy-blurred; the web
+   layers must be see-through so the frosted glass shows. */
+
+html, body, #root {
+  background: transparent !important;
+  height: 100%;
+  margin: 0;
+}
+
+/* ── Frosted Glass Tokens ──────────────────────────────────── */
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 14px;
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+.glass-modal {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: 16px;
+  backdrop-filter: blur(36px) saturate(1.7);
+  -webkit-backdrop-filter: blur(36px) saturate(1.7);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.16);
+}
+
+.glass-subtle {
+  background: rgba(255, 255, 255, 0.30);
+  border: 1px solid rgba(255, 255, 255, 0.40);
+  border-radius: 10px;
+}
