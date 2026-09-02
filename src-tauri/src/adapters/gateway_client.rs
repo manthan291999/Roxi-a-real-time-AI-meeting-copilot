@@ -72,10 +72,12 @@ impl GatewayClient for NodeGatewayClient {
             for line in reader.lines() {
                 match line {
                     Ok(text) => on_event(text),
-                    Err(_) => break, // Pipe closed
+                    Err(_) => {
+                        tracing::warn!("[sidecar] Stdout closed.");
+                        break;
+                    }
                 }
             }
-            eprintln!("[sidecar] Stdout closed.");
         });
 
         Ok(Box::new(sidecar_stdin))
@@ -96,9 +98,9 @@ impl GatewayClient for NodeGatewayClient {
                         Err(_) => break,
                     }
                 }
-                eprintln!("[sidecar] Graceful shutdown timed out; force killing.");
+                tracing::warn!("[sidecar] Graceful shutdown timed out; force killing.");
+                let _ = child.kill();
             }
-            let _ = child.kill();
             let _ = child.wait();
         }
         Ok(())

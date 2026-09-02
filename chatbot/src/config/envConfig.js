@@ -1,10 +1,10 @@
 /**
  * Environment configuration — the ONLY module that reads process.env.
  *
- * Precedence: chatbot/.env (own overrides) > gateway/.env (shared keys,
- * fills gaps only) > existing process env. This lets the chatbot reuse the
- * project's OPENAI_API_KEY without duplicating secrets, while staying fully
- * decoupled from gateway code.
+ * Load order (later entries DO NOT override earlier ones):
+ *   1. Root .env  (global — shared by Rust agents, gateway, chatbot)
+ *   2. chatbot/.env  (local overrides, optional)
+ * This means you only need to maintain ONE .env file at the project root.
  */
 
 const path = require('path');
@@ -13,13 +13,18 @@ const dotenv = require('dotenv');
 
 const CHATBOT_ROOT = path.join(__dirname, '..', '..');
 
-// Own .env wins...
-dotenv.config({ path: path.join(CHATBOT_ROOT, '.env') });
-// ...gateway/.env only fills missing vars (never overrides).
-const gatewayEnv = path.join(CHATBOT_ROOT, '..', 'gateway', '.env');
-if (fs.existsSync(gatewayEnv)) {
-  dotenv.config({ path: gatewayEnv, override: false });
+// 1. Global root .env — the single source of truth
+const rootEnv = path.join(CHATBOT_ROOT, '..', '.env');
+if (fs.existsSync(rootEnv)) {
+  dotenv.config({ path: rootEnv });
 }
+
+// 2. chatbot-local .env — only fills vars not already set (never overrides root)
+const localEnv = path.join(CHATBOT_ROOT, '.env');
+if (fs.existsSync(localEnv)) {
+  dotenv.config({ path: localEnv, override: false });
+}
+
 
 function envStr(name, fallback = '') {
   const v = process.env[name];

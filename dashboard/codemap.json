@@ -31,6 +31,13 @@
         "function": "LangchainLlmGateway.complete()",
         "recordedBy": "chatbot/src/infrastructure/usage/UsageRecorder.js",
         "description": "ALTERNATIVE adapter (CHATBOT_LLM_ADAPTER=langchain) using LangChain ChatOpenAI. Token usage is extracted from response_metadata/usage_metadata and persisted."
+      },
+      {
+        "source": "rust",
+        "file": "src-tauri/src/agents/adapters/openai_adapter.rs",
+        "function": "OpenAiAdapter.complete() / complete_json()",
+        "recordedBy": "src-tauri/src/agents/adapters/usage_store.rs",
+        "description": "NATIVE RUST choke point for Tauri desktop meeting agents (context_manager, explanation, technical, analyst, risk_detector, response_agent). Records latency, prompts, tokens, and cost to llm_usage.db."
       }
     ],
     "callSites": [

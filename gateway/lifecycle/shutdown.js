@@ -1,16 +1,10 @@
 const db = require('../db/index.js');
-const { generateMeetingSummary } = require('../pipeline/agent-orchestrator.js');
 const { log } = require('../infrastructure/logger.js');
-const usageStore = require('../infrastructure/usage-store.js');
-
-const SUMMARY_DEADLINE_MS = 12000;
 
 function buildFallbackSummary() {
   const agg = db.getMeetingAggregates();
   const lines = [];
-  lines.push('# Meeting Summary (auto-generated fallback)');
-  lines.push('');
-  lines.push('_The AI summary service was unavailable; this summary was compiled from captured artifacts._');
+  lines.push('# Meeting Summary');
   lines.push('');
   if (agg.topic) lines.push(`**Topic:** ${agg.topic}`);
   lines.push(`**Chunks analyzed:** ${agg.chunkCount}`);
@@ -43,35 +37,13 @@ function buildFallbackSummary() {
 
 let shuttingDown = false;
 
-async function shutdown(reason, status, manager, semanticBuffer) {
+async function shutdown(reason, status, manager) {
   if (shuttingDown) return;
   shuttingDown = true;
   log('info', 'sidecar', 'shutdown_started', { reason, status });
 
-  try {
-    await semanticBuffer.drain();
-  } catch (err) {
-    log('error', 'sidecar', 'shutdown_flush_failed', { message: (err.message || '').slice(0, 200) });
-  }
-
-  let summary = null;
-  let kind = 'executive';
-  let summaryTimer = null;
-  try {
-    const deadline = new Promise((resolve) => {
-      summaryTimer = setTimeout(() => resolve(null), SUMMARY_DEADLINE_MS);
-    });
-    summary = await Promise.race([generateMeetingSummary(), deadline]);
-  } catch (err) {
-    log('error', 'sidecar', 'summary_error', { message: (err.message || '').slice(0, 200) });
-  } finally {
-    if (summaryTimer) clearTimeout(summaryTimer);
-  }
-  if (!summary) {
-    summary = buildFallbackSummary();
-    kind = 'fallback_template';
-    log('warn', 'sidecar', 'summary_fallback_used', {});
-  }
+  const summary = buildFallbackSummary();
+  const kind = 'summary';
 
   console.log(JSON.stringify({ type: 'MeetingSummary', text: summary }));
 
@@ -82,8 +54,6 @@ async function shutdown(reason, status, manager, semanticBuffer) {
   }
 
   try { await manager.close(); } catch (_) { }
-
-  usageStore.close(); // flush the LLM usage DB (best effort)
 
   log('info', 'sidecar', 'shutdown_complete', { reason });
   process.exit(status === 'ended' ? 0 : 1);

@@ -1,5 +1,7 @@
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use super::events::{SidecarEvent, TranscriptPayload, ExplanationPayload, ResponsePayload};
+use crate::agents::orchestrator::chunk_graph::ChunkGraph;
+use std::sync::Arc;
 
 pub fn route_sidecar_event(app: &AppHandle, text: &str) {
     if let Ok(event) = serde_json::from_str::<SidecarEvent>(text) {
@@ -13,7 +15,49 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
             "Final" => {
                 if let Some(t) = event.text {
                     let s = event.speaker.unwrap_or_else(|| "Speaker A".to_string());
-                    let _ = app.emit("transcript_final", TranscriptPayload { text: t, speaker: s, stt_label: event.stt_label });
+                    // 1. Emit the final transcript instantly to the UI
+                    let _ = app.emit("transcript_final", TranscriptPayload { text: t.clone(), speaker: s.clone(), stt_label: event.stt_label });
+                    
+                    // 2. Intercept and run the Rust Native ChunkGraph
+                    let app_clone = app.clone();
+                    
+                    tauri::async_runtime::spawn(async move {
+                        match app_clone.try_state::<Arc<ChunkGraph>>() {
+                            Some(graph) => {
+                                let (state, trace) = graph.run(&t, &s).await;
+                                
+                                // Emit the trace for observability
+                                let _ = app_clone.emit("agent_trace", trace);
+
+                                // Emit the results of the Rust agents
+                                if let Some(expl) = state.explanation {
+                                    let _ = app_clone.emit("context_explanation", ExplanationPayload { text: expl, speaker: s.clone() });
+                                }
+                                if let Some(tech) = state.technical_explanation {
+                                    let _ = app_clone.emit("technical_explanation", ExplanationPayload { text: tech, speaker: s.clone() });
+                                }
+                                if !state.decisions.is_empty() {
+                                    let _ = app_clone.emit("meeting_decisions", state.decisions);
+                                }
+                                if !state.action_items.is_empty() {
+                                    let _ = app_clone.emit("meeting_action_items", state.action_items);
+                                }
+                                if !state.risks.is_empty() {
+                                    let _ = app_clone.emit("meeting_risks", state.risks);
+                                }
+                                if let Some(resp) = state.suggested_response {
+                                    let _ = app_clone.emit("suggested_response", ResponsePayload { 
+                                        text: resp, 
+                                        speaker: s.clone(), 
+                                        reply_type: state.suggested_response_type 
+                                    });
+                                }
+                            }
+                            None => {
+                                tracing::error!("[event_router] CRITICAL: ChunkGraph not found in Tauri state — LLM agents will not run. Was .manage(graph) called in lib.rs?");
+                            }
+                        }
+                    });
                 }
             }
             "Explanation" => {
@@ -85,6 +129,6 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
             _ => {}
         }
     } else {
-        eprintln!("[sidecar log] {}", text);
+        tracing::warn!("[sidecar log] {}", text);
     }
 }

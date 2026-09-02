@@ -46,6 +46,6 @@ pub fn route_chat_event(app: &AppHandle, text: &str) {
             _ => {}
         }
     } else {
-        eprintln!("[chat sidecar log] {}", text);
+        tracing::warn!("[chat sidecar log] {}", text);
     }
 }

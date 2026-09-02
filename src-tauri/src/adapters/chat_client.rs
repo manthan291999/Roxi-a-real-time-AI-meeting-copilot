@@ -62,10 +62,12 @@ impl ChatGatewayClient for NodeChatClient {
             for line in reader.lines() {
                 match line {
                     Ok(text) => on_event(text),
-                    Err(_) => break,
+                    Err(_) => {
+                        tracing::warn!("[chat sidecar] Stdout closed.");
+                        break;
+                    }
                 }
             }
-            eprintln!("[chat sidecar] Stdout closed.");
         });
 
         Ok(())
@@ -109,7 +111,7 @@ impl ChatGatewayClient for NodeChatClient {
                         Err(_) => break,
                     }
                 }
-                eprintln!("[chat sidecar] Graceful shutdown timed out; force killing.");
+                tracing::warn!("[chat sidecar] Graceful shutdown timed out; force killing.");
             }
             let _ = session.child.kill();
             let _ = session.child.wait();

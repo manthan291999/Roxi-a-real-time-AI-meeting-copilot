@@ -16,6 +16,13 @@
 
 const path = require('path');
 const fs = require('fs');
+const dotenv = require('dotenv');
+
+// Load environment from global root .env (or local fallback)
+const ROOT_ENV = path.join(__dirname, '..', '.env');
+const LOCAL_ENV = path.join(__dirname, '.env');
+dotenv.config({ path: fs.existsSync(ROOT_ENV) ? ROOT_ENV : LOCAL_ENV });
+
 const express = require('express');
 const Database = require('better-sqlite3');
 const { MODEL_PRICES, costOf } = require('./lib/schema.js');

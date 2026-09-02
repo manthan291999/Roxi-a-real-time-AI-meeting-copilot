@@ -81,8 +81,47 @@ async function route() {
   }
 }
 
+let isLive = false;
+let liveTimer = null;
+
+function setLive(active) {
+  isLive = active;
+  const btn = document.getElementById('live-btn');
+  if (!btn) return;
+  if (isLive) {
+    btn.textContent = '🟢 Live: 5s';
+    btn.classList.add('active');
+    if (liveTimer) clearInterval(liveTimer);
+    liveTimer = setInterval(async () => {
+      const { tab } = currentRoute();
+      if (tab === 'overview') {
+        // Soft refresh without wiping DOM loader
+        const [summary, byAgent, timeline, histogram, sessions] = await Promise.all([
+          api.get('/api/summary'),
+          api.get('/api/by-agent'),
+          api.get('/api/timeline'),
+          api.get('/api/latency-histogram'),
+          api.get('/api/sessions'),
+        ]);
+        if (summary.dbAvailable && summary.requests > 0) {
+          renderOverviewCharts(byAgent, timeline, histogram);
+        }
+      } else if (tab === 'requests') {
+        await loadRequestRows();
+      }
+      refreshDbStatus();
+    }, 5000);
+  } else {
+    btn.textContent = '🔴 Live: Off';
+    btn.classList.remove('active');
+    if (liveTimer) clearInterval(liveTimer);
+    liveTimer = null;
+  }
+}
+
 window.addEventListener('hashchange', route);
 document.getElementById('refresh-btn').addEventListener('click', route);
+document.getElementById('live-btn').addEventListener('click', () => setLive(!isLive));
 
 // --- DB status pill ----------------------------------------------------------------
 
@@ -200,7 +239,11 @@ function renderOverviewCharts(byAgent, timeline, histogram) {
     type: 'bar',
     data: { labels: byAgent.rows.map((r) => r.tag), datasets: [{
       label: 'calls', data: byAgent.rows.map((r) => r.calls),
-      backgroundColor: byAgent.rows.map((r) => r.source === 'gateway' ? 'rgba(76,194,255,0.6)' : 'rgba(124,92,255,0.6)'),
+      backgroundColor: byAgent.rows.map((r) => {
+        if (r.source === 'gateway') return 'rgba(76,194,255,0.6)';
+        if (r.source === 'rust') return 'rgba(251,146,60,0.6)';
+        return 'rgba(124,92,255,0.6)';
+      }),
     }] },
     options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } },
@@ -228,7 +271,7 @@ async function renderRequests() {
 
   $view.innerHTML = `
     <div class="filters">
-      <label>Source <select id="f-source">${opts(['gateway', 'chatbot'], reqState.source)}</select></label>
+      <label>Source <select id="f-source">${opts(['gateway', 'chatbot', 'rust'], reqState.source)}</select></label>
       <label>Status <select id="f-status">${opts(['ok', 'failed'], reqState.status)}</select></label>
       <label>Agent / tag <select id="f-tag">${opts(tags, reqState.tag)}</select></label>
       <span class="muted" id="f-count"></span>

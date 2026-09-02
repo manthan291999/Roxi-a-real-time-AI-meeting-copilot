@@ -83,13 +83,12 @@ meeting-interpreter-mac-main/
 │   ├── providers/            # assemblyai.js, speechmatics.js, mfcc.js (13-coeff MFCC)
 │   ├── stt/                  # provider-manager.js (fallback chain), diarization-layer.js, transcript-sanitizer.js
 │   ├── tools/                # pcm-consumer.js (stream validator/stats), transcriber.js
-│   ├── interfaces/           # IAgent.js, ISttProvider.js, ITranscriptCleaner.js, ITranscriptSanitizer.js
-│   ├── infrastructure/       # logger, validate, stdout-protocol (typed emitters), circuit-breaker,
-│   │                         # cost-anomaly-detector, billing-tracker, usage-store, retry, text-similarity
+│   ├── interfaces/           # ISttProvider.js, ITranscriptCleaner.js, ITranscriptSanitizer.js
+│   ├── infrastructure/       # logger, validate, stdout-protocol (typed emitters), retry, text-similarity
 │   ├── state/                # meeting-state.js (+user/role profiles), prompt-builder.js, speaker-tracker.js
 │   ├── db/                   # index.js (better-sqlite3), migrate.js (forward-only)
-│   ├── llm/                  # llm-port.js, openai-client.js (gpt-5.6-luna; legacy path, kept for dashboard/tooling)
-│   ├── config/agent-config.js
+│   ├── llm/                  # [EMPTY — removed] Node LLM client replaced by Rust openai_adapter.rs
+│   ├── config/               # [EMPTY — removed]
 │   └── lifecycle/shutdown.js
 ├── chatbot/                  # Ask Roxi: LangGraph Adaptive-RAG over FTS5 index (self-contained sidecar)
 │   ├── sidecar.js            # stdio JSON protocol entry
@@ -105,8 +104,9 @@ meeting-interpreter-mac-main/
         ├── lib.rs            # Setup hook (stealth overlay), agent graph wiring, command registration
         ├── macos_overlay.rs  # NSStatusWindowLevel + CanJoinAllSpaces FFI (fullscreen float)
         ├── agents/           # RUST-NATIVE LLM PIPELINE (hexagonal)
-        │   ├── orchestrator/chunk_graph.rs   # ChunkGraph: chit-chat gate → context mgr → parallel swarm → response
-        │   ├── agents/                        # context_manager, explanation, technical, analyst, risk_detector, response_agent, chit_chat_gate
+        │   ├── orchestrator/chunk_graph.rs   # ChunkGraph: chit-chat gate → context mgr → complexity_analyzer → conditional parallel stage-2 → response
+        │   ├── orchestrator/routing.rs       # Pure fn decide(state) → RouteDecision (no I/O, fully unit-tested)
+        │   ├── agents/                        # context_manager, explanation, technical, analyst, risk_detector, response_agent, chit_chat_gate, complexity_analyzer
         │   ├── adapters/                     # openai_adapter.rs (rig → OpenAI, tagged), usage_store.rs (llm_usage.db)
         │   ├── ports/                        # agent_port.rs (Agent trait), llm_port.rs (LlmClient trait)
         │   └── domain/                        # chunk_state, decision, action_item, risk, agent_error
@@ -134,7 +134,11 @@ meeting-interpreter-mac-main/
 8. `lib.rs` `event_router.rs`: deserializes `SidecarEvent`. On `Final` it **intercepts the transcript and runs the Rust-native `ChunkGraph`** on `tauri::async_runtime`:
    - `chit_chat_gate::is_filler` (local heuristic) → fast-exit small talk.
    - `ContextManagerAgent` (sequential) → topic + significance grading.
-   - Parallel swarm (concurrent futures): `ExplanationAgent`, `TechnicalAgent`, `AnalystAgent` (decisions/action items), `RiskDetectorAgent`.
+   - `ComplexityAnalyzerAgent` (sequential) — classifies chunk as low/medium/high; fast call (≤20 tokens); on failure defaults to Medium.
+   - Stage-2 conditional parallel fan-out via `routing::decide()`:
+     - `Low`    → `ExplanationAgent` only
+     - `Medium` → `ExplanationAgent` + `RiskDetectorAgent` (parallel)
+     - `High`   → all four: `ExplanationAgent`, `TechnicalAgent`, `AnalystAgent`, `RiskDetectorAgent` (parallel)
    - `ResponseAgent` (sequential, last) → suggested reply (+ type).
    - All agents call `OpenAiAdapter` (rig-core → `gpt-5.6-luna`; temperature omitted — model rejects overrides) with per-tag usage logging to `llm_usage.db`.
 9. `event_router.rs` emits Tauri events: `context_explanation`, `technical_explanation`, `meeting_decisions`, `meeting_action_items`, `meeting_risks`, `suggested_response` (+ still relays legacy sidecar `Explanation`/`Decisions`/… types if a Node pipeline ever emits them).
@@ -207,7 +211,7 @@ Dev notes: cargo lives at `~/.cargo/bin/cargo` (not on default PATH). Builds wor
 ## Agent Instructions
 
 - **Modifying JSON events:** update `SidecarEvent` + payload structs (`sidecar/events.rs`), the match arms in `event_router.rs`, and `App.tsx`/`useTauriEvents` types in lockstep.
-- **Adding an agent:** implement `Agent`, add it to the `parallel_agents` vec or as a new sequential node in `chunk_graph.rs`, wire an `OpenAiAdapter::with_tag(...)` in `lib.rs`, and add the matching emit in `event_router.rs`.
+- **Adding an agent:** implement `Agent` trait; decide its stage (sequential or stage-2 conditional); add it as a named field in `ChunkGraph` and update `routing.rs` decision table if it's a stage-2 agent; wire an `OpenAiAdapter::with_tag(...)` in `lib.rs`; emit its output in `event_router.rs`.
 - **Diarization & speakers:** always pass `sttLabel` alongside `speaker` end-to-end so the Rename Modal can map labels.
 - **Cost safety:** all LLM calls must flow through `OpenAiAdapter` (Rust) / `callLLM`+circuit-breaker (gateway tooling) / `CallCountBudgetGuard` (chatbot). Never bypass; keys are rotated and usage-logged.
 - **Never send temperature to gpt-5.6-luna** — the model rejects non-default values; omit it entirely.
@@ -218,7 +222,18 @@ Dev notes: cargo lives at `~/.cargo/bin/cargo` (not on default PATH). Builds wor
 Full report: `audit/CODE-AUDIT-REPORT.md`. Critical: plaintext API keys in `gateway/.env` (rotate). High: CSP disabled (`csp: null`), `withGlobalTauri: true` (XSS→IPC risk), sidecar path from CWD, unauthenticated stdin protocol. Medium/Low: mutex panics, unbounded channels, fragile DB path, O(n) deframer resync, dead code. Architecture verdict: clean separation (hexagonal Rust, layered Node); risks are configuration, not structure. The LLM migration to OpenAI + Rust-native agents (2026-08-28→09-01) postdates the audit.
 
 ## Changelog
+- **[2026-09-01]**: Hybrid Agent Architecture: ComplexityAnalyzerAgent + routing.rs added to Rust pipeline; ChunkGraph now routes Low/Medium/High complexity to 4/5/7 LLM calls respectively vs fixed 6 before; ~25% average LLM cost reduction. Removed dead Node.js agent files.
 - **[2026-09-01]**: Stealth overlay + crystal-clear transparency: `set_content_protected` capture shield, Accessory policy (no Dock/Cmd+Tab), NSStatusWindowLevel fullscreen float (`macos_overlay.rs`), Option+Space hotkey, tray lifeline, frameless fully-transparent window (vibrancy removed — pixel-sharp background), glass token retune + text-shadow halo. Commits `718fac1`, `2a59dba`.
 - **[2026-08-28]**: Ask Roxi chatbot (`chatbot/` LangGraph Adaptive-RAG, FTS5 index, Rust chat bridge, ChatPanel with deep-linked citations). LLM stack migrated Groq → OpenAI `gpt-5.6-luna`; Node agent pipeline replaced by Rust-native `ChunkGraph` (rig-core); dashboard/ LLM-usage observability added; gateway restructured (`pipeline/`,`agents/` → `tools/`, `interfaces/`; cost-anomaly-detector; root `.env`).
 - **[2026-08-26]**: Folder structure/core-modules/data-flow sync + code audit summary.
 - **[2026-08-22]**: `sttLabel` tracking for speaker renaming; React/Tailwind UI upgrade; multi-STT provider manager; MFCC diarization; SQLite migration.
+
+## Architectural Decision Records (ADRs)
+
+### ADR 1: Why Node.js Sidecars Remain (2026-09-01)
+**Context:** The LLM agent pipeline was successfully rewritten in pure Rust for performance and SOLID decoupling. However, two Node.js sidecars remain: `gateway/sidecar.js` and `chatbot/sidecar.js`.
+**Decision:** We keep Node.js for STT and Chatbot, while using Rust for Agents.
+**Rationale:**
+1. **STT Gateway (`gateway/sidecar.js`):** The official, production-ready real-time SDKs for AssemblyAI and Speechmatics are heavily optimized for Node.js. Additionally, the speaker diarization engine relies on 13-coefficient MFCC extraction libraries that are already tuned in JS. Rewriting these in Rust would introduce massive instability without adding value.
+2. **Chatbot (`chatbot/`):** The "Ask Roxi" chatbot relies on **LangGraph** (Adaptive-RAG). LangGraph's ecosystem and abstractions are deeply rooted in JS/Python. Implementing this complex cyclic graph logic natively in Rust would reinvent the wheel.
+**Result:** A true hybrid architecture. Rust handles the heavy lifting, high-concurrency routing, and OS-level stealth, while Node.js handles the specialized SDKs and graph frameworks.

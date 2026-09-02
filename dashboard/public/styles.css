@@ -56,6 +56,18 @@ code { font-family: var(--mono); font-size: 12px; color: var(--accent); }
 .db-status { font-size: 11px; color: var(--muted); max-width: 340px; }
 .db-status.ok { color: var(--ok); }
 .db-status.bad { color: var(--warn); }
+#live-btn {
+  background: var(--panel-2); color: var(--muted); border: 1px solid var(--border);
+  padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  transition: all 0.2s ease;
+}
+#live-btn:hover { border-color: var(--accent); color: var(--text); }
+#live-btn.active {
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--ok);
+  border-color: rgba(52, 211, 153, 0.5);
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.2);
+}
 #refresh-btn {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
   padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
@@ -100,6 +112,7 @@ td.wrap { white-space: normal; max-width: 480px; }
 .badge.failed { background: rgba(248, 113, 113, 0.12); color: var(--bad); }
 .badge.src-gateway { background: rgba(76, 194, 255, 0.12); color: var(--accent); }
 .badge.src-chatbot { background: rgba(124, 92, 255, 0.14); color: #a78bfa; }
+.badge.src-rust { background: rgba(251, 146, 60, 0.14); color: #fb923c; }
 .badge.tag { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); font-family: var(--mono); }
 
 /* --- Filters --- */

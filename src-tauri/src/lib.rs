@@ -27,6 +27,18 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize professional tracing logger
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env().add_directive("tauri_app=info".parse().unwrap()))
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_file(false)
+        .with_line_number(false)
+        .init();
+
+    // Load .env file first — critical for macOS .app bundles that don't inherit shell env vars
+    let _ = dotenvy::dotenv(); // silently ignore if no .env file is present
+
     // 1. Initialize Adapters
     let audio_capture = Arc::new(MacAudioCapture::new());
     let gateway_client = Arc::new(NodeGatewayClient::new());
@@ -35,21 +47,34 @@ pub fn run() {
 
     // Initialize Rust Native Agents
     let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
-    let llm: Arc<dyn LlmClient> = Arc::new(agents::adapters::openai_adapter::OpenAiAdapter::new(
-        &api_key, 
-        "gpt-4o-mini"
-    ));
+    if api_key.is_empty() {
+        tracing::error!("[FATAL] OPENAI_API_KEY is not set or is empty. LLM agents will fail with 401 Unauthorized.");
+        tracing::error!("[FATAL] Set it in a .env file next to the app, or export it before launching.");
+    }
+    let model = "gpt-5.6-luna";
+    let llm_context: Arc<dyn LlmClient> = Arc::new(agents::adapters::openai_adapter::OpenAiAdapter::with_tag(&api_key, model, "context_manager"));
+    let llm_explanation: Arc<dyn LlmClient> = Arc::new(agents::adapters::openai_adapter::OpenAiAdapter::with_tag(&api_key, model, "explanation"));
+    let llm_technical: Arc<dyn LlmClient> = Arc::new(agents::adapters::openai_adapter::OpenAiAdapter::with_tag(&api_key, model, "technical"));
+    let llm_analyst: Arc<dyn LlmClient> = Arc::new(agents::adapters::openai_adapter::OpenAiAdapter::with_tag(&api_key, model, "analyst"));
+    let llm_risk: Arc<dyn LlmClient> = Arc::new(agents::adapters::openai_adapter::OpenAiAdapter::with_tag(&api_key, model, "risk_detector"));
+    let llm_response: Arc<dyn LlmClient> = Arc::new(agents::adapters::openai_adapter::OpenAiAdapter::with_tag(&api_key, model, "response_agent"));
+    let llm_complexity: Arc<dyn LlmClient> = Arc::new(agents::adapters::openai_adapter::OpenAiAdapter::with_tag(&api_key, model, "complexity"));
 
-    let context_mgr: Arc<dyn Agent> = Arc::new(agents::agents::context_manager::ContextManagerAgent::new(Arc::clone(&llm)));
-    let explanation: Arc<dyn Agent> = Arc::new(agents::agents::explanation::ExplanationAgent::new(Arc::clone(&llm)));
-    let technical: Arc<dyn Agent> = Arc::new(agents::agents::technical::TechnicalAgent::new(Arc::clone(&llm)));
-    let analyst: Arc<dyn Agent> = Arc::new(agents::agents::analyst::AnalystAgent::new(Arc::clone(&llm)));
-    let risk: Arc<dyn Agent> = Arc::new(agents::agents::risk_detector::RiskDetectorAgent::new(Arc::clone(&llm)));
-    let response: Arc<dyn Agent> = Arc::new(agents::agents::response_agent::ResponseAgent::new(Arc::clone(&llm)));
+    let context_mgr: Arc<dyn Agent> = Arc::new(agents::agents::context_manager::ContextManagerAgent::new(llm_context));
+    let explanation: Arc<dyn Agent> = Arc::new(agents::agents::explanation::ExplanationAgent::new(llm_explanation));
+    let technical: Arc<dyn Agent> = Arc::new(agents::agents::technical::TechnicalAgent::new(llm_technical));
+    let analyst: Arc<dyn Agent> = Arc::new(agents::agents::analyst::AnalystAgent::new(llm_analyst));
+    let risk: Arc<dyn Agent> = Arc::new(agents::agents::risk_detector::RiskDetectorAgent::new(llm_risk));
+    let response: Arc<dyn Agent> = Arc::new(agents::agents::response_agent::ResponseAgent::new(llm_response));
+    let complexity_analyzer: Arc<dyn Agent> = Arc::new(agents::agents::complexity_analyzer::ComplexityAnalyzerAgent::new(llm_complexity));
 
     let graph = Arc::new(agents::orchestrator::chunk_graph::ChunkGraph::new(
         context_mgr,
-        vec![explanation, technical, analyst, risk],
+        complexity_analyzer,
+        explanation,
+        technical,
+        risk,
+        analyst,
         response,
     ));
 

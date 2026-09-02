@@ -1,7 +1,10 @@
-// Load .env from the gateway/ folder regardless of cwd (Rust spawns node
-// with a different working directory, so we must use __dirname explicitly).
-require('dotenv').config({ path: require('path').join(__dirname, '.env') });
-const { setMeetingContext } = require('./pipeline/agent-orchestrator.js');
+// Load from the single global .env at the project root (one level above gateway/).
+// Falls back to gateway/.env if root one is missing (backwards compat).
+const path = require('path');
+const ROOT_ENV = path.join(__dirname, '..', '.env');
+const LOCAL_ENV = path.join(__dirname, '.env');
+require('dotenv').config({ path: require('fs').existsSync(ROOT_ENV) ? ROOT_ENV : LOCAL_ENV });
+
 const { setUserProfile } = require('./state/meeting-state.js');
 const db = require('./db/index.js');
 const { ProviderManager } = require('./stt/provider-manager.js');
@@ -9,20 +12,16 @@ const { AssemblyAIProvider } = require('./providers/assemblyai.js');
 const { SpeechmaticsProvider } = require('./providers/speechmatics.js');
 const { validateTranscriptEvent } = require('./infrastructure/validate.js');
 const { log } = require('./infrastructure/logger.js');
-const { SemanticBuffer } = require('./audio/semantic-buffer.js');
 const { DiarizationLayer } = require('./stt/diarization-layer.js');
 const { PcmDeframer } = require('./audio/pcm-deframer.js');
 const { shutdown } = require('./lifecycle/shutdown.js');
 const sanitizer = require('./stt/transcript-sanitizer.js');
-const { AGENT_CONFIG } = require('./config/agent-config.js');
 
-const { runChunk } = require('./pipeline/chunk-runner.js');
 
 let meetingContext = '';
 const ctxIdx = process.argv.indexOf('--context');
 if (ctxIdx !== -1 && process.argv[ctxIdx + 1]) {
   meetingContext = process.argv[ctxIdx + 1];
-  setMeetingContext(meetingContext);
   log('info', 'sidecar', 'meeting_context_set', { preview: meetingContext.slice(0, 80) });
 }
 
@@ -56,8 +55,6 @@ if (missing.length > 0) {
 }
 
 let diarization = null;
-
-const semanticBuffer = new SemanticBuffer(runChunk);
 
 const chain = [];
 if (assemblyaiKey) {
@@ -104,7 +101,8 @@ manager.on('final', (evt) => {
   if (diarization) diarization.buildEmbedding(sttLabel);
 
   db.saveTranscript(displayName, sanitized.text);
-  semanticBuffer.accept(displayName, sanitized.text);
+  // Disabled: Node.js agent pipeline replaced by Rust-native agent pipeline.
+  // semanticBuffer.accept(displayName, sanitized.text);
 });
 
 manager.on('speakerRevision', ({ revision }) => {
@@ -121,7 +119,7 @@ manager.on('error', ({ message }) => {
 });
 
 manager.on('exhausted', () => {
-  shutdown('stt_exhausted', 'exhausted', manager, semanticBuffer);
+  shutdown('stt_exhausted', 'exhausted', manager);
 });
 
 async function start() {
@@ -136,9 +134,9 @@ async function start() {
 
   process.stdin.resume();
   process.stdin.on('data', (data) => deframer.append(data));
-  process.stdin.on('end', () => shutdown('stdin_end', 'ended', manager, semanticBuffer));
-  process.on('SIGTERM', () => shutdown('sigterm', 'ended', manager, semanticBuffer));
-  process.on('SIGINT', () => shutdown('sigint', 'ended', manager, semanticBuffer));
+  process.stdin.on('end', () => shutdown('stdin_end', 'ended', manager));
+  process.on('SIGTERM', () => shutdown('sigterm', 'ended', manager));
+  process.on('SIGINT', () => shutdown('sigint', 'ended', manager));
 
   await manager.start();
 }
