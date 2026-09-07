@@ -15,6 +15,19 @@ module.exports = Object.freeze({
   SNIPPET_MAX_CHARS: 600,
   /** Prior chat turns included in the generate prompt. */
   HISTORY_TURNS: 6,
+  /**
+   * Reciprocal Rank Fusion constant, from the original paper. Larger values
+   * flatten the difference between ranks; 60 keeps rank 1 and rank 2 close
+   * enough that agreement between two sources outweighs a single source's
+   * top hit.
+   */
+  RRF_K: 60,
+  /**
+   * Vector hits below this cosine similarity are noise. Without a floor every
+   * question returns its top-k chunks however irrelevant, and grade_documents
+   * burns tokens rejecting them.
+   */
+  MIN_COSINE_SIMILARITY: 0.25,
   /** Node names surfaced as ChatThinking events (protocol stability). */
   NODES: Object.freeze({
     ANALYZE: 'analyze_query',

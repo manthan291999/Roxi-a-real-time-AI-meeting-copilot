@@ -13,6 +13,11 @@ const { CallCountBudgetGuard } = require('../infrastructure/budget/CallCountBudg
 const { OpenAiLlmGateway } = require('../infrastructure/llm/OpenAiLlmGateway');
 const { LangchainLlmGateway } = require('../infrastructure/llm/LangchainLlmGateway');
 const { UsageRecorder } = require('../infrastructure/usage/UsageRecorder');
+const { OpenAiEmbeddingGateway } = require('../infrastructure/embedding/OpenAiEmbeddingGateway');
+const { DocumentRepositorySqlite } = require('../infrastructure/documents/DocumentRepositorySqlite');
+const { DocumentEvidenceSource } = require('../infrastructure/documents/DocumentEvidenceSource');
+const { FtsEvidenceSource } = require('../infrastructure/persistence/FtsEvidenceSource');
+const { CompositeEvidenceSource } = require('../application/retrieval/CompositeEvidenceSource');
 
 const { createAnalyzeQueryNode } = require('../application/nodes/analyzeQueryNode');
 const { createRetrieveNode } = require('../application/nodes/retrieveNode');
@@ -47,6 +52,9 @@ function buildContainer(overrides = {}) {
   let llm = null;
   let useCase = null;
   let usageRecorder = null;
+  let documents = null;
+  let embeddings = null;
+  let embedBudget = null;
 
   if (!overrides.skipLlm) {
     budget = new CallCountBudgetGuard({
@@ -75,9 +83,36 @@ function buildContainer(overrides = {}) {
       ? new LangchainLlmGateway(llmOpts)
       : new OpenAiLlmGateway(llmOpts);
 
+    // Embeddings get their own budget: one large upload must not consume the
+    // call allowance belonging to the conversation it was uploaded for.
+    embedBudget = new CallCountBudgetGuard({
+      softLimit: config.embedBudgetHard,
+      hardLimit: config.embedBudgetHard,
+      logger,
+    });
+    embeddings = new OpenAiEmbeddingGateway({
+      apiKey: config.openAiApiKey,
+      model: config.embedModel,
+      baseUrl: config.openAiBaseUrl,
+      budget: embedBudget,
+      logger,
+      usageRecorder,
+    });
+    documents = new DocumentRepositorySqlite(config.docStorePath, logger);
+
+    // retrieveNode gets one EvidenceSource and cannot tell how many corpora
+    // are behind it. Adding a source is one more entry in this array.
+    const evidenceSource = new CompositeEvidenceSource({
+      sources: [
+        new FtsEvidenceSource(retriever, logger),
+        new DocumentEvidenceSource({ documents, embeddings, logger }),
+      ],
+      logger,
+    });
+
     const graph = buildChatGraph({
       analyzeQuery: createAnalyzeQueryNode({ llm, logger }),
-      retrieve: createRetrieveNode({ retriever, logger }),
+      retrieve: createRetrieveNode({ evidenceSource, logger }),
       gradeDocuments: createGradeDocumentsNode({ llm, logger }),
       rewriteQuery: createRewriteQueryNode({ llm, logger }),
       clarify: createClarifyNode({ llm, logger }),
@@ -92,10 +127,24 @@ function buildContainer(overrides = {}) {
     store.close();
     indexBuilder.close();
     retriever.close();
+    documents?.close();
     usageRecorder?.close();
   };
 
-  return { config, logger, store, indexBuilder, retriever, budget, llm, useCase, shutdown };
+  return {
+    config,
+    logger,
+    store,
+    indexBuilder,
+    retriever,
+    documents,
+    embeddings,
+    budget,
+    embedBudget,
+    llm,
+    useCase,
+    shutdown,
+  };
 }
 
 module.exports = { buildContainer };

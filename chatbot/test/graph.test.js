@@ -17,6 +17,7 @@ const { buildChatGraph } = require('../src/application/graph/buildChatGraph');
 const { AnswerQuestionUseCase } = require('../src/application/useCases/AnswerQuestionUseCase');
 const { createAnalyzeQueryNode } = require('../src/application/nodes/analyzeQueryNode');
 const { createRetrieveNode } = require('../src/application/nodes/retrieveNode');
+const { FtsEvidenceSource } = require('../src/infrastructure/persistence/FtsEvidenceSource');
 const { createGradeDocumentsNode } = require('../src/application/nodes/gradeDocumentsNode');
 const { createRewriteQueryNode } = require('../src/application/nodes/rewriteQueryNode');
 const { createClarifyNode } = require('../src/application/nodes/clarifyNode');
@@ -89,7 +90,10 @@ after(() => {
 function makeUseCase(llm) {
   const graph = buildChatGraph({
     analyzeQuery: createAnalyzeQueryNode({ llm, logger: silentLogger }),
-    retrieve: createRetrieveNode({ retriever, logger: silentLogger }),
+    retrieve: createRetrieveNode({
+      evidenceSource: new FtsEvidenceSource(retriever),
+      logger: silentLogger,
+    }),
     gradeDocuments: createGradeDocumentsNode({ llm, logger: silentLogger }),
     rewriteQuery: createRewriteQueryNode({ llm, logger: silentLogger }),
     clarify: createClarifyNode({ llm, logger: silentLogger }),
