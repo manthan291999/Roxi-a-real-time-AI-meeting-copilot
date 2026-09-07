@@ -24,7 +24,7 @@ export const IdleScreen: React.FC<IdleScreenProps> = ({ onStart, onHistory, blac
       style={{
         width: 240,
         height: 240,
-        background: 'radial-gradient(ellipse at center, rgba(124,116,242,0.07) 0%, transparent 70%)',
+        background: `radial-gradient(ellipse at center, ${tokens.signalDim} 0%, transparent 70%)`,
       }}
     />
 
@@ -52,7 +52,7 @@ export const IdleScreen: React.FC<IdleScreenProps> = ({ onStart, onHistory, blac
       
       <button
         onClick={onHistory}
-        className="text-[13px] font-medium transition-colors hover:text-white"
+        className="text-[13px] font-medium transition-colors hover:text-[var(--t-paper)]"
         style={{ color: tokens.mute }}
       >
         View Past Meetings

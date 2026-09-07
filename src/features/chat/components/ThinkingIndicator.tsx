@@ -36,7 +36,7 @@ export const ThinkingIndicator: React.FC<Props> = ({ nodeName }) => {
         {/* Animated Shimmer Bar */}
         <div 
           className="h-1 w-full rounded-full overflow-hidden relative"
-          style={{ background: 'rgba(255,255,255,0.05)' }}
+          style={{ background: tokens.panelRaised }}
         >
           <div 
             className="absolute top-0 bottom-0 left-0 w-1/3 rounded-full animate-shimmer"

@@ -36,7 +36,7 @@ export const MeetingContextModal: React.FC<MeetingContextModalProps> = ({ onConf
        instead of painting square corners over the transparent window. */
     <div
       className="absolute inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(10,10,12,0.6)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
+      style={{ backgroundColor: tokens.scrim, backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
       role="dialog"
       aria-modal="true"
       aria-label="Meeting context"
@@ -45,9 +45,9 @@ export const MeetingContextModal: React.FC<MeetingContextModalProps> = ({ onConf
         className="flex w-full max-w-[520px] max-h-full flex-col p-6 animate-card-enter"
         style={{
           borderRadius: radius.panel + 8,
-          background: 'rgba(17,19,24,0.94)',
+          background: tokens.sheet,
           border: `1px solid ${tokens.hairline}`,
-          boxShadow: '0 30px 80px rgba(0,0,0,0.6)',
+          boxShadow: tokens.sheetShadow,
           backdropFilter: 'blur(28px)',
           WebkitBackdropFilter: 'blur(28px)',
         }}
@@ -91,7 +91,7 @@ export const MeetingContextModal: React.FC<MeetingContextModalProps> = ({ onConf
           <button
             type="button"
             onClick={() => onConfirm(undefined)}
-            className="text-[14px] transition-opacity ease-[cubic-bezier(.2,.8,.2,1)] hover:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgba(124,116,242,0.35)] rounded"
+            className="text-[14px] transition-opacity ease-[cubic-bezier(.2,.8,.2,1)] hover:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-focus-ring)] rounded"
             style={{ color: tokens.mute }}
           >
             Skip this context

@@ -39,7 +39,7 @@ export const SuggestCard: React.FC<SuggestCardProps> = memo(({ card, onThumbUp, 
           <button
             type="button"
             aria-label="Thumbs up"
-            className="transition-colors hover:text-white cursor-pointer"
+            className="transition-colors hover:text-[var(--t-paper)] cursor-pointer"
             style={{ color: tokens.mute }}
             onClick={onThumbUp}
           >
@@ -48,7 +48,7 @@ export const SuggestCard: React.FC<SuggestCardProps> = memo(({ card, onThumbUp, 
           <button
             type="button"
             aria-label="Thumbs down"
-            className="transition-colors hover:text-white cursor-pointer"
+            className="transition-colors hover:text-[var(--t-paper)] cursor-pointer"
             style={{ color: tokens.mute }}
             onClick={onThumbDown}
           >

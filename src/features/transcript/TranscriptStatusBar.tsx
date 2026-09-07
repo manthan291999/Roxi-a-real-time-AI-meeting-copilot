@@ -29,7 +29,7 @@ export const TranscriptStatusBar: React.FC<TranscriptStatusBarProps> = ({
     <button
       type="button"
       onClick={onToggleAutoScroll}
-      className="text-[11px] transition-opacity ease-[cubic-bezier(.2,.8,.2,1)] hover:opacity-80 cursor-pointer font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgba(124,116,242,0.35)]"
+      className="text-[11px] transition-opacity ease-[cubic-bezier(.2,.8,.2,1)] hover:opacity-80 cursor-pointer font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-focus-ring)]"
       style={{ color: autoScroll ? tokens.technical : tokens.muteDim }}
       title={autoScroll ? 'Auto-scroll ON — click to pause' : 'Auto-scroll OFF — click to resume'}
     >

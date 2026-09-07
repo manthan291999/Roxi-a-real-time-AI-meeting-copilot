@@ -18,7 +18,7 @@ export const Waveform: React.FC<WaveformProps> = ({ variant = 'live', className 
           <div
             key={index}
             className="w-[7px] rounded-full"
-            style={{ height, backgroundColor: 'rgba(154, 154, 164, 0.35)' }}
+            style={{ height, backgroundColor: tokens.muteDim }}
           />
         ))}
       </div>

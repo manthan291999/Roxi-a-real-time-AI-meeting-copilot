@@ -12,7 +12,7 @@ export const Badge: React.FC<BadgeProps> = ({ label, variant = 'neutral' }) => {
       case 'connecting': return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
       case 'error': return 'bg-red-500/10 text-red-500 border-red-500/20';
       case 'neutral':
-      default: return 'bg-white/10 text-gray-300 border-white/20';
+      default: return 'bg-[var(--t-neutral-bg)] text-[var(--t-mute)] border-[var(--t-neutral-line)]';
     }
   };
 
@@ -22,7 +22,7 @@ export const Badge: React.FC<BadgeProps> = ({ label, variant = 'neutral' }) => {
       case 'connecting': return 'bg-amber-500';
       case 'error': return 'bg-red-500';
       case 'neutral':
-      default: return 'bg-gray-400';
+      default: return 'bg-[var(--t-mute)]';
     }
   };
 

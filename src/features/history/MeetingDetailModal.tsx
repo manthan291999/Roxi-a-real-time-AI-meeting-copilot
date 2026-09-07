@@ -19,7 +19,7 @@ export const MeetingDetailModal: React.FC<MeetingDetailModalProps> = ({ meeting,
     <div className="absolute inset-0 z-50 flex flex-col pointer-events-auto">
       <div 
         className="flex-1 cursor-pointer transition-opacity"
-        style={{ background: 'rgba(0, 0, 0, 0.4)' }}
+        style={{ background: tokens.scrim }}
         onClick={onClose}
       />
       <div 
@@ -30,7 +30,7 @@ export const MeetingDetailModal: React.FC<MeetingDetailModalProps> = ({ meeting,
           background: tokens.sheet,
           backdropFilter: 'blur(24px)',
           WebkitBackdropFilter: 'blur(24px)',
-          boxShadow: '0 -4px 16px rgba(0,0,0,0.2)',
+          boxShadow: tokens.sheetShadowUp,
           transition: `transform 0.3s ${easing.calm}`
         }}
       >
@@ -43,7 +43,7 @@ export const MeetingDetailModal: React.FC<MeetingDetailModalProps> = ({ meeting,
           </div>
           <button 
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 cursor-pointer"
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[var(--t-overlay-hover)] cursor-pointer"
             style={{ color: tokens.mute }}
           >
             ✕

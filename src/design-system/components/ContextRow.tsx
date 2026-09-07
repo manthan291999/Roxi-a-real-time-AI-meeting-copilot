@@ -21,7 +21,7 @@ export const ContextRow: React.FC<ContextRowProps> = ({ item }) => {
     <div
       className="flex items-start gap-2.5 rounded-lg py-1.5 pr-2.5 pl-2"
       style={{
-        backgroundColor: isAccented ? accent.bg : 'rgba(255, 255, 255, 0.02)',
+        backgroundColor: isAccented ? accent.bg : tokens.panelRaised,
         borderLeft: `2px solid ${isAccented ? accent.fg : 'transparent'}`,
       }}
     >

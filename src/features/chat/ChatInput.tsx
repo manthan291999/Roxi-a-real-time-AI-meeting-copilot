@@ -69,7 +69,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, isLoading = false 
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           placeholder={PLACEHOLDERS[placeholderIdx]}
-          className="flex-1 max-h-[120px] bg-transparent text-[14px] p-3 resize-none focus:outline-none custom-scrollbar placeholder:text-[#6F6F79] transition-all"
+          className="flex-1 max-h-[120px] bg-transparent text-[14px] p-3 resize-none focus:outline-none custom-scrollbar placeholder:text-[var(--t-mute-dim)] transition-all"
           style={{ color: tokens.paper }}
           rows={1}
         />
@@ -80,7 +80,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, isLoading = false 
             active={canSend}
             className={!canSend ? 'opacity-50 pointer-events-none' : ''}
           />
-          <div className="absolute -top-8 right-0 bg-[rgba(19,19,27,0.85)] backdrop-blur-md text-[10px] text-[#A1A1AA] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-[rgba(255,255,255,0.10)]">
+          <div className="absolute -top-8 right-0 bg-[var(--t-sheet)] backdrop-blur-md text-[10px] text-[var(--t-mute)] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-[var(--t-hairline)]">
             ⌘↵ to send
           </div>
         </div>

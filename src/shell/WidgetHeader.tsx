@@ -27,7 +27,7 @@ export const WidgetHeader: React.FC<WidgetHeaderProps> = ({ isLive, isConnecting
             {isConnecting ? (
               <div
                 className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium"
-                style={{ backgroundColor: 'rgba(255, 165, 0, 0.15)', color: 'orange' }}
+                style={{ backgroundColor: tokens.riskBg, color: tokens.risk }}
               >
                 <Spinner size={12} color="orange" />
                 Connecting
@@ -44,10 +44,10 @@ export const WidgetHeader: React.FC<WidgetHeaderProps> = ({ isLive, isConnecting
             <StopButton onClick={onStop} disabled={isStopping} />
           </>
         )}
-        <button type="button" onClick={onHistory} className="transition-opacity ease-[cubic-bezier(.2,.8,.2,1)] hover:opacity-70 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgba(124,116,242,0.35)]" style={{ color: tokens.mute }} title="History">
+        <button type="button" onClick={onHistory} className="transition-opacity ease-[cubic-bezier(.2,.8,.2,1)] hover:opacity-70 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-focus-ring)]" style={{ color: tokens.mute }} title="History">
           <ClockIcon className="w-5 h-5" />
         </button>
-        <button type="button" className="transition-opacity ease-[cubic-bezier(.2,.8,.2,1)] hover:opacity-70 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgba(124,116,242,0.35)]" style={{ color: tokens.mute }} title="Settings">
+        <button type="button" className="transition-opacity ease-[cubic-bezier(.2,.8,.2,1)] hover:opacity-70 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-focus-ring)]" style={{ color: tokens.mute }} title="Settings">
           <GearIcon className="w-5 h-5" />
         </button>
       </div>

@@ -110,6 +110,31 @@
   --t-neutral-bg: rgba(0, 0, 0, 0.045);
   --t-neutral-line: rgba(0, 0, 0, 0.16);
 
+  /* Interaction chrome. These were repeated as literals across ~20 files —
+     the focus ring alone appeared in ten — which is precisely why a re-theme
+     used to mean a repo-wide search. */
+  --t-focus-ring: rgba(67, 56, 202, 0.35);
+  --t-overlay-hover: rgba(0, 0, 0, 0.08);
+  /* Full-screen dim behind a modal. Stays dark in both themes: a scrim's job
+     is to suppress what is behind it, not to match the surface. */
+  --t-scrim: rgba(0, 0, 0, 0.32);
+
+  /* Destructive / stop. 4.58:1 on the shell. */
+  --t-danger: #B91C1C;
+  --t-danger-bg: rgba(185, 28, 28, 0.08);
+  --t-danger-bg-hover: rgba(185, 28, 28, 0.16);
+
+  /* A raised card with its own ground, sitting ON the shell (GlassCard,
+     modal bodies). Not bound by the opacity budget — like a sheet, it needs
+     its own surface or the shell's backdrop reads through the text. */
+  --t-card: rgba(255, 255, 255, 0.90);
+  --t-card-sheen: linear-gradient(160deg, rgba(255, 255, 255, 0.60) 0%, rgba(255, 255, 255, 0) 55%);
+  --t-card-inset: inset 0 1px 0 rgba(255, 255, 255, 0.80), inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+  /* Depth under a sheet. Lighter than the dark theme's: a heavy black shadow
+     under a white surface reads as dirt rather than elevation. */
+  --t-sheet-shadow: 0 30px 80px rgba(0, 0, 0, 0.22);
+  --t-sheet-shadow-up: 0 -4px 16px rgba(0, 0, 0, 0.10);
+
   /* Speaker identity colours, assigned round-robin by diarization index.
      Five distinguishable hues, each >= 4.5:1 on the shell. The dark theme used
      Tailwind 400-level values, which measured 1.3-1.9:1 on a light ground; a

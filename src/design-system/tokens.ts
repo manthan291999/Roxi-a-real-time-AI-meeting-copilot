@@ -72,6 +72,23 @@ export const tokens = {
   technicalBg: 'var(--t-technical-bg)',
   technicalLine: 'var(--t-technical-line)',
 
+  /** Interaction chrome — focus, hover, and the dim behind a modal. */
+  focusRing: 'var(--t-focus-ring)',
+  overlayHover: 'var(--t-overlay-hover)',
+  scrim: 'var(--t-scrim)',
+
+  /** Destructive / stop. */
+  danger: 'var(--t-danger)',
+  dangerBg: 'var(--t-danger-bg)',
+  dangerBgHover: 'var(--t-danger-bg-hover)',
+
+  /** A raised card with its own ground (GlassCard, modal bodies). */
+  card: 'var(--t-card)',
+  cardSheen: 'var(--t-card-sheen)',
+  cardInset: 'var(--t-card-inset)',
+  sheetShadow: 'var(--t-sheet-shadow)',
+  sheetShadowUp: 'var(--t-sheet-shadow-up)',
+
   /** Fallback accent for a tag the UI has no styling for. */
   neutralBg: 'var(--t-neutral-bg)',
   neutralLine: 'var(--t-neutral-line)',

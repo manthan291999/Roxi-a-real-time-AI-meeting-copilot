@@ -74,7 +74,7 @@ export const RoxiAnswerCard: React.FC<Props> = ({ message, onFollowUpClick }) =>
                   onClick={() => onFollowUpClick?.(question)}
                   className="text-[12px] px-3 py-1.5 rounded-full transition-all hover:scale-[1.02] active:scale-[0.98] text-left"
                   style={{ 
-                    background: 'rgba(255,255,255,0.05)', 
+                    background: tokens.panelRaised, 
                     border: `1px solid ${tokens.hairline}`,
                     color: tokens.paper 
                   }}

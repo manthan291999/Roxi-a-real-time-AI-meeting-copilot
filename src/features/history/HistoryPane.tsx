@@ -3,6 +3,7 @@ import { useHistory } from './useHistory';
 import { useMeetingDetail } from './useMeetingDetail';
 import { ChatPane } from '../chat';
 import { MeetingDetailModal } from './MeetingDetailModal';
+import { tokens } from '../../design-system';
 import { ClockIcon } from '../../design-system';
 import { Spinner } from '../../shared/ui/Spinner';
 import { EmptyState } from '../../shared/ui/EmptyState';
@@ -25,9 +26,9 @@ export const HistoryPane: React.FC = () => {
 
   if (meetings.length === 0) {
     return (
-      <div className="h-full flex flex-col items-center justify-center p-8 text-center text-[#c7c4d7]">
-        <ClockIcon className="w-12 h-12 mb-4" style={{ color: 'rgba(255,255,255,0.1)' }} />
-        <h3 className="text-[16px] font-medium text-[#e4e1ed] mb-2">No Past Meetings</h3>
+      <div className="h-full flex flex-col items-center justify-center p-8 text-center text-[var(--t-mute)]">
+        <ClockIcon className="w-12 h-12 mb-4" style={{ color: tokens.hairline }} />
+        <h3 className="text-[16px] font-medium text-[var(--t-paper)] mb-2">No Past Meetings</h3>
         <p className="text-[13px]">
           Your past meetings will appear here. Start a capture session to record your first meeting.
         </p>
@@ -38,16 +39,16 @@ export const HistoryPane: React.FC = () => {
   return (
     <div className="flex flex-col h-full gap-4 relative">
       <div className="flex-1 overflow-hidden flex flex-col rounded-xl">
-        <div className="p-4 flex flex-col gap-4 overflow-y-auto custom-scrollbar h-1/2 border-b border-[rgba(255,255,255,0.05)]">
-          <h2 className="text-[18px] font-bold text-[#e4e1ed] mb-2 px-2">Past Meetings</h2>
+        <div className="p-4 flex flex-col gap-4 overflow-y-auto custom-scrollbar h-1/2 border-b border-[var(--t-hairline-soft)]">
+          <h2 className="text-[18px] font-bold text-[var(--t-paper)] mb-2 px-2">Past Meetings</h2>
           {meetings.map((meeting) => (
             <div 
               key={meeting.id}
               onClick={() => openMeeting(meeting)}
-              className="bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.05)] rounded-xl p-4 hover:bg-[rgba(255,255,255,0.08)] transition-colors cursor-pointer"
+              className="bg-[var(--t-panel-raised)] border border-[var(--t-hairline-soft)] rounded-xl p-4 hover:bg-[var(--t-overlay-hover)] transition-colors cursor-pointer"
             >
-              <h3 className="text-[15px] font-medium text-[#e4e1ed] mb-1">{meeting.title || 'Untitled Meeting'}</h3>
-              <p className="text-[12px] text-[#464554]">{new Date(meeting.date).toLocaleString()}</p>
+              <h3 className="text-[15px] font-medium text-[var(--t-paper)] mb-1">{meeting.title || 'Untitled Meeting'}</h3>
+              <p className="text-[12px] text-[var(--t-mute-dim)]">{new Date(meeting.date).toLocaleString()}</p>
             </div>
           ))}
         </div>

@@ -9,8 +9,8 @@ export const BlackholeNotice: React.FC = () => (
   <div
     className="max-w-[400px] rounded-xl border px-4 py-3.5 text-left"
     style={{
-      backgroundColor: 'rgba(242, 177, 61, 0.08)',
-      borderColor: 'rgba(242, 177, 61, 0.35)',
+      backgroundColor: tokens.riskBg,
+      borderColor: tokens.riskLine,
     }}
   >
     <h3 className="mb-1 text-[14px] font-semibold" style={{ color: tokens.risk }}>

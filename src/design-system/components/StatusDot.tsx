@@ -9,7 +9,7 @@ interface StatusDotProps {
 const COLORS: Record<StatusDotProps['color'], string> = {
   green: tokens.decision,
   amber: tokens.risk,
-  red: '#ef4444',
+  red: tokens.danger,
   gray: tokens.muteDim,
 };
 

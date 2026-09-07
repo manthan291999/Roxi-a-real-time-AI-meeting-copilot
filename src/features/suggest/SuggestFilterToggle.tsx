@@ -27,7 +27,7 @@ export const SuggestFilterToggle: React.FC<SuggestFilterToggleProps> = ({ scope,
           aria-pressed={isActive}
           className="px-3 py-1 rounded-full text-[12px] font-medium transition-colors cursor-pointer"
           style={{
-            backgroundColor: isActive ? '#33353a' : 'transparent',
+            backgroundColor: isActive ? tokens.overlay : 'transparent',
             color: isActive ? tokens.paper : tokens.mute,
           }}
         >

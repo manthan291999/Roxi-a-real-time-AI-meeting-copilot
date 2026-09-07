@@ -31,7 +31,7 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, onCha
             key={tab.id}
             type="button"
             onClick={() => onChange(tab.id)}
-            className="flex-1 h-9 text-[17px] font-semibold cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgba(124,116,242,0.35)]"
+            className="flex-1 h-9 text-[17px] font-semibold cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-focus-ring)]"
             style={{
               borderRadius: radius.chip,
               background: isActive ? tokens.signalDim : 'transparent',

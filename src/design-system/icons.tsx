@@ -6,8 +6,8 @@ export const SparkleIcon: React.FC<IconProps> = ({ className = '', style }) => (
   <svg viewBox="0 0 24 24" fill="url(#roxi-sparkle-gradient)" className={className} style={style}>
     <defs>
       <linearGradient id="roxi-sparkle-gradient" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stopColor="#c4b5fd" />
-        <stop offset="100%" stopColor="#7c3aed" />
+        <stop offset="0%" stopColor="var(--t-signal)" />
+        <stop offset="100%" stopColor="var(--t-technical)" />
       </linearGradient>
     </defs>
     <path d="M12 2c.6 3.8 2.2 5.4 6 6-3.8.6-5.4 2.2-6 6-.6-3.8-2.2-5.4-6-6 3.8-.6 5.4-2.2 6-6Z" />

@@ -17,7 +17,7 @@ export const TranscriptLine: React.FC<TranscriptLineProps> = memo(({ line, displ
   const color = getSpeakerColor(line.speakerIdx);
 
   return (
-    <div className={`flex gap-4 p-4 hover:bg-white/5 transition-colors ${line.partial ? 'opacity-70' : ''}`}>
+    <div className={`flex gap-4 p-4 hover:bg-[var(--t-overlay-hover)] transition-colors ${line.partial ? 'opacity-70' : ''}`}>
       <div className="w-[100px] shrink-0 flex flex-col items-end gap-1 pt-[2px]">
         {onRenameSpeaker ? (
           <button

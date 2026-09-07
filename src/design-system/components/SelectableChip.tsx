@@ -14,8 +14,8 @@ export interface ChipPalette {
 /** Default palette, used by every chip in the app — idle, intake, and session. */
 export const DARK_CHIP_PALETTE: ChipPalette = {
   fg: tokens.paper,
-  bg: 'rgba(255, 255, 255, 0.04)',
-  border: 'rgba(255, 255, 255, 0.12)',
+  bg: tokens.panelRaised,
+  border: tokens.hairline,
   selectedFg: tokens.signal,
   selectedBg: tokens.signalDim,
   selectedBorder: tokens.signalLine,
@@ -50,7 +50,7 @@ export const SelectableChip: React.FC<SelectableChipProps> = ({
     onClick={onClick}
     aria-pressed={selected}
     title={title ?? label}
-    className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ease-[cubic-bezier(.2,.8,.2,1)] cursor-pointer hover:brightness-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgba(124,116,242,0.35)]"
+    className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium transition-colors ease-[cubic-bezier(.2,.8,.2,1)] cursor-pointer hover:brightness-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-focus-ring)]"
     style={{
       color: selected ? palette.selectedFg : palette.fg,
       backgroundColor: selected ? palette.selectedBg : palette.bg,

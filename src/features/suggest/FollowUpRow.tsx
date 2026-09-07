@@ -28,7 +28,7 @@ export const FollowUpRow: React.FC<FollowUpRowProps> = ({ onSelect }) => (
       type="button"
       onClick={() => onSelect('')}
       className="inline-flex items-center gap-1 rounded-full border border-dashed px-3 py-1 text-[12px] font-medium transition-colors cursor-pointer hover:brightness-125"
-      style={{ borderColor: 'rgba(255,255,255,0.20)', color: tokens.mute }}
+      style={{ borderColor: tokens.neutralLine, color: tokens.mute }}
       title="Write your own follow-up"
     >
       <PlusIcon className="w-3.5 h-3.5" />
