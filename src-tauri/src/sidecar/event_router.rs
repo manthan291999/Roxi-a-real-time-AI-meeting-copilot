@@ -14,13 +14,17 @@ fn send_control(app: &AppHandle, command: &serde_json::Value) {
     }
 }
 
-/// PERF FIX #2: Cap the number of concurrent in-flight LLM pipeline tasks.
-/// Without this, a fast speaker produces Final events faster than the LLM can
-/// process them (~5-8s/chunk), causing unbounded task accumulation → API 429
-/// rate-limit errors → stale, out-of-order responses in the UI.
+/// Caps concurrent LLM pipeline work at 3, which is ~15-24s of LLM budget in
+/// parallel — enough for real-time meetings without saturating the OpenAI rate
+/// limit.
 ///
-/// 3 concurrent tasks = ~15-24s of LLM budget in parallel, which is enough
-/// for real-time meetings without saturating the OpenAI rate limit.
+/// The permit is acquired INSIDE the spawned task, not before it. That is
+/// deliberate: route_sidecar_event runs on the gateway's stdout reader thread
+/// (adapters/gateway_client.rs), and blocking there would stall
+/// transcript_partial delivery and visibly freeze the live caption UI.
+/// Concurrent API calls are therefore capped, but the task queue itself is
+/// unbounded. Accepted: one speaker produces a final turn every ~3-8s and three
+/// pipelines drain at ~5-8s each, so the queue does not grow in practice.
 static PIPELINE_SEMAPHORE: std::sync::OnceLock<Arc<Semaphore>> = std::sync::OnceLock::new();
 
 fn get_semaphore() -> Arc<Semaphore> {
@@ -59,11 +63,15 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                     // 1. Emit the final transcript instantly to the UI — never blocked by LLM
                     let _ = app.emit("transcript_final", TranscriptPayload { text: t.clone(), speaker: s.clone(), stt_label: event.stt_label });
                     
-                    // 2. Run the Rust Native ChunkGraph under backpressure semaphore
-                    //    PERF FIX #2: acquire permit before spawning to cap concurrency at 3.
-                    //    If 3 tasks are already in-flight, this blocks until one completes.
+                    // 2. Run the Rust Native ChunkGraph. See PIPELINE_SEMAPHORE above
+                    //    for why the permit is taken inside the task rather than here.
                     let app_clone = app.clone();
                     let sem = get_semaphore();
+
+                    // Minted here, before the task is spawned, so refs follow the order
+                    // turns were spoken rather than the order pipelines happened to
+                    // finish (routes differ: Low is 1 LLM hop, High is 3).
+                    let chunk_ref = persistence::next_chunk_ref();
                     
                     tauri::async_runtime::spawn(async move {
                         // Acquire permit — auto-released when `_permit` is dropped at end of scope
@@ -80,13 +88,13 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                             Some(graph) => {
                                 let (state, trace, detached) = graph.run(&t, &s).await;
 
-                                // Identifies this chunk to the gateway so the detached
+                                // `chunk_ref` (minted before this task was spawned)
+                                // identifies the chunk to the gateway so the detached
                                 // lane's artifacts can be attached to the same row.
                                 //
                                 // Sent BEFORE the detached lane is spawned: that lane's
                                 // `persistArtifacts` references this chunkRef, so the row
                                 // must already exist by the time it can arrive.
-                                let chunk_ref = persistence::next_chunk_ref();
                                 send_control(
                                     &app_clone,
                                     &persistence::persist_chunk_command(&chunk_ref, &t, &s, &state),
