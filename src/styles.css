@@ -8,34 +8,51 @@
   /* ---- Glass shell tunables -------------------------------------------
      Two numbers control the whole look; nothing else moves.
 
-     --glass-alpha  alpha of the shell's layer. Lower = more see-through.
+     --glass-alpha  alpha of the shell's light layer. Lower = more see-through.
      --glass-dim    brightness() applied to the BACKDROP before the shell
-                    composites over it. Lower = more readable text.
+                    composites over it. HIGHER = more readable text here,
+                    because the shell is light and the text is dark.
 
-     Why brightness() is needed: at 0.35 alpha over a white desktop the
-     composited luminance is ~0.66, which puts `paper` (#F5F5F7) text at
-     ~1.3:1 — invisible. brightness(0.35) darkens the backdrop first, giving
-     ~0.16 luminance and ~12:1 contrast while shape, colour and motion still
-     read through. This is what macOS dark vibrancy does.
+     Why this theme is less see-through than the dark one was: the dark shell
+     could rely on brightness(0.25) to darken any backdrop, because multiplying
+     toward zero always works — white x 0.25 is mid-grey. A light shell needs
+     the mirror trick and cannot have it: brightness(k) on a black desktop is
+     still black for every k, since 0 x k = 0. So on a dark wallpaper the only
+     thing standing between dark text and a dark backdrop is the shell's own
+     alpha, which is why it is 0.85 here and was 0.35 before. --glass-dim
+     still earns its place on mid-tone wallpapers; it simply cannot rescue the
+     worst case on its own.
 
-     Measured over a WHITE desktop (the worst case for text), with
-     --glass-alpha 0.35 and --glass-dim 0.25:
-       paper   on shell 12.65:1 AAA   on a 0.04 card 11.20:1 AAA
-       mute    on shell  4.94:1 AA    on a 0.04 card  4.99:1 AA
-     dim 0.35 (the first value tried) put `mute` at 3.86:1 / 3.42:1, below AA,
-     so 0.25 is the ceiling if muted labels are to stay legible. Re-measure if
-     you change either number.
+     The worst case has therefore FLIPPED. It used to be a white desktop; it is
+     now a BLACK one. Measured there, with --glass-alpha 0.85:
+       paper  on shell 12.25:1 AAA   on a 0.035 card 11.37:1 AAA
+       mute   on shell  5.21:1 AA    on a 0.035 card  4.83:1 AA
+     mute #5A5A66 (the first value tried) held AA on the shell at 4.80:1 but
+     fell to 4.46:1 on a card, so #55555F is the ceiling if muted labels are to
+     stay legible everywhere. Re-measure if you change either number.
+     Over a white desktop the same text reads 17.33:1 / 6.80:1 — the easy case.
 
      Exactly ONE layer carries transparency: the shell. Interior surfaces are
      transparent or an overlay at <= 0.06 alpha, because transmittance
      multiplies — stacking alpha layers destroys see-through:
-       shell only                 0.65                      = 65.0%
-       shell + 0.04 + 0.06        0.65 x 0.96 x 0.94        = 58.7%  ok
-       shell + 0.20 + 0.45        0.65 x 0.80 x 0.55        = 28.6%  not ok
+       shell only                 0.15                      = 15.0%
+       shell + 0.035 + 0.055      0.15 x 0.965 x 0.945       = 13.7%  ok
+       shell + 0.20 + 0.45        0.15 x 0.80 x 0.55         =  6.6%  not ok
   */
-  --glass-alpha: 0.35;
-  --glass-dim: 0.25;
+  --glass-alpha: 0.85;
+  --glass-dim: 1.35;
   --glass-blur: 32px;
+
+  /* The shell recipe, composed here rather than in AppShell.tsx so that the
+     component stays purely structural and owns no colour. */
+  --t-shell-rgb: 255, 255, 255;
+  --t-shell: rgba(var(--t-shell-rgb), var(--glass-alpha));
+  --t-shell-backdrop: blur(var(--glass-blur)) saturate(150%) brightness(var(--glass-dim));
+  --t-shell-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.28),
+    0 0 0 0.5px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.70),
+    0 0 120px rgba(124, 116, 242, 0.05);
 
   /* ---- Theme palette ---------------------------------------------------
      THE single source of truth for colour. `design-system/tokens.ts` maps each
@@ -49,23 +66,23 @@
 
   /* Surfaces. The shell is the only layer allowed to be transparent; see the
      opacity budget above. */
-  --t-ink: #0A0A0C;
+  --t-ink: #FFFFFF;
   --t-panel: transparent;
-  --t-panel-raised: rgba(255, 255, 255, 0.04);
-  --t-overlay: rgba(255, 255, 255, 0.06);
-  --t-hairline: rgba(255, 255, 255, 0.10);
-  --t-hairline-soft: rgba(255, 255, 255, 0.05);
+  --t-panel-raised: rgba(0, 0, 0, 0.035);
+  --t-overlay: rgba(0, 0, 0, 0.055);
+  --t-hairline: rgba(0, 0, 0, 0.12);
+  --t-hairline-soft: rgba(0, 0, 0, 0.07);
 
   /* Sheets sit OVER the glass (modals, tooltips), so they cannot derive from
      --glass-alpha: they need their own readable ground or the text behind them
      shows through. */
-  --t-sheet: rgba(19, 19, 27, 0.72);
-  --t-sheet-inner: rgba(0, 0, 0, 0.28);
+  --t-sheet: rgba(252, 252, 254, 0.88);
+  --t-sheet-inner: rgba(0, 0, 0, 0.05);
 
   /* Text. Fully opaque — the opacity budget does not apply to these. */
-  --t-paper: #F5F5F7;
-  --t-mute: #A5A5AF;
-  --t-mute-dim: #6F6F79;
+  --t-paper: #1A1A1F;
+  --t-mute: #55555F;
+  --t-mute-dim: #7A7A86;
 
   /* The one interactive accent — CTA, live state, focus. */
   --t-signal: #7C74F2;
@@ -85,8 +102,8 @@
   --t-technical-line: rgba(167, 139, 250, 0.30);
 
   /* The fallback accent for a tag the UI has no styling for. */
-  --t-neutral-bg: rgba(255, 255, 255, 0.05);
-  --t-neutral-line: rgba(255, 255, 255, 0.15);
+  --t-neutral-bg: rgba(0, 0, 0, 0.045);
+  --t-neutral-line: rgba(0, 0, 0, 0.16);
 
   /* Speaker identity colours, assigned round-robin by diarization index. */
   --t-speaker-1: #60a5fa;
@@ -96,7 +113,7 @@
   --t-speaker-5: #fb923c;
 
   /* Chrome that belongs to no token: the scrollbar. */
-  --t-scrollbar-thumb: #464554;
+  --t-scrollbar-thumb: rgba(0, 0, 0, 0.22);
 }
 
 /* Without backdrop-filter there is no brightness() to guarantee legibility,
@@ -104,7 +121,7 @@
    it; only reachable if the app is ever ported off macOS. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root {
-    --glass-alpha: 0.88;
+    --glass-alpha: 0.95;
   }
 }
 
@@ -115,7 +132,7 @@
   .glass-panel {
     background: var(--t-panel-raised);
     border: 1px solid var(--t-hairline);
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.18);
   }
 
   .inner-glass {

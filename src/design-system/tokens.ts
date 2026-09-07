@@ -24,6 +24,15 @@ export const tokens = {
    * carried by hairlines and shadows, not by opacity.
    */
   ink: 'var(--t-ink)',
+  /**
+   * The shell recipe. Composed in styles.css, not here and not in AppShell:
+   * the background, the backdrop filter and the shadow have to change together
+   * or the glass stops being legible, so they belong in one place next to the
+   * contrast measurements that justify them.
+   */
+  shell: 'var(--t-shell)',
+  shellBackdrop: 'var(--t-shell-backdrop)',
+  shellShadow: 'var(--t-shell-shadow)',
   panel: 'var(--t-panel)',
   panelRaised: 'var(--t-panel-raised)',
   /** One step stronger, for a control sitting on top of panelRaised. */
