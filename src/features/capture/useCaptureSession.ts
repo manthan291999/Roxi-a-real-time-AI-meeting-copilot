@@ -3,13 +3,28 @@ import { useServices } from '../../context';
 import { MeetingContext } from '../../shared/types';
 
 /**
+ * Gateway provider states (gateway/stt/provider-manager.js setState) -> session
+ * status. The gateway emits 'active', never 'live', so casting the raw string
+ * never matched and WidgetHeader's Live pill and Stop button never rendered.
+ */
+function toSessionStatus(state: string): 'idle' | 'connecting' | 'live' | 'error' {
+  switch (state) {
+    case 'active':     return 'live';
+    case 'connecting': return 'connecting';
+    case 'switching':  return 'connecting';
+    case 'failed':     return 'error';
+    default:           return 'connecting';
+  }
+}
+
+/**
  * Owns the capture session: talks to ICaptureService and tracks provider status.
  * Screen sequencing lives in useCaptureFlow, not here.
  */
 export function useCaptureSession() {
   const { captureService, eventBus } = useServices();
   const [status, setStatus] = useState<'idle' | 'connecting' | 'live' | 'error'>('idle');
-  const [provider, setProvider] = useState<string>('Claude 3.5 Sonnet');
+  const [provider, setProvider] = useState<string>('');
   const [blackholeMissing, setBlackholeMissing] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
 
@@ -20,7 +35,7 @@ export function useCaptureSession() {
 
     const unlistenStatus = eventBus.onProviderStatus((s) => {
       setProvider(s.provider);
-      setStatus(s.state as 'idle' | 'connecting' | 'live' | 'error');
+      setStatus(toSessionStatus(s.state));
     });
 
     const unlistenError = eventBus.onCaptureError((err) => {
@@ -39,7 +54,8 @@ export function useCaptureSession() {
     setStatus('connecting');
     try {
       await captureService.startCapture(context);
-      setStatus('live');
+      // Status is driven by the provider_status event; asserting 'live' here
+      // would claim a connection the gateway has not reported yet.
     } catch (err) {
       console.error('Failed to start capture:', err);
       setStatus('error');
@@ -48,9 +64,16 @@ export function useCaptureSession() {
 
   const stopCapture = useCallback(async () => {
     setIsStopping(true);
-    await captureService.stopCapture();
-    setIsStopping(false);
-    setStatus('idle');
+    try {
+      await captureService.stopCapture();
+    } catch (err) {
+      console.error('Failed to stop capture:', err);
+    } finally {
+      // Always return to idle: the session is over either way, and leaving
+      // isStopping set disables the only Stop control in the header.
+      setIsStopping(false);
+      setStatus('idle');
+    }
   }, [captureService]);
 
   return {
