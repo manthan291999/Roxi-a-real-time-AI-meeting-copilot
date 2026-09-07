@@ -116,6 +116,14 @@ pub fn run() {
             }
             Ok(())
         })
+        .on_window_event(|window, event| {
+            // Close means "minimize to tray", not "quit" — the macOS menu-bar-app
+            // pattern. Quitting is only ever via tray → Quit Roxi.
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::capture::start_capture,
             commands::capture::stop_capture,

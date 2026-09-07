@@ -3,12 +3,13 @@ import { useHistory } from './useHistory';
 import { useMeetingDetail } from './useMeetingDetail';
 import { HistoryChatPane } from '../history-chat';
 import { MeetingDetailModal } from './MeetingDetailModal';
+import { ClockIcon } from '../../design-system';
 import { Spinner } from '../../shared/ui/Spinner';
 import { EmptyState } from '../../shared/ui/EmptyState';
 
 export const HistoryPane: React.FC = () => {
   const { meetings, loading, error } = useHistory();
-  const { selectedMeeting, openMeeting, closeMeeting } = useMeetingDetail();
+  const { selectedMeeting, isLoadingDetail, openMeeting, closeMeeting } = useMeetingDetail();
 
   if (loading) {
     return (
@@ -25,7 +26,7 @@ export const HistoryPane: React.FC = () => {
   if (meetings.length === 0) {
     return (
       <div className="h-full flex flex-col items-center justify-center p-8 text-center text-[#c7c4d7]">
-        <span className="material-symbols-outlined text-[48px] text-[rgba(255,255,255,0.1)] mb-4">history</span>
+        <ClockIcon className="w-12 h-12 mb-4" style={{ color: 'rgba(255,255,255,0.1)' }} />
         <h3 className="text-[16px] font-medium text-[#e4e1ed] mb-2">No Past Meetings</h3>
         <p className="text-[13px]">
           Your past meetings will appear here. Start a capture session to record your first meeting.
@@ -54,7 +55,7 @@ export const HistoryPane: React.FC = () => {
           <HistoryChatPane />
         </div>
       </div>
-      <MeetingDetailModal meeting={selectedMeeting} onClose={closeMeeting} />
+      <MeetingDetailModal meeting={selectedMeeting} onClose={closeMeeting} isLoading={isLoadingDetail} />
     </div>
   );
 };

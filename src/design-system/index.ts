@@ -1,5 +1,6 @@
 export * from './tokens';
 export * from './tagPalette';
+export * from './icons';
 
 export * from './components/Badge';
 export * from './components/TagChip';

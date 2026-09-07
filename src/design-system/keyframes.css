@@ -54,8 +54,51 @@
   animation: signal-breathe 3.4s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
 }
 
+/* Used by SignalRing when isLive=false but isReady=true (idle screen) — a
+   slower, dimmer breath that reads as "ready" rather than "live". */
+@keyframes signal-breathe-idle {
+  0%, 100% { opacity: 0.2; transform: scale(0.96); }
+  50% { opacity: 0.55; transform: scale(1); }
+}
+
+.signal-ring-idle {
+  animation: signal-breathe-idle 4.2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+
+/* Entrance for chat messages and answer cards. `both` fill mode means the
+   reduced-motion override below leaves the element at its natural, visible
+   state rather than stranded at opacity 0. */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Indeterminate progress sweep. The travelling element is one third of its
+   track, so -100% parks it just off the left edge and 300% just off the right. */
+@keyframes shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+
+.animate-shimmer {
+  animation: shimmer 1.6s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .signal-ring-animate {
+  .signal-ring-animate,
+  .signal-ring-idle,
+  .animate-fade-in,
+  .animate-shimmer {
     animation: none;
   }
 }

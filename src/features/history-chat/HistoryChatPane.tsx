@@ -1,8 +1,10 @@
 import React, { useRef, useEffect } from 'react';
 import { useHistoryChatContext } from './HistoryChatContext';
-import { MessageBubble } from '../chat/MessageBubble';
 import { HistoryChatInput } from './HistoryChatInput';
+import { RoxiAnswerCard } from './components/RoxiAnswerCard';
+import { ThinkingIndicator } from './components/ThinkingIndicator';
 import { tokens, radius } from '../../design-system';
+import { ChatMessage } from '../../shared/types';
 
 export const HistoryChatPane: React.FC = () => {
   const { messages, isLoading, thinkingText, askQuestion } = useHistoryChatContext();
@@ -21,23 +23,26 @@ export const HistoryChatPane: React.FC = () => {
           </div>
         ) : (
           messages.map((msg, i) => (
-            <MessageBubble key={i} message={msg} />
+            msg.role === 'assistant' ? (
+              <RoxiAnswerCard key={i} message={msg} onFollowUpClick={askQuestion} />
+            ) : (
+              <div key={i} className="flex w-full justify-end">
+                <div
+                  className="max-w-[85%] p-3 text-[14px] leading-relaxed rounded-br-sm"
+                  style={{
+                    borderRadius: radius.card,
+                    background: tokens.signal,
+                    color: '#fff',
+                  }}
+                >
+                  {msg.content}
+                </div>
+              </div>
+            )
           ))
         )}
 
-        {isLoading && (
-          <div className="flex w-full justify-start">
-            <div
-              className="max-w-[85%] p-3 text-[14px] rounded-bl-sm border flex items-center gap-2"
-              style={{ borderRadius: radius.card, background: tokens.panelRaised, borderColor: tokens.hairline, color: tokens.paper }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full animate-typing-dot" style={{ background: tokens.signal }}></span>
-              <span className="w-1.5 h-1.5 rounded-full animate-typing-dot" style={{ background: tokens.signal }}></span>
-              <span className="w-1.5 h-1.5 rounded-full animate-typing-dot" style={{ background: tokens.signal }}></span>
-              <span className="ml-1 text-[12px]" style={{ color: tokens.mute }}>{thinkingText}</span>
-            </div>
-          </div>
-        )}
+        {isLoading && <ThinkingIndicator nodeName={thinkingText} />}
         <div ref={bottomRef} className="h-4 shrink-0" />
       </div>
 

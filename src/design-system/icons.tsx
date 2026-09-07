@@ -79,6 +79,49 @@ export const SubtitlesIcon: React.FC<IconProps> = ({ className = '', style }) =>
   </svg>
 );
 
+/**
+ * Disclosure chevron. Points down at rest; rotate 180deg for the open state
+ * rather than swapping in a second icon.
+ */
+export const ChevronDownIcon: React.FC<IconProps> = ({ className = '', style }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+    <path d="M6 9.5l6 6 6-6" />
+  </svg>
+);
+
+/** Processing / compute. Used by the chat thinking indicator. */
+export const MemoryIcon: React.FC<IconProps> = ({ className = '', style }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+    <rect x="7.5" y="7.5" width="9" height="9" rx="1.6" />
+    <path d="M10.2 3.4v4.1M13.8 3.4v4.1M10.2 16.5v4.1M13.8 16.5v4.1M3.4 10.2h4.1M3.4 13.8h4.1M16.5 10.2h4.1M16.5 13.8h4.1" />
+  </svg>
+);
+
+/** A confirmed decision. */
+export const VerifiedIcon: React.FC<IconProps> = ({ className = '', style }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M8.4 12.3l2.5 2.5 4.7-5" />
+  </svg>
+);
+
+/** An action item. */
+export const AssignmentIcon: React.FC<IconProps> = ({ className = '', style }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+    <path d="M9 5.2H7.3A1.8 1.8 0 0 0 5.5 7v12.2A1.8 1.8 0 0 0 7.3 21h9.4a1.8 1.8 0 0 0 1.8-1.8V7a1.8 1.8 0 0 0-1.8-1.8H15" />
+    <rect x="9" y="3" width="6" height="4.2" rx="1.3" />
+    <path d="M8.9 12h6.2M8.9 15.6h4.2" />
+  </svg>
+);
+
+/** A risk. */
+export const WarningIcon: React.FC<IconProps> = ({ className = '', style }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+    <path d="M12 4.4 3.1 19.2h17.8L12 4.4Z" />
+    <path d="M12 10.2v4.1M12 16.7v.1" />
+  </svg>
+);
+
 export const ExpandIcon: React.FC<IconProps> = ({ className = '', style }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
     <path d="M9 4H4v5M15 4h5v5M4 15v5h5M20 15v5h-5" />

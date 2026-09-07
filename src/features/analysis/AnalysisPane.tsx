@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAnalysis } from './useAnalysis';
-import { GlassCard } from '../../design-system';
+import { GlassCard, VerifiedIcon, AssignmentIcon, WarningIcon } from '../../design-system';
 
 export const AnalysisPane: React.FC = () => {
   const { risks, decisions, actions } = useAnalysis();
@@ -18,7 +18,7 @@ export const AnalysisPane: React.FC = () => {
       {decisions.length > 0 && (
         <section>
           <h3 className="text-[#e4e1ed] font-medium mb-3 flex items-center gap-2">
-            <span className="material-symbols-outlined text-[#00a370] text-[18px]">verified</span>
+            <VerifiedIcon className="w-[18px] h-[18px]" style={{ color: '#00a370' }} />
             Decisions
           </h3>
           <div className="flex flex-col gap-2">
@@ -34,7 +34,7 @@ export const AnalysisPane: React.FC = () => {
       {actions.length > 0 && (
         <section>
           <h3 className="text-[#e4e1ed] font-medium mb-3 flex items-center gap-2">
-            <span className="material-symbols-outlined text-[#8083ff] text-[18px]">assignment</span>
+            <AssignmentIcon className="w-[18px] h-[18px]" style={{ color: '#8083ff' }} />
             Action Items
           </h3>
           <div className="flex flex-col gap-2">
@@ -50,7 +50,7 @@ export const AnalysisPane: React.FC = () => {
       {risks.length > 0 && (
         <section>
           <h3 className="text-[#e4e1ed] font-medium mb-3 flex items-center gap-2">
-            <span className="material-symbols-outlined text-[#d97721] text-[18px]">warning</span>
+            <WarningIcon className="w-[18px] h-[18px]" style={{ color: '#d97721' }} />
             Risks Identified
           </h3>
           <div className="flex flex-col gap-2">

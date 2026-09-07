@@ -26,7 +26,7 @@ export const IdleScreen: React.FC<IdleScreenProps> = ({ onStart, onHistory, blac
       }}
     />
 
-    <SignalRing scale="macro" />
+    <SignalRing scale="macro" isReady />
 
     <div className="flex flex-col gap-3">
       <h2 className="text-[28px] font-bold tracking-tight leading-[1.25]" style={{ color: tokens.paper }}>

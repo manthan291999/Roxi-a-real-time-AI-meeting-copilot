@@ -1,14 +1,19 @@
 import React from 'react';
-import { Meeting } from '../../shared/types';
+import { MeetingDetail } from '../../shared/types';
 import { tokens, radius, easing } from '../../design-system/tokens';
+import { Spinner } from '../../shared/ui/Spinner';
 
 interface MeetingDetailModalProps {
-  meeting: Meeting | null;
+  meeting: MeetingDetail | null;
   onClose: () => void;
+  isLoading?: boolean;
 }
 
-export const MeetingDetailModal: React.FC<MeetingDetailModalProps> = ({ meeting, onClose }) => {
+export const MeetingDetailModal: React.FC<MeetingDetailModalProps> = ({ meeting, onClose, isLoading }) => {
   if (!meeting) return null;
+
+  const transcript = meeting.transcript;
+  const hasTranscript = typeof transcript === 'string' && transcript.trim().length > 0;
 
   return (
     <div className="absolute inset-0 z-50 flex flex-col pointer-events-auto">
@@ -42,7 +47,15 @@ export const MeetingDetailModal: React.FC<MeetingDetailModalProps> = ({ meeting,
         </div>
         
         <div className="flex-1 overflow-y-auto p-5 custom-scrollbar text-[14px] leading-relaxed whitespace-pre-wrap" style={{ color: tokens.paper }}>
-          {('transcript' in meeting ? (meeting as any).transcript : null) || <span className="italic" style={{ color: tokens.muteDim }}>No transcript available for this meeting.</span>}
+          {isLoading ? (
+            <div className="h-full flex items-center justify-center">
+              <Spinner size={24} />
+            </div>
+          ) : hasTranscript ? (
+            transcript
+          ) : (
+            <span className="italic" style={{ color: tokens.muteDim }}>No transcript available for this meeting.</span>
+          )}
         </div>
       </div>
     </div>

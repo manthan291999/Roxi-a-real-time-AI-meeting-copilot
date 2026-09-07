@@ -12,6 +12,8 @@ interface SignalRingProps {
   scale?: keyof typeof RING_CONFIGS;
   /** Breathing halo animates when true; a dim static ring otherwise. */
   isLive?: boolean;
+  /** Idle screen "ready" state — a slower, dimmer breath than `isLive`. */
+  isReady?: boolean;
   /** Caption overlay uses a dimmer halo behind the transcript text. */
   dimHalo?: boolean;
   className?: string;
@@ -26,11 +28,14 @@ interface SignalRingProps {
 export const SignalRing: React.FC<SignalRingProps> = ({
   scale = 'micro',
   isLive = false,
+  isReady = false,
   dimHalo = false,
   className = '',
 }) => {
   const { core, rings } = RING_CONFIGS[scale];
   const outerSize = rings[rings.length - 1];
+  // isLive wins over isReady; neither leaves the ring truly static.
+  const ringAnimation = isLive ? 'signal-ring-animate' : isReady ? 'signal-ring-idle' : '';
 
   return (
     <div
@@ -40,7 +45,7 @@ export const SignalRing: React.FC<SignalRingProps> = ({
       {rings.map((size, i) => (
         <div
           key={size}
-          className={`absolute rounded-full border ${isLive ? 'signal-ring-animate' : ''}`}
+          className={`absolute rounded-full border ${ringAnimation}`}
           style={{
             width: size,
             height: size,

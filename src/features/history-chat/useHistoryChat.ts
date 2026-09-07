@@ -19,7 +19,14 @@ export function useHistoryChat() {
         typeof msg === 'string'
           ? msg
           : msg?.answer || msg?.text || JSON.stringify(msg);
-      setMessages(prev => [...prev, { role: 'assistant', content: text }]);
+      
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: text,
+        sources: typeof msg === 'object' ? msg?.sources : undefined,
+        followUps: typeof msg === 'object' ? msg?.followUps : undefined,
+        clarifyingQuestion: typeof msg === 'object' ? msg?.clarifyingQuestion : undefined,
+      }]);
     });
 
     const unlistenThinking = eventBus.onChatThinking((text) => {
