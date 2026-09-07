@@ -34,6 +34,19 @@ impl MacAudioCapture {
 
 impl AudioCapture for MacAudioCapture {
     fn start_capture(&self, sink: Box<dyn PcmSink>) -> Result<()> {
+        // Pre-flight on the calling thread. Everything below runs on a spawned
+        // thread whose only error path is a log line, and this function returns
+        // before it runs — so a device failure used to surface as a successful
+        // start_capture followed by "Waiting for speech..." forever.
+        {
+            let host = cpal::default_host();
+            let device = find_loopback_device(&host, &None)
+                .context("No usable audio capture device found")?;
+            device
+                .default_output_config()
+                .context("Audio device found but its format could not be read")?;
+        }
+
         self.running.store(true, Ordering::SeqCst);
         let running_flag = self.running.clone();
         
@@ -124,11 +137,30 @@ fn find_device(host: &Host, name_filter: &Option<String>) -> Result<Device> {
     }
 }
 
-/// Generic capture function: opens WASAPI loopback, resamples to 16kHz mono,
+/// Resolve the device the loopback stream is opened on.
+///
+/// Prefers BlackHole: on macOS, CoreAudio cannot capture an ordinary output
+/// device, so BlackHole (a virtual loopback driver) is what actually carries
+/// system audio — the other participants in a meeting. Previously this always
+/// took the default output device, which is whatever the user has selected
+/// (speakers, AirPods), so system audio was never captured and Roxi heard only
+/// the microphone.
+///
+/// Falls back to the default output device when BlackHole is not installed, so
+/// such a machine behaves exactly as it did before: loopback fails to build and
+/// capture continues with the microphone alone.
+fn find_loopback_device(host: &Host, name_filter: &Option<String>) -> Result<Device> {
+    if name_filter.is_some() {
+        return find_device(host, name_filter);
+    }
+    find_device(host, &Some("BlackHole".to_string())).or_else(|_| find_device(host, &None))
+}
+
+/// Generic capture function: opens the loopback device, resamples to 16kHz mono,
 /// and feeds PCM16 samples into the provided sink.
 fn capture_to_sink_internal(config: CaptureConfig, sink: Box<dyn PcmSink>, running: Arc<AtomicBool>) -> Result<()> {
     let host = cpal::default_host();
-    let device = find_device(&host, &config.device_name)?;
+    let device = find_loopback_device(&host, &config.device_name)?;
     let device_name = device.name().unwrap_or_else(|_| "<unknown>".into());
     info!("Capturing from device: {}", device_name);
 
