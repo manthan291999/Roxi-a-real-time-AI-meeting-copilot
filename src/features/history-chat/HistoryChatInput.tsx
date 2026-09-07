@@ -75,7 +75,7 @@ export const HistoryChatInput: React.FC<HistoryChatInputProps> = ({ onSend, isLo
             className={!canSend ? 'opacity-50 pointer-events-none' : ''}
           />
           {/* Tooltip for keyboard shortcut */}
-          <div className="absolute -top-8 right-0 bg-[#292932] text-[10px] text-[#A1A1AA] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-[#3f3f46]">
+          <div className="absolute -top-8 right-0 bg-[rgba(19,19,27,0.85)] backdrop-blur-md text-[10px] text-[#A1A1AA] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-[rgba(255,255,255,0.10)]">
             ⌘↵ to send
           </div>
         </div>

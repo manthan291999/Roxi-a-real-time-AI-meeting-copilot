@@ -14,7 +14,7 @@ export const AnalysisPane: React.FC = () => {
   }
 
   return (
-    <div className="p-4 flex flex-col gap-6 bg-[#13131b] h-full overflow-y-auto custom-scrollbar">
+    <div className="p-4 flex flex-col gap-6 h-full overflow-y-auto custom-scrollbar">
       {decisions.length > 0 && (
         <section>
           <h3 className="text-[#e4e1ed] font-medium mb-3 flex items-center gap-2">

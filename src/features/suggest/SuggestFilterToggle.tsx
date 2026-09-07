@@ -15,7 +15,7 @@ const SCOPES: { id: SuggestScope; label: string }[] = [
 export const SuggestFilterToggle: React.FC<SuggestFilterToggleProps> = ({ scope, onChange }) => (
   <div
     className="flex rounded-full p-[2px] border"
-    style={{ backgroundColor: '#1F242F', borderColor: 'rgba(255, 255, 255, 0.05)' }}
+    style={{ backgroundColor: tokens.panelRaised, borderColor: tokens.hairlineSoft }}
   >
     {SCOPES.map((option) => {
       const isActive = option.id === scope;

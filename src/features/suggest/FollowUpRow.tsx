@@ -18,7 +18,7 @@ export const FollowUpRow: React.FC<FollowUpRowProps> = ({ onSelect }) => (
         type="button"
         onClick={() => onSelect(label)}
         className="rounded-full border px-3 py-1 text-[12px] font-medium transition-colors cursor-pointer hover:brightness-125"
-        style={{ backgroundColor: '#282a2f', borderColor: 'rgba(255,255,255,0.10)', color: tokens.paper }}
+        style={{ backgroundColor: tokens.overlay, borderColor: tokens.hairline, color: tokens.paper }}
       >
         {label}
       </button>

@@ -25,7 +25,11 @@ export const MeetingDetailModal: React.FC<MeetingDetailModalProps> = ({ meeting,
       <div 
         className="flex flex-col h-[75%] rounded-t-[16px] overflow-hidden"
         style={{ 
-          background: tokens.panelRaised,
+          // A sheet over the glass: its own ground, not a --glass-alpha value,
+          // or the shell's content reads through it.
+          background: tokens.sheet,
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
           boxShadow: '0 -4px 16px rgba(0,0,0,0.2)',
           transition: `transform 0.3s ${easing.calm}`
         }}

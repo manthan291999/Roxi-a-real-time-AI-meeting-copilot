@@ -14,7 +14,9 @@ interface IdleScreenProps {
 export const IdleScreen: React.FC<IdleScreenProps> = ({ onStart, onHistory, blackholeMissing }) => (
   <div
     className="h-full w-full flex flex-col items-center justify-center gap-8 px-10 text-center relative"
-    style={{ backgroundColor: tokens.ink }}
+    // Transparent so the shell's glass shows through; this used to paint an
+    // opaque `ink` ground over the whole idle screen.
+    style={{ backgroundColor: 'transparent' }}
   >
     {/* Ambient glow behind the macro ring. */}
     <div

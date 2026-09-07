@@ -5,6 +5,38 @@
 @tailwind utilities;
 
 :root {
+  /* ---- Glass shell tunables -------------------------------------------
+     Two numbers control the whole look; nothing else moves.
+
+     --glass-alpha  alpha of the shell's dark layer. Lower = more see-through.
+     --glass-dim    brightness() applied to the BACKDROP before the shell
+                    composites over it. Lower = more readable text.
+
+     Why brightness() is needed: at 0.35 alpha over a white desktop the
+     composited luminance is ~0.66, which puts `paper` (#F5F5F7) text at
+     ~1.3:1 — invisible. brightness(0.35) darkens the backdrop first, giving
+     ~0.16 luminance and ~12:1 contrast while shape, colour and motion still
+     read through. This is what macOS dark vibrancy does.
+
+     Measured over a WHITE desktop (the worst case for text), with
+     --glass-alpha 0.35 and --glass-dim 0.25:
+       paper   on shell 12.65:1 AAA   on a 0.04 card 11.20:1 AAA
+       mute    on shell  4.94:1 AA    on a 0.04 card  4.99:1 AA
+     dim 0.35 (the first value tried) put `mute` at 3.86:1 / 3.42:1, below AA,
+     so 0.25 is the ceiling if muted labels are to stay legible. Re-measure if
+     you change either number.
+
+     Exactly ONE layer carries transparency: the shell. Interior surfaces are
+     transparent or a white overlay at <= 0.06 alpha, because transmittance
+     multiplies — stacking dark alpha layers destroys see-through:
+       shell only                 0.65                      = 65.0%
+       shell + white 0.04 + 0.06  0.65 x 0.96 x 0.94        = 58.7%  ok
+       shell + dark  0.20 + 0.45  0.65 x 0.80 x 0.55        = 28.6%  not ok
+  */
+  --glass-alpha: 0.35;
+  --glass-dim: 0.25;
+  --glass-blur: 32px;
+
   --color-surface: #13131b;
   --color-surface-container: #1f1f27;
   --color-surface-container-high: #292932;
@@ -19,11 +51,20 @@
   --color-risk-amber: #d97721;
 }
 
+/* Without backdrop-filter there is no brightness() to guarantee legibility,
+   so the shell has to go near-opaque. Correct today on any engine that lacks
+   it; only reachable if the app is ever ported off macOS. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --glass-alpha: 0.88;
+  }
+}
+
 @layer utilities {
+  /* An interior raised surface. No second blur and no second dark layer —
+     see the opacity budget above. Depth comes from the hairline and shadow. */
   .glass-panel {
-    background: rgba(19, 19, 27, 0.95);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   }

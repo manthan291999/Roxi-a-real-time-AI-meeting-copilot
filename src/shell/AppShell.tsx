@@ -15,9 +15,11 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => (
     <div
       className="w-full h-full flex flex-col font-sans relative overflow-hidden"
       style={{
-        background: 'rgba(10,10,12,0.97)',
-        backdropFilter: 'blur(40px)',
-        WebkitBackdropFilter: 'blur(40px)',
+        // See styles.css for why brightness() is part of the recipe and why
+        // this is the only layer allowed to be transparent.
+        background: 'rgba(10,10,12,var(--glass-alpha))',
+        backdropFilter: 'blur(var(--glass-blur)) saturate(150%) brightness(var(--glass-dim))',
+        WebkitBackdropFilter: 'blur(var(--glass-blur)) saturate(150%) brightness(var(--glass-dim))',
         borderRadius: radius.shell,
         border: `1px solid ${tokens.hairline}`,
         boxShadow: [

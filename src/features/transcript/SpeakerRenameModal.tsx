@@ -65,7 +65,10 @@ export const SpeakerRenameModal: React.FC<SpeakerRenameModalProps> = ({
         onMouseDown={(e) => e.stopPropagation()}
         className="w-[320px] p-5 shadow-2xl"
         style={{
-          background: tokens.panelRaised,
+          // See MeetingDetailModal: sheets need their own readable ground.
+          background: tokens.sheet,
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
           border: `1px solid ${tokens.hairline}`,
           borderRadius: radius.card,
         }}
@@ -89,7 +92,7 @@ export const SpeakerRenameModal: React.FC<SpeakerRenameModalProps> = ({
           disabled={saving}
           className="w-full px-3 py-2 text-[14px] outline-none"
           style={{
-            background: tokens.ink,
+            background: tokens.sheetInner,
             color: tokens.paper,
             border: `1px solid ${tokens.hairline}`,
             borderRadius: radius.chip,
