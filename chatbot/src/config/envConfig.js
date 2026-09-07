@@ -67,6 +67,28 @@ function loadConfig() {
     trackUsagePayloads: envStr('LLM_TRACK_PAYLOADS', '1') !== '0',
     /** Disable LLM usage recording entirely when '0'. */
     usageTracking: envStr('LLM_USAGE_TRACKING', '1') !== '0',
+    /**
+     * Chatbot-owned document store. Deliberately NOT chat_index.db: that file
+     * is opened read-only by FtsRetriever and wholesale-rebuilt by
+     * FtsIndexBuilder, so user documents there would be tied to an index
+     * rebuild.
+     */
+    docStorePath: envStr('CHATBOT_DOC_DB', path.join(CHATBOT_ROOT, 'data', 'doc_store.db')),
+    /** Embedding model. 1,536 dims, $0.02/1M tokens. */
+    embedModel: envStr('CHATBOT_EMBED_MODEL', 'text-embedding-3-small'),
+    /**
+     * Embeddings get their OWN call budget. Sharing the chat budget would let
+     * one large upload starve the conversation it was uploaded for.
+     */
+    embedBudgetHard: envInt('CHATBOT_EMBED_BUDGET_HARD', 400),
+    /**
+     * Upload limits are driven by size rather than a file count: a library of
+     * forty short notes and one of three long reports should both be allowed.
+     * maxDocuments is only a backstop against pathological cases.
+     */
+    maxDocumentBytes: envInt('CHATBOT_MAX_DOCUMENT_BYTES', 20 * 1024 * 1024),
+    maxLibraryBytes: envInt('CHATBOT_MAX_LIBRARY_BYTES', 200 * 1024 * 1024),
+    maxDocuments: envInt('CHATBOT_MAX_DOCUMENTS', 50),
     /** Log level: debug|info|warn|error. */
     logLevel: envStr('CHATBOT_LOG_LEVEL', 'info'),
   });

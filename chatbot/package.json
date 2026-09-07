@@ -19,7 +19,9 @@
     "@langchain/openai": "^0.3.0",
     "better-sqlite3": "^13.0.3",
     "dotenv": "^16.4.5",
+    "mammoth": "^1.12.2",
     "openai": "^4.0.0",
+    "pdf-parse": "^2.4.5",
     "zod": "^3.23.0"
   },
   "devDependencies": {

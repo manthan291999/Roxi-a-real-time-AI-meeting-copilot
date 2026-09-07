@@ -36,4 +36,24 @@ class StoreError extends ChatbotError {
   }
 }
 
-module.exports = { ChatbotError, ConfigError, BudgetExhaustedError, StoreError };
+/**
+ * A document could not be accepted, parsed or indexed.
+ *
+ * Carries a specific code so the UI can say something useful — an unsupported
+ * type, a scan with no text layer, and a file over the size cap all need
+ * different wording.
+ */
+class DocumentError extends ChatbotError {
+  constructor(message, code = 'DOCUMENT_ERROR') {
+    super(message, code);
+    this.name = 'DocumentError';
+  }
+}
+
+module.exports = {
+  ChatbotError,
+  ConfigError,
+  BudgetExhaustedError,
+  StoreError,
+  DocumentError,
+};
