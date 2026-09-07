@@ -22,8 +22,8 @@ export const TranscriptLine: React.FC<TranscriptLineProps> = memo(({ line, displ
         {onRenameSpeaker ? (
           <button
             type="button"
-            onClick={() => onRenameSpeaker(line.speaker)}
-            title={`Rename ${line.speaker}`}
+            onClick={() => onRenameSpeaker(line.sttLabel)}
+            title={`Rename ${displayName}`}
             className="text-[13px] font-semibold truncate w-full text-right hover:underline cursor-pointer"
             style={{ color }}
           >

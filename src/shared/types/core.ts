@@ -6,7 +6,10 @@ export type SuggestTag = 'technical' | 'decision' | 'risk' | 'clarification';
 
 export interface TxLine {
   id: string;
+  /** Display name, already resolved by the gateway's diarization layer. */
   speaker: string;
+  /** Raw STT label ("Speaker A"). The stable identity renames are keyed on. */
+  sttLabel: string;
   text: string;
   time: number;
   partial: boolean;

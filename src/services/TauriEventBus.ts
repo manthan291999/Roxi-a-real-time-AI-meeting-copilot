@@ -2,8 +2,8 @@ import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { IEventBus, ProviderStatus } from '../shared/interfaces';
 import { SuggestCardType, TxLine, Significance } from '../shared/types';
-import { SuggestAnswerWire } from './wire';
-import { toSuggestCard } from './mappers';
+import { SuggestAnswerWire, TranscriptWire } from './wire';
+import { toSuggestCard, toTxLine } from './mappers';
 
 export class TauriEventBus implements IEventBus {
   /**
@@ -24,12 +24,12 @@ export class TauriEventBus implements IEventBus {
   }
   
   onTranscriptPartial(cb: (line: TxLine) => void) {
-    const unlisten = listen<TxLine>('transcript_partial', (e) => cb(e.payload));
+    const unlisten = listen<TranscriptWire>('transcript_partial', (e) => cb(toTxLine(e.payload, true)));
     return () => unlisten.then(f => f());
   }
 
   onTranscriptFinal(cb: (line: TxLine) => void) {
-    const unlisten = listen<TxLine>('transcript_final', (e) => cb(e.payload));
+    const unlisten = listen<TranscriptWire>('transcript_final', (e) => cb(toTxLine(e.payload, false)));
     return () => unlisten.then(f => f());
   }
 

@@ -48,7 +48,7 @@ export const TranscriptPane: React.FC<TranscriptPaneProps> = ({ isLive }) => {
           <TranscriptLine
             key={line.id || `line-${idx}`}
             line={line}
-            displayName={getSpeakerName(line.speaker)}
+            displayName={getSpeakerName(line.sttLabel, line.speaker)}
             onRenameSpeaker={setRenaming}
           />
         ))}
@@ -57,7 +57,7 @@ export const TranscriptPane: React.FC<TranscriptPaneProps> = ({ isLive }) => {
           <TranscriptLine
             key={`partial-${idx}`}
             line={partial}
-            displayName={getSpeakerName(partial.speaker)}
+            displayName={getSpeakerName(partial.sttLabel, partial.speaker)}
           />
         ))}
         <div ref={bottomRef} className="h-4 shrink-0" />

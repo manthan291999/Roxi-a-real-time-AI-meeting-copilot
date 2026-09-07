@@ -17,17 +17,19 @@ export function useTranscript() {
 
   useEffect(() => {
     const unlistenPartial = eventBus.onTranscriptPartial((line) => {
-      const prev = partialsRef.current.get(line.speaker);
+      // Keyed by sttLabel, not the display name: a rename mid-session changes
+      // `speaker` and would otherwise orphan the in-flight partial.
+      const prev = partialsRef.current.get(line.sttLabel);
       // Only trigger re-render when the displayed text actually changes
       if (prev?.text !== line.text) {
-        partialsRef.current.set(line.speaker, line);
+        partialsRef.current.set(line.sttLabel, line);
         setPartialsTick(t => t + 1);
       }
     });
 
     const unlistenFinal = eventBus.onTranscriptFinal((line) => {
-      if (partialsRef.current.has(line.speaker)) {
-        partialsRef.current.delete(line.speaker);
+      if (partialsRef.current.has(line.sttLabel)) {
+        partialsRef.current.delete(line.sttLabel);
         setPartialsTick(t => t + 1);
       }
       setLines(prev => [...prev, line]);
@@ -50,8 +52,16 @@ export function useTranscript() {
     () => 0
   );
 
+  /**
+   * Resolve a display name for an STT label. A local rename (held in
+   * SpeakerRepository and keyed by STT label) wins; otherwise fall back to the
+   * name the gateway already resolved from speaker_names or a voice match.
+   */
   const getSpeakerName = useCallback(
-    (speaker: string) => speakerRepository.getDisplayName(speaker),
+    (sttLabel: string, resolved?: string) => {
+      const local = speakerRepository.getDisplayName(sttLabel);
+      return local === sttLabel ? resolved ?? sttLabel : local;
+    },
     // nameVersion participates so memoized consumers re-resolve after a rename.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [speakerRepository, nameVersion]

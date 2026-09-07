@@ -23,6 +23,13 @@ export interface ContextItemWire {
   tags?: string[];
 }
 
+/** Payload of `transcript_partial` / `transcript_final`. */
+export interface TranscriptWire {
+  text?: string;
+  speaker?: string;
+  sttLabel?: string;
+}
+
 export interface SuggestAnswerWire {
   text?: string;
   speaker?: string;
