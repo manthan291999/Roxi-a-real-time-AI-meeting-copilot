@@ -7,10 +7,20 @@ module.exports = Object.freeze({
   MAX_RETRIEVAL_ATTEMPTS: 2,
   /** Max raw hits pulled from FTS per question. */
   MAX_HITS: 24,
-  /** Max meetings represented in the evidence sent to the LLM. */
-  MAX_EVIDENCE_MEETINGS: 4,
-  /** Max snippets per meeting in the evidence sent to the LLM. */
-  MAX_SNIPPETS_PER_MEETING: 5,
+  /**
+   * Max groups represented in the evidence sent to the LLM. A "group" is one
+   * meeting or one document — grouping is by groupKey, not meetingId, because
+   * documents have no meeting.
+   */
+  MAX_EVIDENCE_GROUPS: 4,
+  /** Max snippets per group in the evidence sent to the LLM. */
+  MAX_SNIPPETS_PER_GROUP: 5,
+  /**
+   * When both corpora return hits, guarantee at least this many groups from
+   * each. Without it a 200-chunk PDF that ranks well can occupy every slot in
+   * MAX_EVIDENCE_GROUPS and silently crowd meetings out of the answer.
+   */
+  MIN_GROUPS_PER_SOURCE_TYPE: 1,
   /** Max chars per snippet (keeps prompts bounded). */
   SNIPPET_MAX_CHARS: 600,
   /** Prior chat turns included in the generate prompt. */

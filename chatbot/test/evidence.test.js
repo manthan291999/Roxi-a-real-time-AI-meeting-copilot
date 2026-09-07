@@ -1,34 +1,63 @@
 /**
- * Unit tests: evidence shaping — meeting bounding + source mapping.
+ * Unit tests: evidence shaping — group bounding, citation refs, source mapping.
  */
 const { test } = require('node:test');
 const assert = require('node:assert');
 
 const { boundEvidence, toSources } = require('../src/application/graph/evidence');
-const { MAX_EVIDENCE_MEETINGS, MAX_SNIPPETS_PER_MEETING } = require('../src/application/graph/constants');
+const {
+  MAX_EVIDENCE_GROUPS,
+  MAX_SNIPPETS_PER_GROUP,
+  MIN_GROUPS_PER_SOURCE_TYPE,
+} = require('../src/application/graph/constants');
 
 function hit(meetingId, sourceId, text = 't') {
-  return { meetingId, sourceId, sourceTable: 'transcripts', speaker: 'A', text, meetingDate: 'd', score: 1 };
+  return {
+    sourceType: 'meeting',
+    groupKey: `meeting:${meetingId}`,
+    meetingId,
+    sourceId,
+    sourceTable: 'transcripts',
+    speaker: 'A',
+    text,
+    meetingDate: 'd',
+    score: 1,
+  };
 }
 
-test('boundEvidence caps meetings and snippets per meeting', () => {
+function docHit(docId, chunkId, text = 'doc text', pageNumber = 1) {
+  return {
+    sourceType: 'document',
+    groupKey: `doc:${docId}`,
+    meetingId: null,
+    docId,
+    fileName: `${docId}.pdf`,
+    pageNumber,
+    sourceId: chunkId,
+    sourceTable: 'documents',
+    text,
+    score: 0.9,
+  };
+}
+
+test('boundEvidence caps groups and snippets per group', () => {
   const hits = [];
-  for (let m = 1; m <= MAX_EVIDENCE_MEETINGS + 3; m++) {
-    for (let s = 0; s < MAX_SNIPPETS_PER_MEETING + 4; s++) hits.push(hit(m, s));
+  for (let m = 1; m <= MAX_EVIDENCE_GROUPS + 3; m++) {
+    for (let s = 0; s < MAX_SNIPPETS_PER_GROUP + 4; s++) hits.push(hit(m, s));
   }
   const bounded = boundEvidence(hits);
   const meetings = new Set(bounded.map((h) => h.meetingId));
-  assert.strictEqual(meetings.size, MAX_EVIDENCE_MEETINGS);
+  assert.strictEqual(meetings.size, MAX_EVIDENCE_GROUPS);
   for (const m of meetings) {
     const count = bounded.filter((h) => h.meetingId === m).length;
-    assert.ok(count <= MAX_SNIPPETS_PER_MEETING);
+    assert.ok(count <= MAX_SNIPPETS_PER_GROUP);
   }
 });
 
-test('boundEvidence keeps first (best-ranked) meetings', () => {
+test('boundEvidence keeps first (best-ranked) groups', () => {
   const hits = [hit(9, 1), hit(8, 1), hit(7, 1)];
   const bounded = boundEvidence(hits);
-  assert.deepStrictEqual(bounded.map((h) => h.meetingId), [9, 8, 7].slice(0, MAX_EVIDENCE_MEETINGS));
+  assert.deepStrictEqual(bounded.map((h) => h.meetingId), [9, 8, 7].slice(0, MAX_EVIDENCE_GROUPS));
 });
 
 test('boundEvidence handles empty input', () => {
@@ -36,17 +65,126 @@ test('boundEvidence handles empty input', () => {
   assert.deepStrictEqual(boundEvidence(null), []);
 });
 
-test('toSources maps hits to protocol shape and dedupes', () => {
-  const hits = [hit(3, 1, 'hello'), hit(3, 1, 'hello'), hit(5, 2, 'world')];
+test('meeting refs stay M<meetingId> — the shipped citation vocabulary', () => {
+  const bounded = boundEvidence([hit(3, 1), hit(3, 2), hit(5, 1)]);
+  assert.strictEqual(bounded.find((h) => h.meetingId === 3).ref, 'M3');
+  assert.strictEqual(bounded.find((h) => h.meetingId === 5).ref, 'M5');
+});
+
+test('every hit in a group carries the same ref', () => {
+  const bounded = boundEvidence([docHit('abc', 'c1'), docHit('abc', 'c2'), docHit('xyz', 'c3')]);
+  const abc = bounded.filter((h) => h.docId === 'abc');
+  assert.strictEqual(abc.length, 2);
+  assert.strictEqual(abc[0].ref, abc[1].ref);
+  assert.notStrictEqual(abc[0].ref, bounded.find((h) => h.docId === 'xyz').ref);
+});
+
+test('document refs are D1..Dn in selection order, not docId-derived', () => {
+  const bounded = boundEvidence([docHit('zzz', 'c1'), docHit('aaa', 'c2')]);
+  assert.deepStrictEqual([...new Set(bounded.map((h) => h.ref))], ['D1', 'D2']);
+});
+
+test('refs are unique per group across mixed sources', () => {
+  const bounded = boundEvidence([hit(3, 1), docHit('abc', 'c1'), hit(4, 1), docHit('xyz', 'c2')]);
+  const refs = [...new Set(bounded.map((h) => h.ref))];
+  assert.deepStrictEqual(refs, ['M3', 'D1', 'M4', 'D2']);
+});
+
+test('boundEvidence derives grouping for hits with no groupKey stamped', () => {
+  const raw = { meetingId: 7, sourceId: 1, sourceTable: 'transcripts', text: 't' };
+  const bounded = boundEvidence([raw]);
+  assert.strictEqual(bounded[0].groupKey, 'meeting:7');
+  assert.strictEqual(bounded[0].sourceType, 'meeting');
+  assert.strictEqual(bounded[0].ref, 'M7');
+});
+
+test('a document flood cannot crowd every meeting out of the evidence', () => {
+  // Documents win every rank; without the quota the meeting is never seen.
+  const hits = [];
+  for (let d = 0; d < MAX_EVIDENCE_GROUPS + 2; d++) hits.push(docHit(`doc${d}`, `c${d}`));
+  hits.push(hit(3, 1));
+  const bounded = boundEvidence(hits);
+
+  const groups = new Set(bounded.map((h) => h.groupKey));
+  assert.strictEqual(groups.size, MAX_EVIDENCE_GROUPS);
+  const meetingGroups = new Set(bounded.filter((h) => h.sourceType === 'meeting').map((h) => h.groupKey));
+  assert.ok(meetingGroups.size >= MIN_GROUPS_PER_SOURCE_TYPE);
+  assert.ok(bounded.some((h) => h.meetingId === 3));
+});
+
+test('the quota reserves in both directions', () => {
+  const hits = [];
+  for (let m = 1; m <= MAX_EVIDENCE_GROUPS + 2; m++) hits.push(hit(m, 1));
+  hits.push(docHit('abc', 'c1'));
+  const bounded = boundEvidence(hits);
+  const docGroups = new Set(bounded.filter((h) => h.sourceType === 'document').map((h) => h.groupKey));
+  assert.ok(docGroups.size >= MIN_GROUPS_PER_SOURCE_TYPE);
+});
+
+test('the quota does not disturb rank order of what it selects', () => {
+  const hits = [];
+  for (let d = 0; d < MAX_EVIDENCE_GROUPS + 1; d++) hits.push(docHit(`doc${d}`, `c${d}`));
+  hits.push(hit(3, 1));
+  const bounded = boundEvidence(hits);
+  const order = [...new Set(bounded.map((h) => h.groupKey))];
+  // The reserved meeting ranked last, so it must still appear last.
+  assert.strictEqual(order[order.length - 1], 'meeting:3');
+  assert.ok(order.slice(0, -1).every((k) => k.startsWith('doc:')));
+});
+
+test('the quota is inert when only one corpus contributed', () => {
+  const hits = [];
+  for (let m = 1; m <= MAX_EVIDENCE_GROUPS + 3; m++) hits.push(hit(m, 1));
+  const bounded = boundEvidence(hits);
+  assert.deepStrictEqual(bounded.map((h) => h.meetingId), [1, 2, 3, 4].slice(0, MAX_EVIDENCE_GROUPS));
+});
+
+test('toSources maps meeting hits to protocol shape and dedupes', () => {
+  const hits = boundEvidence([hit(3, 1, 'hello'), hit(3, 1, 'hello'), hit(5, 2, 'world')]);
   const sources = toSources(hits);
   assert.strictEqual(sources.length, 2);
-  assert.deepStrictEqual(Object.keys(sources[0]).sort(), ['date', 'meetingId', 'snippet', 'sourceTable', 'speaker']);
+  assert.deepStrictEqual(
+    Object.keys(sources[0]).sort(),
+    ['date', 'meetingId', 'ref', 'snippet', 'sourceTable', 'sourceType', 'speaker'],
+  );
   assert.strictEqual(sources[0].meetingId, 3);
+  assert.strictEqual(sources[0].ref, 'M3');
+  assert.strictEqual(sources[0].sourceType, 'meeting');
   assert.strictEqual(sources[0].snippet, 'hello');
 });
 
-test('toSources filters by cited meeting ids', () => {
-  const hits = [hit(3, 1), hit(5, 2), hit(7, 3)];
-  const sources = toSources(hits, [5, 7]);
-  assert.deepStrictEqual(sources.map((s) => s.meetingId), [5, 7]);
+test('toSources emits document fields and no meetingId for document hits', () => {
+  const hits = boundEvidence([docHit('abc', 'c1', 'spec text', 4)]);
+  const [card] = toSources(hits);
+  assert.deepStrictEqual(
+    Object.keys(card).sort(),
+    ['docId', 'fileName', 'pageNumber', 'ref', 'snippet', 'sourceTable', 'sourceType'],
+  );
+  // Number(null) === 0 would render as "Meeting #0" in the UI.
+  assert.ok(!('meetingId' in card));
+  assert.strictEqual(card.docId, 'abc');
+  assert.strictEqual(card.fileName, 'abc.pdf');
+  assert.strictEqual(card.pageNumber, 4);
+  assert.strictEqual(card.ref, 'D1');
+});
+
+test('toSources filters by cited refs across both source types', () => {
+  const hits = boundEvidence([hit(3, 1), docHit('abc', 'c1'), hit(7, 2)]);
+  const sources = toSources(hits, ['M7', 'D1']);
+  assert.deepStrictEqual(sources.map((s) => s.ref), ['D1', 'M7']);
+});
+
+test('toSources ref matching is case- and whitespace-tolerant', () => {
+  const hits = boundEvidence([hit(3, 1), hit(7, 2)]);
+  assert.deepStrictEqual(toSources(hits, [' m3 ']).map((s) => s.ref), ['M3']);
+});
+
+test('toSources with an unmatched ref returns nothing rather than everything', () => {
+  const hits = boundEvidence([hit(3, 1)]);
+  assert.deepStrictEqual(toSources(hits, ['M99']), []);
+});
+
+test('toSources dedupes two documents that share a chunk index', () => {
+  const hits = boundEvidence([docHit('abc', 'c1'), docHit('xyz', 'c1')]);
+  assert.strictEqual(toSources(hits).length, 2);
 });

@@ -87,11 +87,11 @@ after(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-function makeUseCase(llm) {
+function makeUseCase(llm, evidenceSource = null) {
   const graph = buildChatGraph({
     analyzeQuery: createAnalyzeQueryNode({ llm, logger: silentLogger }),
     retrieve: createRetrieveNode({
-      evidenceSource: new FtsEvidenceSource(retriever),
+      evidenceSource: evidenceSource || new FtsEvidenceSource(retriever),
       logger: silentLogger,
     }),
     gradeDocuments: createGradeDocumentsNode({ llm, logger: silentLogger }),
@@ -213,4 +213,141 @@ test('rejects empty question', async () => {
   const llm = new FakeLlm({});
   const useCase = makeUseCase(llm);
   await assert.rejects(() => useCase.run({ question: '   ', threadId: 't-bad' }), /non-empty/);
+});
+
+
+/**
+ * EvidenceSource double returning one meeting hit and one document hit, in the
+ * exact shape CompositeEvidenceSource emits — refs are deliberately absent,
+ * because assigning them is boundEvidence's job.
+ */
+class MixedEvidenceSource {
+  constructor() { this.name = 'mixed'; }
+  async search() {
+    return [
+      {
+        sourceType: 'meeting',
+        groupKey: 'meeting:1',
+        meetingId: 1,
+        meetingDate: '2026-08-01',
+        speaker: 'Speaker A',
+        sourceTable: 'transcripts',
+        sourceId: 1,
+        text: 'We decided to use SQLite for the local database',
+        score: 2.5,
+      },
+      {
+        sourceType: 'document',
+        groupKey: 'doc:d-1',
+        meetingId: null,
+        docId: 'd-1',
+        fileName: 'architecture.pdf',
+        pageNumber: 7,
+        sourceTable: 'documents',
+        sourceId: 'chunk-9',
+        text: 'The datastore section mandates SQLite with WAL enabled.',
+        score: 0.82,
+      },
+    ];
+  }
+}
+
+test('mixed corpora: the model is offered both refs and cites both', async () => {
+  let evidencePrompt = '';
+  const llm = new FakeLlm({
+    analyze_query: { searchKeywords: ['sqlite'], isAmbiguous: false, ambiguityNote: '' },
+    grade_documents: allRelevant,
+    generate: (tag, messages) => {
+      evidencePrompt = messages[1].content;
+      return {
+        answer: 'SQLite was chosen [M1] and the architecture doc requires WAL [D1].',
+        citedRefs: ['M1', 'D1'],
+        followUps: [],
+      };
+    },
+  });
+  const useCase = makeUseCase(llm, new MixedEvidenceSource());
+  const payload = await useCase.run({ question: 'what database do we use?', threadId: 't-mixed' });
+
+  // The prompt labels each corpus with the token the model is asked to cite.
+  assert.ok(evidencePrompt.includes('[M1]'));
+  assert.ok(evidencePrompt.includes('[D1]'));
+  assert.ok(evidencePrompt.includes('architecture.pdf · page 7'));
+  assert.ok(evidencePrompt.includes('Meeting #1'));
+
+  assert.strictEqual(payload.route, 'generate');
+  assert.ok(payload.answer.includes('[M1]'));
+  assert.ok(payload.answer.includes('[D1]'));
+
+  assert.strictEqual(payload.sources.length, 2);
+  const meeting = payload.sources.find((x) => x.sourceType === 'meeting');
+  const document = payload.sources.find((x) => x.sourceType === 'document');
+  assert.strictEqual(meeting.ref, 'M1');
+  assert.strictEqual(meeting.meetingId, 1);
+  assert.strictEqual(document.ref, 'D1');
+  assert.strictEqual(document.fileName, 'architecture.pdf');
+  assert.strictEqual(document.pageNumber, 7);
+  assert.strictEqual(document.docId, 'd-1');
+  assert.ok(!('meetingId' in document));
+});
+
+test('citedRefs selects a subset: an uncited document is dropped', async () => {
+  const llm = new FakeLlm({
+    analyze_query: { searchKeywords: ['sqlite'], isAmbiguous: false, ambiguityNote: '' },
+    grade_documents: allRelevant,
+    generate: { answer: 'SQLite [M1].', citedRefs: ['M1'], followUps: [] },
+  });
+  const useCase = makeUseCase(llm, new MixedEvidenceSource());
+  const payload = await useCase.run({ question: 'what database do we use?', threadId: 't-subset' });
+
+  assert.deepStrictEqual(payload.sources.map((x) => x.ref), ['M1']);
+});
+
+test('a legacy citedMeetingIds response still resolves its sources', async () => {
+  // The pre-Phase-8 shape: a request in flight across the upgrade, or a model
+  // that answers in the old format, must not lose its source cards.
+  const llm = new FakeLlm({
+    analyze_query: { searchKeywords: ['sqlite'], isAmbiguous: false, ambiguityNote: '' },
+    grade_documents: allRelevant,
+    generate: { answer: 'SQLite [M1].', citedMeetingIds: [1], followUps: [] },
+  });
+  const useCase = makeUseCase(llm, new MixedEvidenceSource());
+  const payload = await useCase.run({ question: 'what database do we use?', threadId: 't-legacy' });
+
+  assert.deepStrictEqual(payload.sources.map((x) => x.ref), ['M1']);
+  assert.strictEqual(payload.sources[0].meetingId, 1);
+});
+
+test('degraded digest cites documents with file and page', async () => {
+  const llm = new FakeLlm({
+    analyze_query: { searchKeywords: ['sqlite'], isAmbiguous: false, ambiguityNote: '' },
+    grade_documents: allRelevant,
+    generate: new Error('boom'),
+  });
+  const useCase = makeUseCase(llm, new MixedEvidenceSource());
+  const payload = await useCase.run({ question: 'what database do we use?', threadId: 't-digest' });
+
+  assert.ok(payload.answer.includes('[M1]'));
+  assert.ok(payload.answer.includes('[D1 architecture.pdf p7]'));
+  assert.ok(payload.answer.includes('your meetings and documents'));
+  assert.ok(payload.degradedNote.length > 0);
+});
+
+test('grading candidates describe documents by file, not by meeting', async () => {
+  let gradePrompt = '';
+  const llm = new FakeLlm({
+    analyze_query: { searchKeywords: ['sqlite'], isAmbiguous: false, ambiguityNote: '' },
+    grade_documents: (tag, messages) => {
+      gradePrompt = messages[1].content;
+      return allRelevant(tag, messages);
+    },
+    generate: { answer: 'SQLite [M1].', citedRefs: ['M1'], followUps: [] },
+  });
+  const useCase = makeUseCase(llm, new MixedEvidenceSource());
+  await useCase.run({ question: 'what database do we use?', threadId: 't-grade' });
+
+  assert.ok(gradePrompt.includes('architecture.pdf · page 7'));
+  assert.ok(gradePrompt.includes('Meeting #1 · transcripts (Speaker A)'));
+  // A document must never be labelled "Meeting #null".
+  assert.ok(!gradePrompt.includes('Meeting #null'));
 });
