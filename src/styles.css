@@ -8,7 +8,7 @@
   /* ---- Glass shell tunables -------------------------------------------
      Two numbers control the whole look; nothing else moves.
 
-     --glass-alpha  alpha of the shell's dark layer. Lower = more see-through.
+     --glass-alpha  alpha of the shell's layer. Lower = more see-through.
      --glass-dim    brightness() applied to the BACKDROP before the shell
                     composites over it. Lower = more readable text.
 
@@ -27,28 +27,76 @@
      you change either number.
 
      Exactly ONE layer carries transparency: the shell. Interior surfaces are
-     transparent or a white overlay at <= 0.06 alpha, because transmittance
-     multiplies — stacking dark alpha layers destroys see-through:
+     transparent or an overlay at <= 0.06 alpha, because transmittance
+     multiplies — stacking alpha layers destroys see-through:
        shell only                 0.65                      = 65.0%
-       shell + white 0.04 + 0.06  0.65 x 0.96 x 0.94        = 58.7%  ok
-       shell + dark  0.20 + 0.45  0.65 x 0.80 x 0.55        = 28.6%  not ok
+       shell + 0.04 + 0.06        0.65 x 0.96 x 0.94        = 58.7%  ok
+       shell + 0.20 + 0.45        0.65 x 0.80 x 0.55        = 28.6%  not ok
   */
   --glass-alpha: 0.35;
   --glass-dim: 0.25;
   --glass-blur: 32px;
 
-  --color-surface: #13131b;
-  --color-surface-container: #1f1f27;
-  --color-surface-container-high: #292932;
-  --color-surface-bright: #393841;
-  --color-primary-container: #8083ff;
-  --color-on-primary-container: #0d0096;
-  --color-on-surface: #e4e1ed;
-  --color-on-surface-variant: #c7c4d7;
-  --color-outline-variant: #464554;
-  --color-emerald: #00a370;
-  --color-amethyst: #9b51e0;
-  --color-risk-amber: #d97721;
+  /* ---- Theme palette ---------------------------------------------------
+     THE single source of truth for colour. `design-system/tokens.ts` maps each
+     variable below to a named token, and components consume only the NAME —
+     never a literal. A theme change is therefore an edit to this block alone,
+     and is revertable by reverting this block alone.
+
+     Add a colour here and expose it in tokens.ts. Never write a colour literal
+     in a component: that is what makes a re-theme a repo-wide search.
+  */
+
+  /* Surfaces. The shell is the only layer allowed to be transparent; see the
+     opacity budget above. */
+  --t-ink: #0A0A0C;
+  --t-panel: transparent;
+  --t-panel-raised: rgba(255, 255, 255, 0.04);
+  --t-overlay: rgba(255, 255, 255, 0.06);
+  --t-hairline: rgba(255, 255, 255, 0.10);
+  --t-hairline-soft: rgba(255, 255, 255, 0.05);
+
+  /* Sheets sit OVER the glass (modals, tooltips), so they cannot derive from
+     --glass-alpha: they need their own readable ground or the text behind them
+     shows through. */
+  --t-sheet: rgba(19, 19, 27, 0.72);
+  --t-sheet-inner: rgba(0, 0, 0, 0.28);
+
+  /* Text. Fully opaque — the opacity budget does not apply to these. */
+  --t-paper: #F5F5F7;
+  --t-mute: #A5A5AF;
+  --t-mute-dim: #6F6F79;
+
+  /* The one interactive accent — CTA, live state, focus. */
+  --t-signal: #7C74F2;
+  --t-signal-dim: rgba(124, 116, 242, 0.14);
+  --t-signal-line: rgba(124, 116, 242, 0.35);
+  --t-signal-focus: rgba(124, 116, 242, 0.20);
+
+  /* Semantic tag colours — meaning-carrying, kept off interactive chrome. */
+  --t-decision: #34D399;
+  --t-decision-bg: rgba(52, 211, 153, 0.12);
+  --t-decision-line: rgba(52, 211, 153, 0.30);
+  --t-risk: #F2B13D;
+  --t-risk-bg: rgba(242, 177, 61, 0.15);
+  --t-risk-line: rgba(242, 177, 61, 0.30);
+  --t-technical: #A78BFA;
+  --t-technical-bg: rgba(139, 92, 246, 0.15);
+  --t-technical-line: rgba(167, 139, 250, 0.30);
+
+  /* The fallback accent for a tag the UI has no styling for. */
+  --t-neutral-bg: rgba(255, 255, 255, 0.05);
+  --t-neutral-line: rgba(255, 255, 255, 0.15);
+
+  /* Speaker identity colours, assigned round-robin by diarization index. */
+  --t-speaker-1: #60a5fa;
+  --t-speaker-2: #a78bfa;
+  --t-speaker-3: #22d3ee;
+  --t-speaker-4: #34d399;
+  --t-speaker-5: #fb923c;
+
+  /* Chrome that belongs to no token: the scrollbar. */
+  --t-scrollbar-thumb: #464554;
 }
 
 /* Without backdrop-filter there is no brightness() to guarantee legibility,
@@ -62,32 +110,33 @@
 
 @layer utilities {
   /* An interior raised surface. No second blur and no second dark layer —
-     see the opacity budget above. Depth comes from the hairline and shadow. */
+     see the opacity budget above. Depth comes from the hairline and shadow.
+     Currently unused by any component; kept as the documented recipe. */
   .glass-panel {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--t-panel-raised);
+    border: 1px solid var(--t-hairline);
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   }
-  
+
   .inner-glass {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: var(--t-panel-raised);
+    border: 1px solid var(--t-hairline-soft);
   }
-  
+
   .emerald-highlight {
-    background: rgba(0, 163, 112, 0.15);
-    border-left: 2px solid var(--color-emerald);
+    background: var(--t-decision-bg);
+    border-left: 2px solid var(--t-decision);
   }
-  
+
   .amethyst-highlight {
-    background: rgba(155, 81, 224, 0.15);
-    border-left: 2px solid var(--color-amethyst);
+    background: var(--t-technical-bg);
+    border-left: 2px solid var(--t-technical);
   }
 }
 
 body {
   background-color: transparent; /* Needed for Tauri transparent windows */
-  color: var(--color-on-surface);
+  color: var(--t-paper);
 }
 
 * {
@@ -101,6 +150,6 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-outline-variant);
+  background: var(--t-scrollbar-thumb);
   border-radius: 4px;
 }

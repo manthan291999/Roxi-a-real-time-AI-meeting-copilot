@@ -59,7 +59,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, isLoading = false 
           background: tokens.panelRaised,
           border: `1px solid ${isFocused ? tokens.signal : tokens.hairline}`,
           borderRadius: radius.panel,
-          boxShadow: isFocused ? `0 0 0 1px ${tokens.signal}33` : 'none',
+          boxShadow: isFocused ? `0 0 0 1px ${tokens.signalFocus}` : 'none',
         }}
       >
         <textarea

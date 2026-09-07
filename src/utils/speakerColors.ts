@@ -1,9 +1,17 @@
+/**
+ * Speaker identity colours, assigned round-robin by diarization index.
+ *
+ * The literals live in `styles.css` with every other colour, so a re-theme
+ * does not have to hunt through `utils/`. Values resolve in a CSS context —
+ * these are only ever assigned to a `style` property, never to canvas or an
+ * SVG presentation attribute, where `var()` would not resolve.
+ */
 const colors = [
-  '#60a5fa', // blue-400
-  '#a78bfa', // purple-400
-  '#22d3ee', // cyan-400
-  '#34d399', // emerald-400
-  '#fb923c', // orange-400
+  'var(--t-speaker-1)',
+  'var(--t-speaker-2)',
+  'var(--t-speaker-3)',
+  'var(--t-speaker-4)',
+  'var(--t-speaker-5)',
 ];
 
 export function getSpeakerColor(idx?: number): string {

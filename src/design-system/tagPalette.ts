@@ -16,29 +16,29 @@ export const TAG_PALETTE: Record<SuggestTag, AccentColors> = {
   technical: {
     fg: tokens.technical,
     bg: tokens.technicalBg,
-    border: 'rgba(167, 139, 250, 0.30)',
+    border: tokens.technicalLine,
   },
   decision: {
     fg: tokens.decision,
     bg: tokens.decisionBg,
-    border: 'rgba(52, 211, 153, 0.30)',
+    border: tokens.decisionLine,
   },
   risk: {
     fg: tokens.risk,
-    bg: 'rgba(242, 177, 61, 0.15)',
-    border: 'rgba(242, 177, 61, 0.30)',
+    bg: tokens.riskBg,
+    border: tokens.riskLine,
   },
   clarification: {
     fg: tokens.mute,
-    bg: 'rgba(255, 255, 255, 0.05)',
-    border: 'rgba(255, 255, 255, 0.15)',
+    bg: tokens.neutralBg,
+    border: tokens.neutralLine,
   },
 };
 
 const NEUTRAL_ACCENT: AccentColors = {
   fg: tokens.mute,
-  bg: 'rgba(255, 255, 255, 0.05)',
-  border: 'rgba(255, 255, 255, 0.15)',
+  bg: tokens.neutralBg,
+  border: tokens.neutralLine,
 };
 
 /** Tolerates unknown tags so an LLM tag the UI has no styling for still renders. */
@@ -52,8 +52,8 @@ export function getTagColors(tag: string): AccentColors {
  * are neither stay neutral. ContextLegend renders the key for this.
  */
 export const MATCH_ACCENTS = {
-  verbatim: { fg: tokens.decision, bg: tokens.decisionBg, border: 'rgba(52, 211, 153, 0.30)' },
-  technical: { fg: tokens.technical, bg: tokens.technicalBg, border: 'rgba(167, 139, 250, 0.30)' },
+  verbatim: { fg: tokens.decision, bg: tokens.decisionBg, border: tokens.decisionLine },
+  technical: { fg: tokens.technical, bg: tokens.technicalBg, border: tokens.technicalLine },
   neutral: NEUTRAL_ACCENT,
 } as const satisfies Record<string, AccentColors>;
 
