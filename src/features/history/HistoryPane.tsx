@@ -1,7 +1,7 @@
 import React from 'react';
 import { useHistory } from './useHistory';
 import { useMeetingDetail } from './useMeetingDetail';
-import { HistoryChatPane } from '../history-chat';
+import { ChatPane } from '../chat';
 import { MeetingDetailModal } from './MeetingDetailModal';
 import { ClockIcon } from '../../design-system';
 import { Spinner } from '../../shared/ui/Spinner';
@@ -52,7 +52,7 @@ export const HistoryPane: React.FC = () => {
           ))}
         </div>
         <div className="h-1/2 flex flex-col relative overflow-hidden">
-          <HistoryChatPane />
+          <ChatPane threadId="history" emptyHint="Ask Roxi about any past meeting…" />
         </div>
       </div>
       <MeetingDetailModal meeting={selectedMeeting} onClose={closeMeeting} isLoading={isLoadingDetail} />

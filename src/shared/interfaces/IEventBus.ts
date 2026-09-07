@@ -2,10 +2,12 @@ import {
   SuggestCardType,
   TxLine,
   Significance,
-  ChatMessage,
   MeetingDecision,
   MeetingActionItem,
   MeetingRisk,
+  ChatReplyEvent,
+  ChatThinkingEvent,
+  ChatErrorEvent,
 } from '../types';
 
 export interface ProviderStatus {
@@ -27,7 +29,7 @@ export interface IEventBus {
   onCircuitBreaker(cb: () => void): () => void;
   onCaptureError(cb: (err: string) => void): () => void;
   onApiHealth(cb: (health: any) => void): () => void;
-  onChatReply(cb: (msg: any) => void): () => void;
-  onChatThinking(cb: (text: string) => void): () => void;
-  onChatError(cb: (err: any) => void): () => void;
+  onChatReply(cb: (reply: ChatReplyEvent) => void): () => void;
+  onChatThinking(cb: (event: ChatThinkingEvent | string) => void): () => void;
+  onChatError(cb: (err: ChatErrorEvent) => void): () => void;
 }

@@ -6,10 +6,8 @@ import { InputBar } from '../shared/ui/InputBar';
 import { IdleScreen, MeetingContextModal, useCaptureFlow } from '../features/capture';
 import { SuggestAnswersPane } from '../features/suggest';
 import { TranscriptPane } from '../features/transcript';
-import { ChatPane } from '../features/chat';
-import { ChatProvider, useChatContext } from '../context/ChatContext';
+import { ChatPane, ChatThreadProvider, useChatThreadContext } from '../features/chat';
 import { HistoryPane } from '../features/history';
-import { HistoryChatProvider } from '../features/history-chat';
 import { WidgetTab } from '../shared/types/ui';
 
 /**
@@ -20,7 +18,7 @@ const AppContent: React.FC = () => {
   const { status, blackholeMissing, isCollectingContext, isStopping, requestContext, cancelContext, confirmContext, stopCapture } =
     useCaptureFlow();
   const [activeTab, setActiveTab] = useState<WidgetTab>('suggest');
-  const { askQuestion } = useChatContext();
+  const { askQuestion } = useChatThreadContext('ask');
 
   const askAndFocusChat = (question: string) => {
     setActiveTab('ask');
@@ -57,11 +55,13 @@ const AppContent: React.FC = () => {
           {activeTab !== 'history' && <NavigationTabs activeTab={activeTab} onChange={setActiveTab} />}
           <div className="flex-1 overflow-y-auto px-5 pt-4 relative custom-scrollbar flex flex-col gap-4">
             {activeTab === 'suggest' && <SuggestAnswersPane onAskChat={askAndFocusChat} />}
-            {activeTab === 'ask' && <ChatPane />}
+            {activeTab === 'ask' && <ChatPane threadId="ask" />}
             {activeTab === 'listen' && <TranscriptPane isLive={status === 'live'} />}
             {activeTab === 'history' && <HistoryPane />}
           </div>
-          {activeTab !== 'history' && <InputBar onSend={askAndFocusChat} />}
+          {activeTab !== 'history' && activeTab !== 'ask' && (
+            <InputBar onSend={askAndFocusChat} />
+          )}
         </>
       )}
     </AppShell>
@@ -69,9 +69,7 @@ const AppContent: React.FC = () => {
 };
 
 export const App: React.FC = () => (
-  <ChatProvider>
-    <HistoryChatProvider>
-      <AppContent />
-    </HistoryChatProvider>
-  </ChatProvider>
+  <ChatThreadProvider>
+    <AppContent />
+  </ChatThreadProvider>
 );

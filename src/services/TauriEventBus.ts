@@ -7,6 +7,9 @@ import {
   MeetingDecision,
   MeetingActionItem,
   MeetingRisk,
+  ChatReplyEvent,
+  ChatThinkingEvent,
+  ChatErrorEvent,
 } from '../shared/types';
 import { SuggestAnswerWire, TranscriptWire } from './wire';
 import { toSuggestCard, toTxLine } from './mappers';
@@ -85,18 +88,18 @@ export class TauriEventBus implements IEventBus {
     return () => unlisten.then(f => f());
   }
 
-  onChatReply(cb: (msg: any) => void) {
-    const unlisten = listen<any>('chat_reply', (e) => cb(e.payload));
+  onChatReply(cb: (reply: ChatReplyEvent) => void) {
+    const unlisten = listen<ChatReplyEvent>('chat_reply', (e) => cb(e.payload));
     return () => unlisten.then(f => f());
   }
 
-  onChatThinking(cb: (text: string) => void) {
-    const unlisten = listen<string>('chat_thinking', (e) => cb(e.payload));
+  onChatThinking(cb: (event: ChatThinkingEvent | string) => void) {
+    const unlisten = listen<ChatThinkingEvent | string>('chat_thinking', (e) => cb(e.payload));
     return () => unlisten.then(f => f());
   }
 
-  onChatError(cb: (err: any) => void) {
-    const unlisten = listen<any>('chat_error', (e) => cb(e.payload));
+  onChatError(cb: (err: ChatErrorEvent) => void) {
+    const unlisten = listen<ChatErrorEvent>('chat_error', (e) => cb(e.payload));
     return () => unlisten.then(f => f());
   }
 

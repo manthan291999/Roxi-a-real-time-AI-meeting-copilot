@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChatMessage } from '../../../shared/types';
-import { tokens, radius, ChevronDownIcon } from '../../../design-system';
+import { tokens, ChevronDownIcon } from '../../../design-system';
+import { SourceChip } from './SourceChip';
 
 interface Props {
   message: ChatMessage;
@@ -57,24 +58,7 @@ export const RoxiAnswerCard: React.FC<Props> = ({ message, onFollowUpClick }) =>
               {sourcesExpanded && (
                 <div className="flex flex-wrap gap-2">
                   {message.sources!.map((source, idx) => (
-                    <div 
-                      key={idx}
-                      className="text-[11px] p-2 rounded flex flex-col gap-1 max-w-[280px]"
-                      style={{ 
-                        background: 'rgba(255,255,255,0.03)', 
-                        border: `1px solid ${tokens.hairline}`,
-                        borderRadius: radius.card
-                      }}
-                    >
-                      <div className="flex items-center justify-between font-medium" style={{ color: tokens.mute }}>
-                        <span className="truncate pr-2">{source.meeting_title || 'Meeting'}</span>
-                        <span>{source.date ? new Date(source.date).toLocaleDateString() : ''}</span>
-                      </div>
-                      <div className="line-clamp-3" style={{ color: tokens.paper }}>
-                        <span className="font-medium mr-1" style={{ color: tokens.signal }}>{source.speaker}:</span>
-                        {source.text}
-                      </div>
-                    </div>
+                    <SourceChip key={idx} source={source} />
                   ))}
                 </div>
               )}

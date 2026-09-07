@@ -1,43 +1,55 @@
 import React, { useRef, useEffect } from 'react';
-import { useChatContext } from '../../context/ChatContext';
-import { MessageBubble } from './MessageBubble';
+import { ChatThreadId } from '../../shared/types';
+import { useChatThreadContext } from './ChatThreadProvider';
 import { ChatInput } from './ChatInput';
-import { tokens, radius } from '../../design-system';
+import { RoxiAnswerCard } from './components/RoxiAnswerCard';
+import { ThinkingIndicator } from './components/ThinkingIndicator';
+import { UserBubble } from './components/UserBubble';
+import { tokens } from '../../design-system';
 
-export const ChatPane: React.FC = () => {
-  const { messages, isLoading, thinkingText, askQuestion } = useChatContext();
+interface ChatPaneProps {
+  /** Which thread this pane is a view of. */
+  threadId: ChatThreadId;
+  emptyHint?: string;
+}
+
+/**
+ * One chat thread, rendered. Composition only — every rule lives in
+ * useChatThread, so the Ask tab and the history browser share this pane
+ * instead of the two near-identical copies they used to have.
+ */
+export const ChatPane: React.FC<ChatPaneProps> = ({
+  threadId,
+  emptyHint = 'Ask a question about the meeting…',
+}) => {
+  const { messages, isLoading, thinkingNode, askQuestion } = useChatThreadContext(threadId);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading, thinkingText]);
+  }, [messages, isLoading, thinkingNode]);
 
   return (
     <div className="flex flex-col h-full" style={{ background: tokens.panel }}>
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 custom-scrollbar">
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center italic text-[14px]" style={{ color: tokens.muteDim }}>
-            Ask a question about the meeting...
+          <div
+            className="h-full flex flex-col items-center justify-center italic text-[14px]"
+            style={{ color: tokens.muteDim }}
+          >
+            {emptyHint}
           </div>
         ) : (
-          messages.map((msg, i) => (
-            <MessageBubble key={i} message={msg} />
-          ))
+          messages.map((msg, i) =>
+            msg.role === 'assistant' ? (
+              <RoxiAnswerCard key={i} message={msg} onFollowUpClick={askQuestion} />
+            ) : (
+              <UserBubble key={i} content={msg.content} />
+            ),
+          )
         )}
 
-        {isLoading && (
-          <div className="flex w-full justify-start">
-            <div
-              className="max-w-[85%] p-3 text-[14px] rounded-bl-sm border flex items-center gap-2"
-              style={{ borderRadius: radius.card, background: tokens.panelRaised, borderColor: tokens.hairline, color: tokens.paper }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full animate-typing-dot" style={{ background: tokens.signal }}></span>
-              <span className="w-1.5 h-1.5 rounded-full animate-typing-dot" style={{ background: tokens.signal }}></span>
-              <span className="w-1.5 h-1.5 rounded-full animate-typing-dot" style={{ background: tokens.signal }}></span>
-              <span className="ml-1 text-[12px]" style={{ color: tokens.mute }}>{thinkingText}</span>
-            </div>
-          </div>
-        )}
+        {isLoading && <ThinkingIndicator nodeName={thinkingNode} />}
         <div ref={bottomRef} className="h-4 shrink-0" />
       </div>
 
