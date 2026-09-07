@@ -18,6 +18,7 @@ const { DocumentRepositorySqlite } = require('../infrastructure/documents/Docume
 const { DocumentEvidenceSource } = require('../infrastructure/documents/DocumentEvidenceSource');
 const { FtsEvidenceSource } = require('../infrastructure/persistence/FtsEvidenceSource');
 const { CompositeEvidenceSource } = require('../application/retrieval/CompositeEvidenceSource');
+const { createParserRegistry } = require('../infrastructure/documents/parsers/parserRegistry');
 
 const { createAnalyzeQueryNode } = require('../application/nodes/analyzeQueryNode');
 const { createRetrieveNode } = require('../application/nodes/retrieveNode');
@@ -28,6 +29,8 @@ const { createGenerateNode } = require('../application/nodes/generateNode');
 const { createRespondNoDataNode } = require('../application/nodes/respondNoDataNode');
 const { buildChatGraph } = require('../application/graph/buildChatGraph');
 const { AnswerQuestionUseCase } = require('../application/useCases/AnswerQuestionUseCase');
+const { IndexDocumentUseCase } = require('../application/useCases/IndexDocumentUseCase');
+const { ManageDocumentsUseCase } = require('../application/useCases/ManageDocumentsUseCase');
 
 /**
  * Build the fully-wired chatbot.
@@ -36,7 +39,8 @@ const { AnswerQuestionUseCase } = require('../application/useCases/AnswerQuestio
  * @returns {{
  *   config: Object, logger: Object, store: Object, indexBuilder: Object,
  *   retriever: Object, budget: Object|null, llm: Object|null,
- *   useCase: AnswerQuestionUseCase|null, shutdown: () => void
+ *   useCase: AnswerQuestionUseCase|null, indexDocument: IndexDocumentUseCase|null,
+ *   manageDocuments: ManageDocumentsUseCase|null, shutdown: () => void
  * }}
  */
 function buildContainer(overrides = {}) {
@@ -55,6 +59,9 @@ function buildContainer(overrides = {}) {
   let documents = null;
   let embeddings = null;
   let embedBudget = null;
+  let parsers = null;
+  let indexDocument = null;
+  let manageDocuments = null;
 
   if (!overrides.skipLlm) {
     budget = new CallCountBudgetGuard({
@@ -121,6 +128,23 @@ function buildContainer(overrides = {}) {
     });
 
     useCase = new AnswerQuestionUseCase({ graph, logger });
+
+    // Upload/list/delete. Deliberately built from the SAME documents
+    // repository the evidence source reads, so a document is searchable the
+    // moment indexing marks it ready — no second store, no sync step.
+    parsers = createParserRegistry();
+    indexDocument = new IndexDocumentUseCase({
+      documents,
+      embeddings,
+      parsers,
+      logger,
+      limits: {
+        maxDocumentBytes: config.maxDocumentBytes,
+        maxLibraryBytes: config.maxLibraryBytes,
+        maxDocuments: config.maxDocuments,
+      },
+    });
+    manageDocuments = new ManageDocumentsUseCase({ documents, logger });
   }
 
   const shutdown = () => {
@@ -143,6 +167,9 @@ function buildContainer(overrides = {}) {
     embedBudget,
     llm,
     useCase,
+    parsers,
+    indexDocument,
+    manageDocuments,
     shutdown,
   };
 }
