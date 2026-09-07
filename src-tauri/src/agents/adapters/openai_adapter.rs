@@ -94,7 +94,7 @@ impl LlmClient for OpenAiAdapter {
                 // Robustly extract JSON by finding the first '{' and last '}'
                 // This handles markdown code fences, prose wrappers, and stray newlines
                 let start_idx = response.find('{').ok_or_else(|| {
-                    tracing::error!("[openai_adapter] No '{{' found in response: {}", &response[..response.len().min(200)]);
+                    tracing::error!("[openai_adapter] No '{{' found in response: {}", response.chars().take(200).collect::<String>());
                     UsageStore::record(UsageEntry {
                         tag: self.tag.clone(),
                         model: self.model.clone(),
@@ -113,7 +113,7 @@ impl LlmClient for OpenAiAdapter {
                 })?;
 
                 let end_idx = response.rfind('}').ok_or_else(|| {
-                    tracing::error!("[openai_adapter] No '}}' found in response: {}", &response[..response.len().min(200)]);
+                    tracing::error!("[openai_adapter] No '}}' found in response: {}", response.chars().take(200).collect::<String>());
                     UsageStore::record(UsageEntry {
                         tag: self.tag.clone(),
                         model: self.model.clone(),
@@ -155,7 +155,7 @@ impl LlmClient for OpenAiAdapter {
                 let json: Value = match serde_json::from_str(extracted) {
                     Ok(val) => val,
                     Err(e) => {
-                        let err_msg = format!("JSON parse error: {} — extracted: {}", e, &extracted[..extracted.len().min(300)]);
+                        let err_msg = format!("JSON parse error: {} — extracted: {}", e, extracted.chars().take(300).collect::<String>());
                         tracing::error!("[openai_adapter] {}", &err_msg);
                         UsageStore::record(UsageEntry {
                             tag: self.tag.clone(),

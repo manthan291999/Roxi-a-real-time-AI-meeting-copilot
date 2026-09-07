@@ -93,7 +93,14 @@ impl UsageStore {
         if s.len() <= max {
             s.to_string()
         } else {
-            let mut truncated = s[..max].to_string();
+            // Byte-slicing a str panics if `max` lands inside a multi-byte
+            // character, which LLM output (em dashes, curly quotes) routinely
+            // produces. Walk back to the nearest boundary at or below `max`.
+            let mut end = max;
+            while end > 0 && !s.is_char_boundary(end) {
+                end -= 1;
+            }
+            let mut truncated = s[..end].to_string();
             truncated.push_str("…[truncated]");
             truncated
         }
