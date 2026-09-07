@@ -48,6 +48,8 @@ const MODEL_PRICES = {
   'openai/gpt-oss-120b': { input: 0.90, output: 0.90 },
   'llama-3.3-70b-versatile': { input: 0.59, output: 0.79 },
   'gemma2-9b-it': { input: 0.20, output: 0.20 },
+  // Embeddings: input-only, so output is 0 (see OpenAiEmbeddingGateway).
+  'text-embedding-3-small': { input: 0.02, output: 0 },
   default: { input: 0.50, output: 0.50 },
 };
 

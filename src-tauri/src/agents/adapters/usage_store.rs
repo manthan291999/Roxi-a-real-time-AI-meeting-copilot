@@ -82,6 +82,10 @@ impl UsageStore {
             "gemma2-9b-it" => (0.20, 0.20),
             "gpt-4o-mini" => (0.15, 0.60),
             "gpt-4o" => (2.50, 10.00),
+            // Embeddings are input-only, so the output rate is 0. Keep in sync
+            // with chatbot/src/infrastructure/usage/UsageRecorder.js and
+            // dashboard/lib/schema.js.
+            "text-embedding-3-small" => (0.02, 0.0),
             _ => (0.50, 0.50), // default fallback per 1M tokens
         };
 

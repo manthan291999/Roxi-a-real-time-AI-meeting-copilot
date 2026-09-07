@@ -11,8 +11,12 @@
  *   - gateway/infrastructure/usage-store.js
  *   - dashboard/lib/schema.js
  *
- * PRICING SYNC: MODEL_PRICES mirrors gateway/infrastructure/billing-tracker.js
- * (the project's pricing source of truth). Update both when prices change.
+ * PRICING SYNC: MODEL_PRICES must match the other two price tables in the
+ * project. Update all three when prices change:
+ *   - dashboard/lib/schema.js                     (read path)
+ *   - src-tauri/src/agents/adapters/usage_store.rs (Rust agent writer)
+ * (This previously named gateway/infrastructure/billing-tracker.js, which was
+ * deleted when the agent pipeline moved to Rust.)
  *
  * Never throws — usage tracking must never break a chat reply.
  */
@@ -33,6 +37,8 @@ const MODEL_PRICES = {
   'openai/gpt-oss-120b': { input: 0.90, output: 0.90 },
   'llama-3.3-70b-versatile': { input: 0.59, output: 0.79 },
   'gemma2-9b-it': { input: 0.20, output: 0.20 },
+  // Embeddings: input-only, so output is 0 (see OpenAiEmbeddingGateway).
+  'text-embedding-3-small': { input: 0.02, output: 0 },
   default: { input: 0.50, output: 0.50 },
 };
 
