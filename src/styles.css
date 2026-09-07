@@ -52,7 +52,7 @@
     0 24px 64px rgba(0, 0, 0, 0.28),
     0 0 0 0.5px rgba(0, 0, 0, 0.06),
     inset 0 1px 0 rgba(255, 255, 255, 0.70),
-    0 0 120px rgba(124, 116, 242, 0.05);
+    0 0 120px rgba(67, 56, 202, 0.05);
 
   /* ---- Theme palette ---------------------------------------------------
      THE single source of truth for colour. `design-system/tokens.ts` maps each
@@ -85,32 +85,41 @@
   --t-mute-dim: #7A7A86;
 
   /* The one interactive accent — CTA, live state, focus. */
-  --t-signal: #7C74F2;
-  --t-signal-dim: rgba(124, 116, 242, 0.14);
-  --t-signal-line: rgba(124, 116, 242, 0.35);
-  --t-signal-focus: rgba(124, 116, 242, 0.20);
+  --t-signal: #4338CA;
+  --t-signal-dim: rgba(67, 56, 202, 0.10);
+  --t-signal-line: rgba(67, 56, 202, 0.30);
+  --t-signal-focus: rgba(67, 56, 202, 0.20);
 
-  /* Semantic tag colours — meaning-carrying, kept off interactive chrome. */
-  --t-decision: #34D399;
-  --t-decision-bg: rgba(52, 211, 153, 0.12);
-  --t-decision-line: rgba(52, 211, 153, 0.30);
-  --t-risk: #F2B13D;
-  --t-risk-bg: rgba(242, 177, 61, 0.15);
-  --t-risk-line: rgba(242, 177, 61, 0.30);
-  --t-technical: #A78BFA;
-  --t-technical-bg: rgba(139, 92, 246, 0.15);
-  --t-technical-line: rgba(167, 139, 250, 0.30);
+  /* Semantic tag colours — meaning-carrying, kept off interactive chrome.
+     Re-derived for a light ground, not merely darkened by eye: the dark
+     theme's values measured 1.3-1.9:1 here, i.e. invisible. Each is >= 4.5:1
+     on the shell AND on its own 0.07 tint, in the black-desktop worst case.
+     Tints are 0.07 rather than the dark theme's 0.12-0.15 because a heavier
+     wash pulls the chip toward its own text colour and costs contrast. */
+  --t-decision: #065F46;
+  --t-decision-bg: rgba(6, 95, 70, 0.07);
+  --t-decision-line: rgba(6, 95, 70, 0.28);
+  --t-risk: #92400E;
+  --t-risk-bg: rgba(146, 64, 14, 0.07);
+  --t-risk-line: rgba(146, 64, 14, 0.28);
+  --t-technical: #6D28D9;
+  --t-technical-bg: rgba(109, 40, 217, 0.07);
+  --t-technical-line: rgba(109, 40, 217, 0.28);
 
   /* The fallback accent for a tag the UI has no styling for. */
   --t-neutral-bg: rgba(0, 0, 0, 0.045);
   --t-neutral-line: rgba(0, 0, 0, 0.16);
 
-  /* Speaker identity colours, assigned round-robin by diarization index. */
-  --t-speaker-1: #60a5fa;
-  --t-speaker-2: #a78bfa;
-  --t-speaker-3: #22d3ee;
-  --t-speaker-4: #34d399;
-  --t-speaker-5: #fb923c;
+  /* Speaker identity colours, assigned round-robin by diarization index.
+     Five distinguishable hues, each >= 4.5:1 on the shell. The dark theme used
+     Tailwind 400-level values, which measured 1.3-1.9:1 on a light ground; a
+     speaker name is 13px semibold, which is not WCAG "large text", so 4.5 is
+     the bar rather than 3.0. */
+  --t-speaker-1: #1D4ED8;
+  --t-speaker-2: #6D28D9;
+  --t-speaker-3: #155E75;
+  --t-speaker-4: #065F46;
+  --t-speaker-5: #9A3412;
 
   /* Chrome that belongs to no token: the scrollbar. */
   --t-scrollbar-thumb: rgba(0, 0, 0, 0.22);
