@@ -6,6 +6,10 @@ use tauri::{AppHandle, Emitter};
 pub struct ChatEvent {
     #[serde(rename = "type")]
     pub event_type: String,
+    /// Which chat thread this response belongs to. Absent on Ready/Bye and on
+    /// errors raised before the thread is known.
+    #[serde(rename = "threadId")]
+    pub thread_id: Option<String>,
     pub node: Option<String>,
     pub payload: Option<serde_json::Value>,
     pub message: Option<String>,
@@ -22,11 +26,24 @@ pub fn route_chat_event(app: &AppHandle, text: &str) {
                 let _ = app.emit("chat_ready", ());
             }
             "ChatThinking" => {
-                let node = event.node.unwrap_or_default();
-                let _ = app.emit("chat_thinking", node);
+                // Object rather than a bare string so the thread it belongs to
+                // travels with it; the frontend accepts both shapes.
+                let payload = serde_json::json!({
+                    "threadId": event.thread_id,
+                    "node": event.node.unwrap_or_default(),
+                });
+                let _ = app.emit("chat_thinking", payload);
             }
             "ChatReply" => {
-                if let Some(p) = event.payload {
+                if let Some(mut p) = event.payload {
+                    // Merged into the payload rather than wrapped around it, so
+                    // the frontend keeps one flat shape to read.
+                    if let (Some(obj), Some(thread_id)) = (p.as_object_mut(), event.thread_id) {
+                        obj.insert(
+                            "threadId".to_string(),
+                            serde_json::Value::String(thread_id),
+                        );
+                    }
                     let _ = app.emit("chat_reply", p);
                 }
             }
@@ -35,6 +52,7 @@ pub fn route_chat_event(app: &AppHandle, text: &str) {
             }
             "Error" => {
                 let payload = serde_json::json!({
+                    "threadId": event.thread_id,
                     "message": event.message.unwrap_or_else(|| "Unknown chat error".into()),
                     "code": event.code.unwrap_or_else(|| "UNKNOWN".into()),
                 });

@@ -6,11 +6,16 @@
  *             {"type":"RebuildIndex","force":false}
  *             {"type":"Shutdown"}
  *   stdout <- {"type":"Ready"}
- *             {"type":"ChatThinking","node":"retrieve"}
- *             {"type":"ChatReply","payload":{...}}
+ *             {"type":"ChatThinking","threadId":"ask","node":"retrieve"}
+ *             {"type":"ChatReply","threadId":"ask","payload":{...}}
  *             {"type":"IndexRebuilt","stats":{...}}
- *             {"type":"Error","message":"...","code":"..."}
+ *             {"type":"Error","threadId":"ask","message":"...","code":"..."}
  *             {"type":"Bye"}
+ *
+ * Every response to an Ask echoes its threadId. The host fans these out as
+ * global Tauri events, so without it a UI with more than one thread appends
+ * every answer to all of them. threadId is omitted only where it genuinely is
+ * not known (malformed stdin, unknown message type).
  *
  * stdout carries ONLY protocol messages; logs go to stderr via the logger.
  */
@@ -53,33 +58,44 @@ function startStdioSidecar(container) {
     handleMessage(msg).catch((err) => {
       const code = err instanceof ChatbotError ? err.code : 'INTERNAL_ERROR';
       logger.error('sidecar', 'request_failed', { type: msg.type, code, message: err.message });
-      emit({ type: 'Error', message: err.message, code });
+      emit({ type: 'Error', threadId: msg.threadId, message: err.message, code });
     });
   });
 
   async function handleMessage(msg) {
     switch (msg.type) {
       case 'Ask': {
+        const threadId = msg.threadId || 'default';
         if (busy) {
-          emit({ type: 'Error', message: 'Previous question still processing', code: 'BUSY' });
+          emit({
+            type: 'Error',
+            threadId,
+            message: 'Previous question still processing',
+            code: 'BUSY',
+          });
           return;
         }
         busy = true;
         try {
           const payload = await useCase.run({
             question: msg.question,
-            threadId: msg.threadId || 'default',
+            threadId,
             history: Array.isArray(msg.history) ? msg.history : [],
-            onNode: (node) => emit({ type: 'ChatThinking', node }),
+            onNode: (node) => emit({ type: 'ChatThinking', threadId, node }),
           });
-          emit({ type: 'ChatReply', payload });
+          emit({ type: 'ChatReply', threadId, payload });
         } catch (err) {
           // Emit the error as a protocol message — do NOT rethrow, which would
           // cause handleMessage().catch() to emit a SECOND error event and also
           // risk an unhandledRejection if the outer .catch misses it.
           const code = err && err.code ? err.code : 'INTERNAL_ERROR';
           logger.error('sidecar', 'ask_failed', { code, message: err && err.message });
-          emit({ type: 'Error', message: (err && err.message) || 'Unknown error', code });
+          emit({
+            type: 'Error',
+            threadId,
+            message: (err && err.message) || 'Unknown error',
+            code,
+          });
         } finally {
           busy = false;
         }
