@@ -50,7 +50,18 @@ function createShutdown({ session, providerCloser }) {
     }
 
     log('info', 'sidecar', 'shutdown_complete', { reason });
-    process.exit(status === 'ended' ? 0 : 1);
+
+    // process.stdout is asynchronous when it is a pipe — and it is, since the
+    // Rust host holds the other end — so exiting immediately can truncate the
+    // MeetingSummary line written above. The timer bounds the wait well inside
+    // the 15s the host allows before force-killing.
+    const code = status === 'ended' ? 0 : 1;
+    if (process.stdout.writableLength > 0) {
+      process.stdout.once('drain', () => process.exit(code));
+      setTimeout(() => process.exit(code), 1000).unref();
+    } else {
+      process.exit(code);
+    }
   };
 }
 

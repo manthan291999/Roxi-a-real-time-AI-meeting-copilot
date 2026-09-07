@@ -1,4 +1,12 @@
-import { SuggestCardType, TxLine, Significance, ChatMessage } from '../types';
+import {
+  SuggestCardType,
+  TxLine,
+  Significance,
+  ChatMessage,
+  MeetingDecision,
+  MeetingActionItem,
+  MeetingRisk,
+} from '../types';
 
 export interface ProviderStatus {
   provider: string;
@@ -11,9 +19,9 @@ export interface IEventBus {
   onTranscriptFinal(cb: (line: TxLine) => void): () => void;
   onContextExplanation(cb: (data: {text: string, speaker: string}) => void): () => void;
   onTechnicalExplanation(cb: (data: {text: string, speaker: string}) => void): () => void;
-  onMeetingRisks(cb: (risks: string[]) => void): () => void;
-  onMeetingDecisions(cb: (decisions: string[]) => void): () => void;
-  onMeetingActionItems(cb: (actions: string[]) => void): () => void;
+  onMeetingRisks(cb: (risks: MeetingRisk[]) => void): () => void;
+  onMeetingDecisions(cb: (decisions: MeetingDecision[]) => void): () => void;
+  onMeetingActionItems(cb: (actions: MeetingActionItem[]) => void): () => void;
   onChunkSignificance(cb: (sig: Significance) => void): () => void;
   onProviderStatus(cb: (status: ProviderStatus) => void): () => void;
   onCircuitBreaker(cb: () => void): () => void;
@@ -22,8 +30,4 @@ export interface IEventBus {
   onChatReply(cb: (msg: any) => void): () => void;
   onChatThinking(cb: (text: string) => void): () => void;
   onChatError(cb: (err: any) => void): () => void;
-  
-  // App Shell Commands
-  toggleToolbar(): Promise<void>;
-  toggleCaption(): Promise<void>;
 }

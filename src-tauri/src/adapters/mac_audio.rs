@@ -1,12 +1,18 @@
-//! Audio capture module: WASAPI loopback device discovery and recording.
+//! Audio capture: BlackHole loopback plus the system microphone, mixed to
+//! 16 kHz mono PCM16.
 //!
-//! Uses `cpal` which wraps WASAPI on Windows. For loopback capture, we find an
-//! output device and open an input stream on it — cpal's WASAPI backend
-//! transparently uses `IAudioClient::Initialize` with `AUDCLNT_STREAMFLAGS_LOOPBACK`.
+//! macOS is the only target. CoreAudio cannot capture an ordinary output
+//! device, so system audio — the other participants in a meeting — is read
+//! from BlackHole, a virtual loopback driver the user installs and selects as
+//! their output (typically via a Multi-Output Device so they can still hear
+//! it). `find_loopback_device` prefers BlackHole for exactly this reason; the
+//! header here previously described a Windows WASAPI strategy the platform does
+//! not support, which is how that defect stayed hidden.
 //!
-//! Phase 2 refactor: the capture pipeline is now sink-agnostic. Callers provide
-//! a `PcmSink` implementation (WAV file, stdout streaming, etc.) and the capture
-//! loop feeds resampled PCM16 samples into it.
+//! Two `cpal` input streams run concurrently — the BlackHole loopback and the
+//! microphone — and a mixer thread sums them into the caller's `PcmSink`. The
+//! pipeline is sink-agnostic: callers supply the `PcmSink` (today
+//! `StreamingSink`, which frames PCM1 onto the gateway's stdin).
 
 use crate::resample::Resampler;
 use anyhow::{anyhow, Context, Result};
@@ -78,43 +84,6 @@ pub struct CaptureConfig {
     pub device_name: Option<String>,
     pub target_sample_rate: u32,
     pub target_channels: u16,
-}
-
-/// List all available output devices (potential loopback sources).
-pub fn list_output_devices() -> Result<()> {
-    let host = cpal::default_host();
-    info!("Audio host: {}", host.id().name());
-
-    println!("\n  Available output devices (loopback sources):");
-    println!("  {:<4} {:<50} {}", "#", "Device Name", "Default Config");
-    println!("  {}", "-".repeat(90));
-
-    let devices = host
-        .output_devices()
-        .context("Failed to enumerate output devices")?;
-
-    for (i, device) in devices.enumerate() {
-        let name = device.name().unwrap_or_else(|_| "<unknown>".into());
-        let config_str = match device.default_output_config() {
-            Ok(cfg) => format!(
-                "{}Hz, {}ch, {:?}",
-                cfg.sample_rate().0,
-                cfg.channels(),
-                cfg.sample_format()
-            ),
-            Err(e) => format!("(error: {})", e),
-        };
-        println!("  {:<4} {:<50} {}", i, name, config_str);
-    }
-
-    if let Some(default) = host.default_output_device() {
-        println!(
-            "\n  Default output device: {}",
-            default.name().unwrap_or_else(|_| "<unknown>".into())
-        );
-    }
-
-    Ok(())
 }
 
 /// Find the target output device for loopback capture.

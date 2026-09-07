@@ -33,6 +33,9 @@ class SpeakerRepository {
       allEmbeddings: db.prepare(
         'SELECT stt_label, display_name, embedding_json FROM speaker_embeddings'
       ),
+      renameEmbeddings: db.prepare(
+        'UPDATE speaker_embeddings SET display_name = ? WHERE stt_label = ?'
+      ),
     };
   }
 
@@ -62,6 +65,21 @@ class SpeakerRepository {
       this.stmts.insertEmbedding.run(sttLabel, displayName, JSON.stringify(embeddingArray));
     } catch (err) {
       log('warn', 'db', 'save_embedding_failed', { sttLabel, message: err.message });
+    }
+  }
+
+  /**
+   * Relabel every embedding stored for an STT label.
+   *
+   * DiarizationLayer.loadKnownVoices skips rows whose display_name still equals
+   * the stt_label, so without this a voice renamed after its embedding was
+   * stored would never be matched in a later session.
+   */
+  renameSpeakerEmbeddings(sttLabel, displayName) {
+    try {
+      this.stmts.renameEmbeddings.run(displayName, sttLabel);
+    } catch (err) {
+      log('warn', 'db', 'rename_embeddings_failed', { sttLabel, message: err.message });
     }
   }
 

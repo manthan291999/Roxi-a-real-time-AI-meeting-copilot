@@ -16,7 +16,7 @@ const { TranscriptPipeline } = require('../stt/transcript-pipeline.js');
 const { TranscriptSanitizer } = require('../stt/transcript-sanitizer.js');
 const { CommandHandler } = require('../control/command-handler.js');
 
-/** In-memory stand-in for SpeakerRepository — the 4 methods it actually needs. */
+/** In-memory stand-in for SpeakerRepository — the 5 methods it actually needs. */
 function fakeSpeakerRepo(seed = {}) {
   const names = new Map(Object.entries(seed.names || {}));
   const embeddings = [...(seed.embeddings || [])];
@@ -28,6 +28,9 @@ function fakeSpeakerRepo(seed = {}) {
     saveSpeakerEmbedding: (l, n, v) =>
       embeddings.push({ stt_label: l, display_name: n, embedding_json: JSON.stringify(v) }),
     getAllSpeakerEmbeddings: () => embeddings,
+    renameSpeakerEmbeddings: (l, n) => {
+      for (const e of embeddings) if (e.stt_label === l) e.display_name = n;
+    },
   };
 }
 

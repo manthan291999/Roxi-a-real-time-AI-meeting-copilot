@@ -16,15 +16,24 @@ pub async fn start_capture(
     })).map_err(|e| e.to_string())
 }
 
-use crate::ports::chat_gateway::ChatGatewayClient;
-
 #[tauri::command]
 pub async fn stop_capture(
     capture_use_case: State<'_, Arc<CaptureUseCase>>,
-    chat_client: State<'_, Arc<dyn ChatGatewayClient>>,
 ) -> Result<(), String> {
-    let result = capture_use_case.stop().map_err(|e| e.to_string());
-    // Auto-rebuild chatbot FTS index after meeting capture completes (G-1)
-    let _ = chat_client.send(r#"{"type":"RebuildIndex","force":false}"#.to_string());
-    result
+    // stop() polls try_wait with a blocking std::thread::sleep for up to 15s
+    // (adapters/gateway_client.rs), so it must not run on the async runtime the
+    // ChunkGraph pipeline tasks share.
+    //
+    // The chatbot FTS rebuild that used to be fired here has been removed: the
+    // chat sidecar is spawned lazily by ask_chat, so send() failed with "Chat
+    // sidecar is not running" whenever chat had not been opened, and the error
+    // was discarded. It was also redundant — stdioSidecar.js runs
+    // rebuildIfStale at startup, and FtsIndexBuilder compares the meeting count
+    // in meeting_history.db against the index, so a finished meeting is picked
+    // up the next time Ask Roxi opens.
+    let use_case = capture_use_case.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || use_case.stop())
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
 }

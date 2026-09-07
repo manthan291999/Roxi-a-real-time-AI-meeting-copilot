@@ -14,14 +14,6 @@ pub struct OpenAiAdapter {
 }
 
 impl OpenAiAdapter {
-    pub fn new(api_key: &str, model: &str) -> Self {
-        Self {
-            client: OpenAiClient::new(api_key),
-            model: model.to_string(),
-            tag: None,
-        }
-    }
-
     pub fn with_tag(api_key: &str, model: &str, tag: &str) -> Self {
         Self {
             client: OpenAiClient::new(api_key),

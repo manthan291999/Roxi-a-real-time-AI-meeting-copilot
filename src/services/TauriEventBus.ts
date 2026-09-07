@@ -1,22 +1,24 @@
 import { listen } from '@tauri-apps/api/event';
-import { invoke } from '@tauri-apps/api/core';
 import { IEventBus, ProviderStatus } from '../shared/interfaces';
-import { SuggestCardType, TxLine, Significance } from '../shared/types';
+import {
+  SuggestCardType,
+  TxLine,
+  Significance,
+  MeetingDecision,
+  MeetingActionItem,
+  MeetingRisk,
+} from '../shared/types';
 import { SuggestAnswerWire, TranscriptWire } from './wire';
 import { toSuggestCard, toTxLine } from './mappers';
 
 export class TauriEventBus implements IEventBus {
   /**
-   * Both event names carry the same payload (event_router.rs:55-57). The mapper
-   * derives a content-based id so the duplicate delivery collapses downstream
-   * instead of showing every suggestion twice.
+   * `event_router.rs` emits a suggestion once, on `suggest_answer`. The legacy
+   * `suggested_response` listener was removed: subscribing to both made every
+   * suggestion arrive twice and cost two dedup passes and two state updates.
    */
   onSuggestAnswer(cb: (card: SuggestCardType) => void) {
     const handle = (wire: SuggestAnswerWire) => cb(toSuggestCard(wire));
-    // PERF FIX #6: Listen ONLY to 'suggest_answer'. The legacy 'suggested_response'
-    // listener was retained for backwards compat when the backend emitted both events,
-    // but event_router.rs now emits only 'suggest_answer'. Listening to both caused
-    // every suggestion to trigger 2x deduplication and 2x React state updates.
     const unlisten = listen<SuggestAnswerWire>('suggest_answer', (e) => handle(e.payload));
     return () => {
       unlisten.then(f => f());
@@ -43,18 +45,18 @@ export class TauriEventBus implements IEventBus {
     return () => unlisten.then(f => f());
   }
 
-  onMeetingRisks(cb: (risks: string[]) => void) {
-    const unlisten = listen<string[]>('meeting_risks', (e) => cb(e.payload));
+  onMeetingRisks(cb: (risks: MeetingRisk[]) => void) {
+    const unlisten = listen<MeetingRisk[]>('meeting_risks', (e) => cb(e.payload));
     return () => unlisten.then(f => f());
   }
 
-  onMeetingDecisions(cb: (decisions: string[]) => void) {
-    const unlisten = listen<string[]>('meeting_decisions', (e) => cb(e.payload));
+  onMeetingDecisions(cb: (decisions: MeetingDecision[]) => void) {
+    const unlisten = listen<MeetingDecision[]>('meeting_decisions', (e) => cb(e.payload));
     return () => unlisten.then(f => f());
   }
 
-  onMeetingActionItems(cb: (actions: string[]) => void) {
-    const unlisten = listen<string[]>('meeting_action_items', (e) => cb(e.payload));
+  onMeetingActionItems(cb: (actions: MeetingActionItem[]) => void) {
+    const unlisten = listen<MeetingActionItem[]>('meeting_action_items', (e) => cb(e.payload));
     return () => unlisten.then(f => f());
   }
 
@@ -98,11 +100,4 @@ export class TauriEventBus implements IEventBus {
     return () => unlisten.then(f => f());
   }
 
-  async toggleToolbar(): Promise<void> {
-    await invoke('toggle_toolbar');
-  }
-
-  async toggleCaption(): Promise<void> {
-    await invoke('toggle_caption');
-  }
 }

@@ -26,10 +26,9 @@ function toContextItem(wire: ContextItemWire): ContextItem {
 /**
  * Stable id derived from content.
  *
- * The Rust router emits the same payload on both `suggested_response` and
- * `suggest_answer` (event_router.rs:55-57) and TauriEventBus subscribes to both,
- * so every suggestion arrives twice. Hashing the content makes those two
- * deliveries collapse into one card via deduplicateCards.
+ * The router emits each suggestion once, on `suggest_answer`. The id is still
+ * content-derived so a re-emitted suggestion collapses into the existing card
+ * rather than appearing twice (see useSuggestAnswers' seenIds set).
  */
 function toCardId(text: string, speaker: string): string {
   const source = `${speaker}:${text}`;

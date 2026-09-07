@@ -9,7 +9,6 @@ mod ports;
 mod resample;
 mod sidecar;
 mod streaming;
-mod wav_sink;
 
 use adapters::chat_client::NodeChatClient;
 use adapters::gateway_client::NodeGatewayClient;
@@ -85,8 +84,6 @@ pub fn run() {
                     macos_overlay::make_overlay(&win)?;
                 }
 
-                // route so the HashRouter picks up the right component.
-
                 app.global_shortcut().register("Option+Space")?;
 
                 let show = tauri::menu::MenuItem::with_id(app, "show", "Show Roxi", true, None::<&str>)?;
@@ -128,9 +125,6 @@ pub fn run() {
             commands::chat::ask_chat,
             commands::chat::close_chat,
             commands::speaker::rename_speaker,
-            commands::overlay::hide_toolbar,
-            commands::overlay::toggle_toolbar,
-            commands::overlay::toggle_caption,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

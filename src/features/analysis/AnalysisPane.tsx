@@ -24,7 +24,7 @@ export const AnalysisPane: React.FC = () => {
           <div className="flex flex-col gap-2">
             {decisions.map((decision, i) => (
               <GlassCard key={i} animateEnter>
-                <p className="text-[14px] text-[#e4e1ed]">{decision}</p>
+                <p className="text-[14px] text-[#e4e1ed]">{decision.text}</p>
               </GlassCard>
             ))}
           </div>
@@ -40,7 +40,7 @@ export const AnalysisPane: React.FC = () => {
           <div className="flex flex-col gap-2">
             {actions.map((action, i) => (
               <GlassCard key={i} animateEnter>
-                <p className="text-[14px] text-[#e4e1ed]">{action}</p>
+                <p className="text-[14px] text-[#e4e1ed]">{action.text}</p>
               </GlassCard>
             ))}
           </div>
@@ -56,7 +56,7 @@ export const AnalysisPane: React.FC = () => {
           <div className="flex flex-col gap-2">
             {risks.map((risk, i) => (
               <GlassCard key={i} animateEnter>
-                <p className="text-[14px] text-[#e4e1ed]">{risk}</p>
+                <p className="text-[14px] text-[#e4e1ed]">{risk.text}</p>
               </GlassCard>
             ))}
           </div>

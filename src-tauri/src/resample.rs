@@ -83,6 +83,10 @@ impl Resampler {
 
     /// Flush any remaining buffered samples. Call this at the end of a capture
     /// session to avoid losing the tail.
+    /// Drain the resampler's internal buffer. Unused today: the capture loop
+    /// stops on a flag rather than draining. Kept for the mixer drain-on-stop
+    /// work (deferred item A-2).
+    #[allow(dead_code)]
     pub fn flush(&mut self) -> Result<Vec<f32>> {
         if self.buffer.is_empty() {
             return Ok(Vec::new());

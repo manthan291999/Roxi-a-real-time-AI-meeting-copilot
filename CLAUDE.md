@@ -11,7 +11,7 @@ Roxi — a Tauri v2 desktop app (macOS-first) that listens to meetings, transcri
 ## Four cooperating runtimes
 
 1. **Rust core** (`src-tauri/`) — Tauri app: window/tray management, audio capture (`cpal`) + resampling (`rubato`), and the **native LLM agent pipeline** (`src-tauri/src/agents/`, built on `rig-core` against OpenAI).
-2. **Node "gateway" sidecar** (`gateway/`) — child process spawned by Rust for STT only: PCM1 frame parsing, `ProviderManager` (AssemblyAI primary, Speechmatics fallback), MFCC-based speaker diarization, and it writes transcripts/meetings to `meeting_history.db`. It does **not** run LLM/agent logic — `gateway/llm/` and `gateway/config/` are intentionally empty leftovers from before the agent pipeline moved to Rust.
+2. **Node "gateway" sidecar** (`gateway/`) — child process spawned by Rust for STT only: PCM1 frame parsing, `ProviderManager` (AssemblyAI primary, Speechmatics fallback), MFCC-based speaker diarization, and it writes transcripts/meetings to `meeting_history.db`. It does **not** run LLM/agent logic — that moved to Rust. (`gateway/config/index.js` is the gateway's own configuration module: env/argv resolution and validation. There is no `gateway/llm/`.)
 3. **Node "chatbot" sidecar** (`chatbot/`) — separate child process for "Ask Roxi": LangGraph Adaptive-RAG over an FTS5 index of meeting history, spoken to via stdio JSON.
 4. **React/TypeScript frontend** (`src/`) — Vite + Tailwind, talks to Rust only through Tauri `invoke`/events, never directly to either sidecar.
 
@@ -89,19 +89,17 @@ Rust ↔ Node communication is over OS pipes: PCM1-framed binary audio in (gatew
 
 **Read direction**: user speech + system audio → Rust captures/frames it → gateway sidecar turns it into diarized final transcripts in `meeting_history.db` → Rust's `ChunkGraph` turns each final transcript into decisions/risks/explanations/replies via OpenAI → both flow back to the frontend as Tauri events, fanned out across the `main`, `toolbar`, and `caption` windows. The chatbot sidecar is a separate, on-demand branch triggered only by "Ask Roxi," reading the same `meeting_history.db` read-only.
 
-## Multi-window frontend
+## Single-window frontend
 
-`src/main.tsx` mounts a `HashRouter` with three routes, each a separate Tauri **window** (not separate app instances):
+`src/app/main.tsx` mounts a `HashRouter` with one route:
 
 | Route | Window label | Component | Purpose |
 |---|---|---|---|
-| `/` | `main` | `App.tsx` | The primary widget: idle screen → context intake → live session (Suggest/Ask/Listen tabs) |
-| `/toolbar` | `toolbar` | `features/toolbar/ToolbarRoot.tsx` → `FloatingToolbar` | Small always-on-top control strip; status dot driven by `provider_status` events |
-| `/caption` | `caption` | `features/caption/CaptionRoot.tsx` → `CaptionOverlay` | Click-through live-caption overlay showing the current partial/final transcript line |
+| `/` | `main` | `app/App.tsx` | The whole widget: idle screen → context intake → live session (Suggest/Ask/Listen tabs) + history |
 
-All three windows are declared in `src-tauri/tauri.conf.json` (`app.windows[]`: `main` 420×780, `toolbar` 480×52, `caption` 600×48; all transparent, undecorated, always-on-top). In dev mode Tauri ignores each window's configured `url` and loads `devUrl` for all of them, so `lib.rs`'s setup hook manually re-navigates the `toolbar` and `caption` windows to their hash routes (`#cfg(debug_assertions)` block) — if you add a fourth window, replicate that or it will silently show the wrong route in `npm run tauri dev`.
+The `main` window is the only one declared in `src-tauri/tauri.conf.json` (`app.windows[]`: 420×780, transparent, undecorated, always-on-top).
 
-Toolbar/caption visibility is toggled from the frontend via `eventBus.toggleToolbar()` / `toggleCaption()` → Tauri commands `toggle_toolbar` / `toggle_caption` / `hide_toolbar` (`src-tauri/src/commands/overlay.rs`), which just show/hide the named `WebviewWindow`.
+**A floating toolbar and a click-through caption overlay were previously planned as two extra windows.** Their components were deleted in the frontend refactor and their window declarations never existed in the current config, so `commands/overlay.rs`, `capabilities/{toolbar,caption}.json` and `IEventBus.toggleToolbar/toggleCaption` were left resolving nothing and silently returning `Ok(())`. That dead surface has now been removed. If you reinstate either overlay you need all of it: the window declaration, the hash route, the component, a capability file, and a `setup()` re-navigation for dev mode (Tauri loads `devUrl` for every window and ignores each one's configured `url`, so without it a new window silently shows the wrong route under `npm run tauri dev`).
 
 ## Frontend architecture (`src/`)
 
@@ -148,7 +146,11 @@ agents/           the LLM pipeline — see below, mirrors the same ports/adapter
 - `ChunkGraph` (`orchestrator/chunk_graph.rs`) is the pipeline for each finalized transcript chunk:
   1. `chit_chat_gate` — local heuristic, fast-exits small talk with no LLM call.
   2. `ContextManagerAgent` (sequential) — topic tracking + significance grading.
-  3. `ComplexityAnalyzerAgent` (sequential) — classifies the chunk Low/Medium/High.
+  3. Complexity (Low/Medium/High) comes back in `ContextManagerAgent`'s JSON as one
+     extra field — folded in to save a sequential round-trip.
+     `agents/agents/complexity_analyzer.rs` still exists but is **intentionally
+     unwired**: nothing constructs it. Re-wire it in `application/agent_registry.rs`
+     only if complexity needs its own model or cadence.
   4. Stage-2 conditional parallel fan-out, decided by the pure function `orchestrator/routing.rs::decide()` (no I/O, unit-tested — the one test file in the Rust codebase today):
      - Low → `ExplanationAgent` only
      - Medium → `ExplanationAgent` + `RiskDetectorAgent`
@@ -180,7 +182,7 @@ Two independent SQLite databases, never joined at the query level:
 
 ## Commands & events reference
 
-**Tauri commands** (`invoke_handler!` list in `lib.rs`): `start_capture`, `stop_capture`, `check_blackhole_installed`, `get_meetings`, `get_meeting_details`, `ask_chat`, `close_chat`, `hide_toolbar`, `toggle_toolbar`, `toggle_caption`.
+**Tauri commands** (`invoke_handler!` list in `lib.rs`): `start_capture`, `stop_capture`, `check_blackhole_installed`, `get_meetings`, `get_meeting_details`, `ask_chat`, `close_chat`, `rename_speaker`.
 
 **Tauri → frontend events**: `provider_status`, `transcript_partial`, `transcript_final`, `context_explanation`, `technical_explanation`, `chunk_significance`, `meeting_decisions`, `meeting_action_items`, `meeting_risks`, `meeting_summary`, `suggested_response`, `circuit_breaker`, `capture_error`, `api_health`, `billing`, `speaker_revision`, `chat_thinking`, `chat_reply`, `chat_error`.
 
@@ -245,13 +247,13 @@ Husky `pre-commit` (`.husky/pre-commit`) blocks staged `.env`/`.env.local` files
 `brain.md` (dated 2026-09-01) and `README.md` both describe an earlier state. Concretely, as of the current `main`:
 
 - **Screenshot/screen-share protection is currently OFF.** `lib.rs`'s setup hook has `win.set_content_protected(true)` **commented out** with the note "Removed so the window is visible in screen shares." Both docs still describe capture-invisibility as an active feature — it is not, right now, for any window. If a task references "stealth"/"invisible to screen share," confirm with the user whether they want it re-enabled rather than assuming it still works.
-- **Multi-window frontend** (`main` + `toolbar` + `caption`, `HashRouter`, `commands/overlay.rs`) postdates brain.md's file listing, which only describes a single window and a since-deleted `TopBar.tsx`/`ContextModal.tsx`/etc. Trust the actual `src/` tree (see "Frontend architecture" above), not brain.md's tree, for anything frontend.
+- **The frontend is a single window.** brain.md describes a since-deleted `TopBar.tsx`/`ContextModal.tsx` tree, and an interim refactor added toolbar/caption overlay scaffolding that has now been removed (see "Single-window frontend"). Trust the actual `src/` tree, not brain.md's.
 - **Model tiering changed**: brain.md says all agents use `gpt-5.6-luna` with temperature omitted. The code now runs most agents on `gpt-4o-mini` and reserves `gpt-5.6-luna` for `response_agent` only. The "never pass `temperature`" constraint isn't explicitly re-verified for `gpt-4o-mini` in code — treat it as still the safe default for every agent's LLM call, not just the premium one.
-- **`tauri.conf.json` still has `security.csp: null` and `app.withGlobalTauri: true`**, both flagged High in `audit/CODE-AUDIT-REPORT.md` (2026-08-26) and not yet remediated. Don't "fix" these as a drive-by unless asked — they may be relied on (e.g. `window.__TAURI__` usage in window-control code) — but don't add anything that assumes CSP protections exist either.
+- **`tauri.conf.json` still has `security.csp: null` and `app.withGlobalTauri: true`**, both flagged High in `audit/CODE-AUDIT-REPORT.md` (2026-08-26) and not yet remediated — don't add anything that assumes CSP protections exist. Verified 2026-09-07: `window.__TAURI__` is referenced nowhere in `src/` or `index.html` (the window-control code that needed it went with the deleted `TopBar.tsx`), so `withGlobalTauri` can be turned off safely. Both are queued behind the packaging work rather than changed as a drive-by.
 
 ## Don't touch
 
-- `gateway/llm/`, `gateway/config/` — deliberately emptied when the agent pipeline moved to Rust. Don't add Node LLM logic back here.
+- Don't add Node LLM/agent logic back to `gateway/` — it moved to Rust (`src-tauri/src/agents/`). `gateway/config/` is the gateway's own config module, not a leftover.
 - Shipped entries in `gateway/db/migrate.js` — migrations are forward-only; add a new migration instead of editing an old one.
 - `chatbot/data/chat_index.db*` — generated index; regenerate via `chatbot/bin/rebuild-index.js` rather than hand-editing.
 - `audit/CODE-AUDIT-REPORT.md` findings are a point-in-time snapshot (2026-08-26); several (the LLM/agent-architecture ones) are already stale post-migration. Verify against current code before citing it as still-true.

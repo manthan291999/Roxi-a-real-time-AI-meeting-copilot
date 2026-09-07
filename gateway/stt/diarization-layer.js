@@ -115,12 +115,19 @@ class DiarizationLayer {
       }
     }
 
-    this.speakerRepository.saveSpeakerEmbedding(
-      sttLabel,
-      slot.displayName,
-      Array.from(embedding)
-    );
-    this.invalidateKnownVoices();
+    // One row per speaker per session. saveSpeakerEmbedding is a plain INSERT,
+    // so persisting every turn grew speaker_embeddings without bound and — with
+    // the cache dropped each time — forced a full re-read and JSON.parse of the
+    // whole table on the next turn, quadratic in turn count.
+    if (!slot.persisted) {
+      this.speakerRepository.saveSpeakerEmbedding(
+        sttLabel,
+        slot.displayName,
+        Array.from(embedding)
+      );
+      slot.persisted = true;
+      this.invalidateKnownVoices();
+    }
 
     return embedding;
   }
@@ -138,6 +145,9 @@ class DiarizationLayer {
     slot.matched = true; // an explicit name outranks any later voice match
 
     this.speakerRepository.saveSpeakerName(sttLabel, clean);
+    // Relabel any embedding already stored for this voice, or loadKnownVoices
+    // will keep skipping it as an unnamed candidate.
+    this.speakerRepository.renameSpeakerEmbeddings(sttLabel, clean);
     this.invalidateKnownVoices();
 
     log('info', 'diarization', 'speaker_renamed', { sttLabel, displayName: clean });
@@ -216,6 +226,7 @@ class DiarizationLayer {
       displayName: saved || sttLabel,
       embedding: null,
       matched: Boolean(saved),
+      persisted: false,
     };
     this.sessionSpeakers.set(sttLabel, slot);
     log('info', 'diarization', 'new_speaker', { sttLabel, displayName: slot.displayName });
