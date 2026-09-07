@@ -50,8 +50,15 @@ pub fn is_filler(text: &str) -> bool {
     ];
     if word_count <= 5 {
         for prefix in &fill_prefixes {
-            if trimmed.starts_with(prefix) && trimmed.len() <= 30 {
-                return true;
+            if let Some(rest) = trimmed.strip_prefix(prefix) {
+                // Only filler when what follows the filler word is itself
+                // filler. The previous rule gated any short utterance opening
+                // with one of these, so "ok let's ship friday" — a decision —
+                // was dropped before it reached a single agent.
+                let rest = rest.trim();
+                if rest.is_empty() || fill_exact.contains(&rest) {
+                    return true;
+                }
             }
         }
     }

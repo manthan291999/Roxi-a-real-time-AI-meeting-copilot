@@ -36,10 +36,15 @@ Return JSON:
 For each source fact you used, rate how closely it matches the speaker's exact wording from 0.0 to 1.0 (match_confidence). Do not include an "is_verbatim" field — it is derived automatically from match_confidence.
 CRITICAL: Output ONLY raw JSON. No markdown, no ```json fences, no explanation text."#;
 
-        let user = format!(
-            "Chunk: {}\nSpeaker: {}\nExplanation Context: {:?}\nTechnical Context: {:?}",
-            state.chunk_text, state.speaker, state.explanation, state.technical_explanation
-        );
+        // See context_manager.rs: {:?} leaked `Some("...")` / `None` into the
+        // prompt. Absent context now contributes no line at all.
+        let mut user = format!("Chunk: {}\nSpeaker: {}", state.chunk_text, state.speaker);
+        if let Some(explanation) = &state.explanation {
+            user.push_str(&format!("\nExplanation Context: {}", explanation));
+        }
+        if let Some(technical) = &state.technical_explanation {
+            user.push_str(&format!("\nTechnical Context: {}", technical));
+        }
 
         let json = self.llm.complete_json(system, &user).await?;
 

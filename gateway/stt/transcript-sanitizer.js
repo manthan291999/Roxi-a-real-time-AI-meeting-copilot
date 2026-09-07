@@ -5,8 +5,14 @@
  * @implements {import('../interfaces/ITranscriptSanitizer')}
  */
 
+// Matched against the whole trimmed utterance. Ordinary speech that is only
+// noise when it is the entire turn — "thank you" was previously matched as a
+// substring, so "thank you for shipping that, now the budget" was discarded.
+const DEFAULT_EXACT_BLOCKLIST = Object.freeze(['thank you']);
+
+// Matched anywhere in the utterance: unambiguous subtitle-hallucination
+// markers, which are never part of real meeting speech.
 const DEFAULT_BLOCKLIST = Object.freeze([
-  'thank you',
   'thanks for watching',
   'please subscribe',
   'subscribe to my channel',
@@ -21,12 +27,17 @@ const MIN_WORDS = 2;
 
 class TranscriptSanitizer {
   /**
-   * @param {{blocklist?: string[], minConfidence?: number}} [opts]
+   * @param {{blocklist?: string[], exactBlocklist?: string[], minConfidence?: number}} [opts]
    *   Injectable so a deployment can tune the filter without editing this file,
    *   and so tests can exercise the thresholds directly.
    */
-  constructor({ blocklist = DEFAULT_BLOCKLIST, minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
+  constructor({
+    blocklist = DEFAULT_BLOCKLIST,
+    exactBlocklist = DEFAULT_EXACT_BLOCKLIST,
+    minConfidence = DEFAULT_MIN_CONFIDENCE,
+  } = {}) {
     this.blocklist = blocklist;
+    this.exactBlocklist = exactBlocklist;
     this.minConfidence = minConfidence;
   }
 
@@ -58,7 +69,12 @@ class TranscriptSanitizer {
       return { ok: false, text, reason: 'low_confidence' };
     }
 
-    // Blocklist check
+    // Whole-utterance blocklist
+    if (this.exactBlocklist.includes(lowerText)) {
+      return { ok: false, text, reason: 'blocklist_phrase' };
+    }
+
+    // Substring blocklist
     for (const phrase of this.blocklist) {
       if (lowerText.includes(phrase)) {
         return { ok: false, text, reason: 'blocklist_phrase' };
@@ -78,4 +94,9 @@ class TranscriptSanitizer {
   }
 }
 
-module.exports = { TranscriptSanitizer, DEFAULT_BLOCKLIST, DEFAULT_MIN_CONFIDENCE };
+module.exports = {
+  TranscriptSanitizer,
+  DEFAULT_BLOCKLIST,
+  DEFAULT_EXACT_BLOCKLIST,
+  DEFAULT_MIN_CONFIDENCE,
+};

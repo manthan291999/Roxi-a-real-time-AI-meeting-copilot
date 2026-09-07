@@ -37,10 +37,21 @@ high   = decision being made, technical deep-dive, multiple concepts, risk or de
 Return JSON: { \"current_topic\": \"...\", \"conversation_summary\": \"...\", \"new_technical_terms\": {\"term\": \"definition\"}, \"complexity\": \"low\"|\"medium\"|\"high\" }
 CRITICAL: Output ONLY raw JSON. No markdown, no ```json fences, no explanation text.";
 
-        let user = format!(
-            "Topic: {:?}\nSummary: {:?}\nChunk: {}\nSpeaker: {}",
-            state.current_topic, state.conversation_summary, state.chunk_text, state.speaker
-        );
+        // Built up rather than formatted with {:?}: that sent the model Rust
+        // debug syntax — `Topic: None`, `Summary: Some("...")` — and made it
+        // read through the syntax to reach its own context. An absent value now
+        // omits the line entirely.
+        let mut user = String::new();
+        if let Some(topic) = &state.current_topic {
+            user.push_str(&format!("Topic: {}\n", topic));
+        }
+        if let Some(summary) = &state.conversation_summary {
+            user.push_str(&format!("Summary: {}\n", summary));
+        }
+        user.push_str(&format!(
+            "Chunk: {}\nSpeaker: {}",
+            state.chunk_text, state.speaker
+        ));
 
         let json = self.llm.complete_json(system, &user).await?;
 

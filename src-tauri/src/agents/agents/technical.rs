@@ -20,7 +20,8 @@ impl Agent for TechnicalAgent {
 
     async fn run(&self, state: &ChunkState) -> anyhow::Result<ChunkState> {
         let system = "You are a Technical Agent. Extract purely technical architectural decisions, constraints, or engineering notes from the meeting chunk.
-Return JSON: { \"technical_explanation\": \"notes or null\" }
+Return JSON: { \"technical_explanation\": \"notes\" }
+If there are no technical notes, omit the \"technical_explanation\" key entirely.
 CRITICAL: Output ONLY raw JSON. No markdown, no ```json fences, no explanation text.";
 
         let user = format!("Chunk: {}\nSpeaker: {}", state.chunk_text, state.speaker);
@@ -29,7 +30,11 @@ CRITICAL: Output ONLY raw JSON. No markdown, no ```json fences, no explanation t
 
         let mut next = state.clone();
         if let Some(e) = json.get("technical_explanation").and_then(|v| v.as_str()) {
-            next.technical_explanation = Some(e.to_string());
+            // See explanation.rs: the literal string "null" must not become a card.
+            let e = e.trim();
+            if !e.is_empty() && !e.eq_ignore_ascii_case("null") && !e.eq_ignore_ascii_case("none") {
+                next.technical_explanation = Some(e.to_string());
+            }
         }
         Ok(next)
     }
