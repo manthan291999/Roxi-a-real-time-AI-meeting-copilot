@@ -1,0 +1,29 @@
+import { SuggestCardType, TxLine, Significance, ChatMessage } from '../types';
+
+export interface ProviderStatus {
+  provider: string;
+  state: string; // 'connecting' | 'live' | 'unavailable'
+}
+
+export interface IEventBus {
+  onSuggestAnswer(cb: (card: SuggestCardType) => void): () => void;
+  onTranscriptPartial(cb: (line: TxLine) => void): () => void;
+  onTranscriptFinal(cb: (line: TxLine) => void): () => void;
+  onContextExplanation(cb: (data: {text: string, speaker: string}) => void): () => void;
+  onTechnicalExplanation(cb: (data: {text: string, speaker: string}) => void): () => void;
+  onMeetingRisks(cb: (risks: string[]) => void): () => void;
+  onMeetingDecisions(cb: (decisions: string[]) => void): () => void;
+  onMeetingActionItems(cb: (actions: string[]) => void): () => void;
+  onChunkSignificance(cb: (sig: Significance) => void): () => void;
+  onProviderStatus(cb: (status: ProviderStatus) => void): () => void;
+  onCircuitBreaker(cb: () => void): () => void;
+  onCaptureError(cb: (err: string) => void): () => void;
+  onApiHealth(cb: (health: any) => void): () => void;
+  onChatReply(cb: (msg: any) => void): () => void;
+  onChatThinking(cb: (text: string) => void): () => void;
+  onChatError(cb: (err: any) => void): () => void;
+  
+  // App Shell Commands
+  toggleToolbar(): Promise<void>;
+  toggleCaption(): Promise<void>;
+}

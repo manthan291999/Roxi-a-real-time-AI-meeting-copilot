@@ -290,15 +290,25 @@ fn capture_to_sink_internal(config: CaptureConfig, sink: Box<dyn PcmSink>, runni
         let mut mic_buf = VecDeque::new();
         
         while mixer_running.load(Ordering::SeqCst) {
-            // Drain channels
+            // PERF FIX #3: Block on the primary channel with a timeout instead of
+            // spinning with sleep(20ms). This removes the 20ms artificial latency
+            // floor and eliminates wasteful CPU polling during silence.
+            // The 50ms timeout ensures we still check mixer_running regularly and
+            // drain the mic channel even when loopback is quiet.
+            match loopback_rx.recv_timeout(Duration::from_millis(50)) {
+                Ok(chunk) => loopback_buf.extend(chunk),
+                Err(_) => {} // timeout or disconnected — just continue
+            }
+            // Non-blocking drain of any additional loopback chunks that arrived
             while let Ok(chunk) = loopback_rx.try_recv() {
                 loopback_buf.extend(chunk);
             }
+            // Non-blocking drain of mic channel
             while let Ok(chunk) = mic_rx.try_recv() {
                 mic_buf.extend(chunk);
             }
             
-            // Mix available
+            // Mix available samples
             let n = loopback_buf.len().max(mic_buf.len());
             if n > 0 {
                 let mut mixed = Vec::with_capacity(n);
@@ -319,8 +329,6 @@ fn capture_to_sink_internal(config: CaptureConfig, sink: Box<dyn PcmSink>, runni
                     }
                 }
             }
-            
-            std::thread::sleep(Duration::from_millis(20));
         }
     });
 

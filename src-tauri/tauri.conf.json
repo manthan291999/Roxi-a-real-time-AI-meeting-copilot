@@ -16,8 +16,8 @@
       {
         "title": "Roxi",
         "label": "main",
-        "width": 900,
-        "height": 640,
+        "width": 420,
+        "height": 780,
         "transparent": true,
         "decorations": false,
         "alwaysOnTop": true,

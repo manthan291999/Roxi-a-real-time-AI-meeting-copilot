@@ -23,6 +23,7 @@ pub struct ResponsePayload {
     pub speaker: String,
     #[serde(rename = "type")]
     pub reply_type: Option<String>,
+    pub context_items: Vec<crate::agents::domain::context_item::ContextItem>,
 }
 
 #[derive(serde::Serialize, Clone)]

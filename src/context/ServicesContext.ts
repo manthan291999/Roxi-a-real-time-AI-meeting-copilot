@@ -1,16 +1,18 @@
 import { createContext } from 'react';
-import { ICaptureService } from '../interfaces/ICaptureService';
-import { IHistoryRepository } from '../interfaces/IHistoryRepository';
-import { IEventBus } from '../interfaces/IEventBus';
-import { ISpeakerRepository } from '../interfaces/ISpeakerRepository';
-import { IChatService } from '../interfaces/IChatService';
+import { 
+  ICaptureService, 
+  IEventBus, 
+  IChatService, 
+  IHistoryRepository, 
+  ISpeakerRepository 
+} from '../shared/interfaces';
 
-export interface Services {
+export interface IServices {
   captureService: ICaptureService;
-  historyRepo: IHistoryRepository;
   eventBus: IEventBus;
-  speakerRepo: ISpeakerRepository;
   chatService: IChatService;
+  historyRepository: IHistoryRepository;
+  speakerRepository: ISpeakerRepository;
 }
 
-export const ServicesContext = createContext<Services | null>(null);
+export const ServicesContext = createContext<IServices | null>(null);

@@ -73,6 +73,13 @@ function startStdioSidecar(container) {
             onNode: (node) => emit({ type: 'ChatThinking', node }),
           });
           emit({ type: 'ChatReply', payload });
+        } catch (err) {
+          // Emit the error as a protocol message — do NOT rethrow, which would
+          // cause handleMessage().catch() to emit a SECOND error event and also
+          // risk an unhandledRejection if the outer .catch misses it.
+          const code = err && err.code ? err.code : 'INTERNAL_ERROR';
+          logger.error('sidecar', 'ask_failed', { code, message: err && err.message });
+          emit({ type: 'Error', message: (err && err.message) || 'Unknown error', code });
         } finally {
           busy = false;
         }

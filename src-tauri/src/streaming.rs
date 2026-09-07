@@ -1,6 +1,7 @@
 //! Streaming PCM sink: buffers resampled PCM16 samples and writes fixed-size
 //! chunks to stdout for consumption by a Node.js (or any) process.
 
+use crate::adapters::control_channel::SharedWriter;
 use crate::ports::audio_capture::PcmSink;
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
@@ -14,13 +15,15 @@ const HEADER_SIZE: usize = 8;
 
 pub struct StreamingSink {
     buffer: Vec<i16>,
-    writer: Box<dyn Write + Send>,
+    /// Shared with the control channel, which writes `CTL1` frames onto the same
+    /// pipe. Control frames are rare and tiny, so contention here is negligible.
+    writer: SharedWriter,
     chunks_sent: AtomicU64,
     total_samples: u64,
 }
 
 impl StreamingSink {
-    pub fn new(writer: Box<dyn Write + Send>) -> Self {
+    pub fn new(writer: SharedWriter) -> Self {
         Self {
             buffer: Vec::with_capacity(SAMPLES_PER_CHUNK),
             writer,
@@ -41,9 +44,16 @@ impl StreamingSink {
             payload.extend_from_slice(&sample.to_le_bytes());
         }
 
-        self.writer.write_all(&header).context("Failed to write chunk header")?;
-        self.writer.write_all(&payload).context("Failed to write chunk payload")?;
-        self.writer.flush().context("Failed to flush writer")?;
+        {
+            // Scoped so the lock is released before the logging below.
+            let mut guard = self
+                .writer
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Audio writer mutex poisoned"))?;
+            guard.write_all(&header).context("Failed to write chunk header")?;
+            guard.write_all(&payload).context("Failed to write chunk payload")?;
+            guard.flush().context("Failed to flush writer")?;
+        }
 
         let count = self.chunks_sent.fetch_add(1, Ordering::Relaxed) + 1;
         if count % 40 == 0 {

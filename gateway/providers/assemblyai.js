@@ -37,6 +37,24 @@ function normalizeSpeaker(rawSpeaker) {
   return s;
 }
 
+/**
+ * Mean word confidence for a turn. Returns 1 when the provider reported no
+ * word-level confidence, rather than NaN — `NaN < threshold` is false, so a
+ * missing value used to pass the sanitizer by accident rather than by intent.
+ */
+function meanConfidence(words) {
+  if (!Array.isArray(words) || words.length === 0) return 1;
+  let sum = 0;
+  let count = 0;
+  for (const w of words) {
+    if (typeof w.confidence === 'number' && Number.isFinite(w.confidence)) {
+      sum += w.confidence;
+      count++;
+    }
+  }
+  return count > 0 ? sum / count : 1;
+}
+
 function isAuthError(message) {
   return /401|403|unauthorized|unauthenticated|authentication|invalid api key|api key/i.test(
     String(message)
@@ -121,8 +139,13 @@ class AssemblyAIProvider extends EventEmitter {
     if (!turn.end_of_turn) {
       this.emit('partial', { text, speaker });
     } else {
-      const avgConfidence = turn.words?.reduce((s,w) => s + (w.confidence || 0), 0) / (turn.words?.length || 1);
-      this.emit('final', { text, speaker, start: turn.start, end: turn.end, confidence: avgConfidence });
+      this.emit('final', {
+        text,
+        speaker,
+        start: turn.start,
+        end: turn.end,
+        confidence: meanConfidence(turn.words),
+      });
     }
   }
 

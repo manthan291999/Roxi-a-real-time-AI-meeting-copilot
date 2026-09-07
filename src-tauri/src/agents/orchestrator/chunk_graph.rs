@@ -1,50 +1,89 @@
 //! ChunkGraph — Hybrid Agent Orchestrator (production)
 //!
-//! Execution model:
-//!   Stage 0 (local):     chit_chat_gate — zero LLM, fast exit for filler
-//!   Stage 1 (sequential): context_manager → complexity_analyzer
-//!   Stage 2 (conditional parallel): routing::decide() selects active agents
-//!   Stage 3 (sequential): response_agent synthesises all stage-2 outputs
+//! Execution model (fast lane / slow lane):
+//!   Stage 0 (local):      chit_chat_gate — zero LLM, fast exit for filler
+//!   Stage 1 (concurrent): context_manager ‖ explanation
+//!                         context_manager now also returns complexity, so this is
+//!                         one hop instead of two. explanation runs on every route
+//!                         and reads only chunk_text, so it needs nothing from
+//!                         stage 1 and starts at t=0 rather than after it.
+//!   Stage 2 (split):      routing::decide() selects the conditional agents.
+//!                         • technical  — awaited, because response_agent reads it
+//!                         • risk, analyst — DETACHED. response_agent never reads
+//!                           their output, so blocking on them only delays the
+//!                           reply. They are returned as `DetachedWork` for the
+//!                           caller to poll and emit whenever they land.
+//!   Stage 3 (sequential): response_agent synthesises chunk + explanation + technical
 //!
-//! Error model: run_safe() wraps every agent — one crash never kills the pipeline.
-//! Fallback:    Complexity::Medium is the ChunkState default — if complexity_analyzer
-//!              fails, the medium path (explanation + risk) runs automatically.
+//! Critical path is therefore 2 sequential LLM hops on Low/Medium
+//! (context‖explanation → response) and 3 on High (+ technical), down from 4.
+//!
+//! Error model: run_agent_timed() wraps every agent — one crash never kills the pipeline.
+//! Fallback:    Complexity::Medium is the ChunkState default — if context_manager
+//!              fails or omits the field, the medium path (explanation + risk) runs.
 
 use crate::agents::agents::chit_chat_gate;
-use crate::agents::domain::chunk_state::ChunkState;
-use crate::agents::domain::pipeline_trace::PipelineTrace;
+use crate::agents::domain::chunk_state::{ChunkState, Complexity};
+use crate::agents::domain::pipeline_trace::{AgentSpan, PipelineTrace};
 use crate::agents::orchestrator::routing;
 use crate::agents::ports::agent_port::Agent;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
+/// Output of the detached (slow-lane) agents. Only `decisions`, `action_items`
+/// and `risks` are meaningful here — the other fields are carried over from the
+/// base state and were already emitted by the fast lane.
+pub struct DetachedOutcome {
+    pub state: ChunkState,
+    pub spans: Vec<AgentSpan>,
+}
+
+/// Work the caller should drive to completion on its own task, off the reply path.
+pub type DetachedWork = Pin<Box<dyn Future<Output = DetachedOutcome> + Send + 'static>>;
+
+/// Runs one agent, timing it and swallowing errors so a single failure can never
+/// abort the pipeline. Free function (not `&self`) so detached work can own its agents.
+async fn run_agent_timed(agent: Arc<dyn Agent>, state: ChunkState) -> (ChunkState, u64, String) {
+    let start = Instant::now();
+    match agent.run(&state).await {
+        Ok(next) => (next, start.elapsed().as_millis() as u64, "OK".to_string()),
+        Err(e) => {
+            tracing::error!("[chunk_graph] {} failed: {:?}", agent.name(), e);
+            (state, start.elapsed().as_millis() as u64, "ERR".to_string())
+        }
+    }
+}
+
 pub struct ChunkGraph {
-    // Stage 1 — always sequential
-    context_manager:     Arc<dyn Agent>,
-    complexity_analyzer: Arc<dyn Agent>,
-    // Stage 2 — conditional parallel (selected by routing::decide)
-    explanation:         Arc<dyn Agent>,
-    technical:           Arc<dyn Agent>,
-    risk:                Arc<dyn Agent>,
-    analyst:             Arc<dyn Agent>,
+    // Stage 1 — concurrent pair
+    context_manager: Arc<dyn Agent>,
+    explanation:     Arc<dyn Agent>,
+    // Stage 2 — conditional (selected by routing::decide)
+    technical:       Arc<dyn Agent>,
+    risk:            Arc<dyn Agent>,
+    analyst:         Arc<dyn Agent>,
     // Stage 3 — always sequential
-    response_agent:      Arc<dyn Agent>,
+    response_agent:  Arc<dyn Agent>,
 }
 
 impl ChunkGraph {
     pub fn new(
-        context_manager:     Arc<dyn Agent>,
-        complexity_analyzer: Arc<dyn Agent>,
-        explanation:         Arc<dyn Agent>,
-        technical:           Arc<dyn Agent>,
-        risk:                Arc<dyn Agent>,
-        analyst:             Arc<dyn Agent>,
-        response_agent:      Arc<dyn Agent>,
+        context_manager: Arc<dyn Agent>,
+        explanation:     Arc<dyn Agent>,
+        technical:       Arc<dyn Agent>,
+        risk:            Arc<dyn Agent>,
+        analyst:         Arc<dyn Agent>,
+        response_agent:  Arc<dyn Agent>,
     ) -> Self {
-        Self { context_manager, complexity_analyzer, explanation, technical, risk, analyst, response_agent }
+        Self { context_manager, explanation, technical, risk, analyst, response_agent }
     }
 
-    pub async fn run(&self, chunk: &str, speaker: &str) -> (ChunkState, PipelineTrace) {
+    /// Returns the reply-path state, its trace, and any detached slow-lane work.
+    /// The caller MUST drive `DetachedWork` to completion (on a separate task) or
+    /// the risk/decision/action-item signals for this chunk are silently dropped.
+    pub async fn run(&self, chunk: &str, speaker: &str) -> (ChunkState, PipelineTrace, Option<DetachedWork>) {
         let overall_start = Instant::now();
         let mut state = ChunkState {
             chunk_text: chunk.to_string(),
@@ -59,79 +98,124 @@ impl ChunkGraph {
             trace.add_span("chit_chat_gate", 0, 0, "PASS");
             trace.total_ms = overall_start.elapsed().as_millis() as u64;
             trace.log_summary();
-            return (state, trace);
+            return (state, trace, None);
         }
 
-        // We defer trace creation because complexity is unknown, but we'll collect spans first
-        let mut initial_spans = Vec::new();
+        // ── Stage 1: context_manager ‖ explanation ────────────────────────────
+        // Both read only the base state, so they are independent. explanation is
+        // unconditional (every branch of routing::decide sets run_explanation),
+        // which is what makes starting it here safe rather than speculative.
+        let (ctx_res, expl_res) = futures::future::join(
+            run_agent_timed(self.context_manager.clone(), state.clone()),
+            run_agent_timed(self.explanation.clone(), state.clone()),
+        )
+        .await;
 
-        // Stage 1: Sequential — build context, then classify
-        let (new_state, duration, status) = self.run_safe_timed(&self.context_manager, state).await;
-        state = new_state;
-        initial_spans.push(("context_manager", 1, duration, status));
+        let (ctx_state, ctx_ms, ctx_status) = ctx_res;
+        let (expl_state, expl_ms, expl_status) = expl_res;
 
-        let (new_state, duration, status) = self.run_safe_timed(&self.complexity_analyzer, state).await;
-        state = new_state;
-        initial_spans.push(("complexity", 1, duration, status));
+        // Take fields explicitly rather than via merge_from(): merge_from EXTENDS the
+        // vector fields, and both halves carry a copy of the same base state, so
+        // merging them would double up anything already present. It also does not
+        // carry `complexity` at all (Complexity has no "unset" variant to guard on),
+        // which is exactly the field stage 1 exists to produce.
+        state.current_topic        = ctx_state.current_topic;
+        state.conversation_summary = ctx_state.conversation_summary;
+        state.new_technical_terms  = ctx_state.new_technical_terms;
+        state.complexity           = ctx_state.complexity;
+        state.explanation          = expl_state.explanation;
 
-        // Now we know complexity, create trace
         let mut trace = PipelineTrace::new(chunk, speaker, &state.complexity);
-        for (name, stage, dur, stat) in initial_spans {
-            trace.add_span(name, stage, dur, &stat);
-        }
+        trace.add_span("context_manager", 1, ctx_ms, &ctx_status);
+        trace.add_span("explanation", 1, expl_ms, &expl_status);
 
-        // Stage 2: Conditional parallel fan-out
+        // ── Stage 2: split conditional agents by whether the reply needs them ──
         let route = routing::decide(&state);
 
-        let mut stage2_futures: Vec<std::pin::Pin<Box<dyn std::future::Future<Output = (ChunkState, &'static str, u64, String)> + Send + '_>>> = Vec::new();
-        let mut skipped = Vec::new();
+        // Enforces the invariant the eager start above depends on: explanation must be
+        // unconditional. If a route ever stops requesting it, this fires in dev rather
+        // than silently burning a call per chunk.
+        debug_assert!(
+            route.run_explanation,
+            "explanation is started eagerly in stage 1; routing must not skip it"
+        );
 
-        macro_rules! maybe_run {
-            ($flag:expr, $agent:expr, $name:expr) => {
-                if $flag {
-                    stage2_futures.push(Box::pin(async {
-                        let (res_state, dur, stat) = self.run_safe_timed(&$agent, ChunkState::default()).await;
-                        (res_state, $name, dur, stat)
-                    }));
-                } else {
-                    skipped.push($name.to_string());
+        let mut skipped: Vec<String> = Vec::new();
+
+        // Detached: response_agent reads neither of these, so they must not block it.
+        let mut detached_agents: Vec<(Arc<dyn Agent>, &'static str)> = Vec::new();
+        if route.run_risk {
+            detached_agents.push((self.risk.clone(), "risk"));
+        } else {
+            skipped.push("risk".to_string());
+        }
+        if route.run_analyst {
+            detached_agents.push((self.analyst.clone(), "analyst"));
+        } else {
+            skipped.push("analyst".to_string());
+        }
+
+        let detached: Option<DetachedWork> = if detached_agents.is_empty() {
+            None
+        } else {
+            let base = state.clone();
+            Some(Box::pin(async move {
+                let futs = detached_agents.into_iter().map(|(agent, name)| {
+                    let s = base.clone();
+                    async move {
+                        let (st, ms, status) = run_agent_timed(agent, s).await;
+                        (st, name, ms, status)
+                    }
+                });
+                let results = futures::future::join_all(futs).await;
+
+                let mut out = ChunkState::default();
+                let mut spans = Vec::new();
+                for (partial, name, ms, status) in results {
+                    // Safe to merge here: `base` carries empty decision/action/risk
+                    // vectors, so each partial contributes only its own new items.
+                    out.merge_from(partial);
+                    spans.push(AgentSpan {
+                        name: name.to_string(),
+                        stage: 2,
+                        latency_ms: ms,
+                        status,
+                    });
                 }
-            };
+                DetachedOutcome { state: out, spans }
+            }))
+        };
+
+        // Awaited: response_agent reads `technical_explanation`, so this one stays
+        // on the critical path — but only on the High route that actually asks for it.
+        if route.run_technical {
+            let (tech_state, tech_ms, tech_status) =
+                run_agent_timed(self.technical.clone(), state.clone()).await;
+            state.technical_explanation = tech_state.technical_explanation;
+            trace.add_span("technical", 2, tech_ms, &tech_status);
+        } else {
+            skipped.push("technical".to_string());
         }
 
-        maybe_run!(route.run_explanation, self.explanation, "explanation");
-        maybe_run!(route.run_technical,   self.technical,   "technical");
-        maybe_run!(route.run_risk,        self.risk,        "risk");
-        maybe_run!(route.run_analyst,     self.analyst,     "analyst");
-
-        // Agents that DO run remain parallel via join_all — no latency regression
-        let results = futures::future::join_all(stage2_futures).await;
-        for (partial, name, dur, stat) in results {
-            state.merge_from(partial);
-            trace.add_span(name, 2, dur, &stat);
-        }
         state.skipped_agents.extend(skipped);
 
-        // Stage 3: Sequential — synthesise all stage-2 outputs
-        let (new_state, duration, status) = self.run_safe_timed(&self.response_agent, state).await;
-        state = new_state;
-        trace.add_span("response_agent", 3, duration, &status);
+        // ── Stage 3: the reply ────────────────────────────────────────────────
+        // Skipped for Low: a simple fact or short statement doesn't need a
+        // synthesised conversational reply, and this is the priciest call.
+        if state.complexity != Complexity::Low {
+            let (resp_state, resp_ms, resp_status) =
+                run_agent_timed(self.response_agent.clone(), state.clone()).await;
+            state.suggested_response      = resp_state.suggested_response;
+            state.suggested_response_type = resp_state.suggested_response_type;
+            state.context_items           = resp_state.context_items;
+            trace.add_span("response_agent", 3, resp_ms, &resp_status);
+        } else {
+            trace.add_span("response_agent", 3, 0, "SKIPPED_LOW_COMPLEXITY");
+        }
 
         trace.total_ms = overall_start.elapsed().as_millis() as u64;
         trace.log_summary();
 
-        (state, trace)
-    }
-
-    /// Wraps every agent call: on error, logs and returns state unchanged, along with duration.
-    async fn run_safe_timed(&self, agent: &Arc<dyn Agent>, state: ChunkState) -> (ChunkState, u64, String) {
-        let start = Instant::now();
-        match agent.run(&state).await {
-            Ok(new_state) => (new_state, start.elapsed().as_millis() as u64, "OK".to_string()),
-            Err(e) => {
-                tracing::error!("[chunk_graph] {} failed: {:?}", agent.name(), e);
-                (state, start.elapsed().as_millis() as u64, "ERR".to_string())
-            }
-        }
+        (state, trace, detached)
     }
 }

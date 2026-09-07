@@ -1,0 +1,61 @@
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-card-enter {
+  animation: card-enter 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes typing-dot {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+.animate-typing-dot {
+  animation: typing-dot 1.4s infinite ease-in-out;
+}
+.animate-typing-dot:nth-child(1) { animation-delay: 0s; }
+.animate-typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.animate-typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes waveform-bar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+.animate-waveform {
+  transform-origin: bottom;
+  animation: waveform-bar 1.2s infinite ease-in-out;
+}
+.animate-waveform:nth-child(1) { animation-delay: 0.1s; }
+.animate-waveform:nth-child(2) { animation-delay: 0.3s; }
+.animate-waveform:nth-child(3) { animation-delay: 0.5s; }
+.animate-waveform:nth-child(4) { animation-delay: 0.2s; }
+
+@keyframes signal-breathe {
+  0%, 100% { opacity: 0.35; transform: scale(0.94); }
+  50% { opacity: 0.9; transform: scale(1); }
+}
+
+.signal-ring-animate {
+  animation: signal-breathe 3.4s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signal-ring-animate {
+    animation: none;
+  }
+}

@@ -1,20 +1,35 @@
-import React from 'react';
-import { ServicesContext, Services } from './ServicesContext';
-import { TauriCaptureService } from '../services/TauriCaptureService';
-import { TauriHistoryRepository } from '../services/TauriHistoryRepository';
-import { TauriEventBus } from '../services/TauriEventBus';
-import { SpeakerRepository } from '../services/SpeakerRepository';
-import { TauriChatService } from '../services/TauriChatService';
+import React, { useMemo } from 'react';
+import { ServicesContext, IServices } from './ServicesContext';
+import {
+  TauriCaptureService,
+  TauriEventBus,
+  TauriChatService,
+  TauriHistoryRepository,
+  SpeakerRepository
+} from '../services';
 
-const services: Services = {
-  captureService: new TauriCaptureService(),
-  historyRepo: new TauriHistoryRepository(),
-  eventBus: new TauriEventBus(),
-  speakerRepo: new SpeakerRepository(),
-  chatService: new TauriChatService(),
-};
+interface ServicesProviderProps {
+  children: React.ReactNode;
+  /**
+   * Overrides individual services. Production passes nothing and gets the Tauri
+   * implementations; harnesses and previews inject fakes without the components
+   * knowing the difference.
+   */
+  services?: Partial<IServices>;
+}
 
-export const ServicesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const ServicesProvider: React.FC<ServicesProviderProps> = ({ children, services: overrides }) => {
+  const services = useMemo<IServices>(() => {
+    return {
+      captureService: new TauriCaptureService(),
+      eventBus: new TauriEventBus(),
+      chatService: new TauriChatService(),
+      historyRepository: new TauriHistoryRepository(),
+      speakerRepository: new SpeakerRepository(),
+      ...overrides,
+    };
+  }, [overrides]);
+
   return (
     <ServicesContext.Provider value={services}>
       {children}

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "codebase-memory-mcp": {
+      "command": "/Users/manthan/.local/bin/codebase-memory-mcp",
+      "args": [],
+      "env": {
+        "CBM_ALLOWED_ROOT": "/Users/manthan/final code of the meeting /meeting-interpreter-mac-main/meeting-interpreter-mac-main"
+      }
+    }
+  }
+}

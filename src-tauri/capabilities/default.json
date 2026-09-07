@@ -18,6 +18,13 @@
     "core:window:allow-inner-position",
     "core:window:allow-outer-position",
     "core:window:allow-set-position",
-    "opener:default"
+    "opener:default",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-is-registered",
+    "store:allow-get",
+    "store:allow-set",
+    "store:allow-save",
+    "store:allow-load"
   ]
 }

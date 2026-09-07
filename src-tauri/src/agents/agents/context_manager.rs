@@ -1,4 +1,12 @@
-use crate::agents::domain::chunk_state::ChunkState;
+//! ContextManagerAgent — topic tracking, summarisation AND complexity classification.
+//!
+//! PERF: complexity used to be a second sequential LLM call (ComplexityAnalyzerAgent)
+//! that emitted ~5 completion tokens for a full ~900ms round-trip. It is folded into
+//! this agent's JSON instead — same information, one hop instead of two.
+//! On any parse failure the field falls back to Complexity::Medium, which is the
+//! ChunkState default and the safe route (explanation + risk).
+
+use crate::agents::domain::chunk_state::{ChunkState, Complexity};
 use crate::agents::ports::{agent_port::Agent, llm_port::LlmClient};
 use std::sync::Arc;
 
@@ -19,10 +27,14 @@ impl Agent for ContextManagerAgent {
     }
 
     async fn run(&self, state: &ChunkState) -> anyhow::Result<ChunkState> {
-        let system = "You are the Context Manager for a real-time meeting copilot. 
-Update current_topic if changed. Summarize state in conversation_summary (1-2 sentences). 
+        let system = "You are the Context Manager for a real-time meeting copilot.
+Update current_topic if changed. Summarize state in conversation_summary (1-2 sentences).
 Extract new terminology in new_technical_terms.
-Return JSON: { \"current_topic\": \"...\", \"conversation_summary\": \"...\", \"new_technical_terms\": {\"term\": \"definition\"} }
+Also classify the chunk's complexity:
+low    = filler, pleasantry, single-word ack, chit-chat, single simple fact
+medium = question, explanation needed, multi-sentence discussion
+high   = decision being made, technical deep-dive, multiple concepts, risk or deadline mentioned
+Return JSON: { \"current_topic\": \"...\", \"conversation_summary\": \"...\", \"new_technical_terms\": {\"term\": \"definition\"}, \"complexity\": \"low\"|\"medium\"|\"high\" }
 CRITICAL: Output ONLY raw JSON. No markdown, no ```json fences, no explanation text.";
 
         let user = format!(
@@ -46,6 +58,19 @@ CRITICAL: Output ONLY raw JSON. No markdown, no ```json fences, no explanation t
                 }
             }
         }
+
+        // Folded-in complexity classification. A missing or unrecognised value falls
+        // through to Medium — the safe route — exactly as the old separate agent did.
+        next.complexity = match json
+            .get("complexity")
+            .and_then(|v| v.as_str())
+            .unwrap_or("medium")
+        {
+            "low"  => Complexity::Low,
+            "high" => Complexity::High,
+            _      => Complexity::Medium,
+        };
+
         Ok(next)
     }
 }

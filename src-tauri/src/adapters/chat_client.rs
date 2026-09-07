@@ -26,19 +26,23 @@ impl NodeChatClient {
 
 impl ChatGatewayClient for NodeChatClient {
     fn start_session(&self, on_event: Box<dyn Fn(String) + Send + 'static>) -> Result<()> {
-        let mut session_lock = self.session.lock().unwrap();
+        let mut session_lock = self.session.lock().map_err(|e| anyhow::anyhow!("Mutex poisoned: {}", e))?;
         if session_lock.is_some() {
             return Ok(()); // already running; existing listener stays bound
         }
 
         let current_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-        let sidecar_path = current_dir.join("../chatbot/sidecar.js");
+        let sidecar_path = std::env::var("CHATBOT_SIDECAR_PATH")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|_| current_dir.join("../chatbot/sidecar.js"));
+            
+        let sidecar_dir = sidecar_path.parent().unwrap_or_else(|| std::path::Path::new("."));
 
         let mut cmd = Command::new("node");
         cmd.arg(&sidecar_path);
 
         let mut child = cmd
-            .current_dir(current_dir.join("../chatbot"))
+            .current_dir(sidecar_dir)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
@@ -74,7 +78,7 @@ impl ChatGatewayClient for NodeChatClient {
     }
 
     fn send(&self, line: String) -> Result<()> {
-        let mut session_lock = self.session.lock().unwrap();
+        let mut session_lock = self.session.lock().map_err(|e| anyhow::anyhow!("Mutex poisoned: {}", e))?;
         let session = session_lock
             .as_mut()
             .ok_or_else(|| anyhow!("Chat sidecar is not running"))?;
@@ -93,7 +97,7 @@ impl ChatGatewayClient for NodeChatClient {
     }
 
     fn stop_session(&self) -> Result<()> {
-        let mut session_lock = self.session.lock().unwrap();
+        let mut session_lock = self.session.lock().map_err(|e| anyhow::anyhow!("Mutex poisoned: {}", e))?;
         if let Some(mut session) = session_lock.take() {
             // Graceful: ask the sidecar to shut itself down first.
             let _ = session.stdin.write_all(b"{\"type\":\"Shutdown\"}\n");

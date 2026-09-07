@@ -1,81 +1,126 @@
-import { useState, useContext } from 'react'
-import { invoke } from '@tauri-apps/api/core'
-import { SPEAKER_COLORS } from '../../constants'
-import { ServicesContext } from '../../context/ServicesContext'
+import React, { useEffect, useRef, useState } from 'react';
+import { tokens, radius } from '../../design-system';
 
-export interface SpeakerEntry { sttLabel: string; displayName: string }
+interface SpeakerRenameModalProps {
+  /** Raw STT label being renamed, e.g. "Speaker A". */
+  sttLabel: string;
+  /** The name currently shown for that label. */
+  currentName: string;
+  onCancel: () => void;
+  onSubmit: (displayName: string) => Promise<void>;
+}
 
-export function SpeakerRenameModal({ speakers, onClose }: { speakers: SpeakerEntry[]; onClose: () => void }) {
-  const [names, setNames] = useState<Record<string, string>>(() =>
-    Object.fromEntries(speakers.map(s => [s.sttLabel, s.displayName]))
-  )
-  const services = useContext(ServicesContext)
-  const [saving, setSaving] = useState(false)
+export const SpeakerRenameModal: React.FC<SpeakerRenameModalProps> = ({
+  sttLabel,
+  currentName,
+  onCancel,
+  onSubmit,
+}) => {
+  const [value, setValue] = useState(currentName === sttLabel ? '' : currentName);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const resolveSpeakerIdx = (sttLabel: string) => {
-    return services?.speakerRepo.resolveIndex(sttLabel) ?? 0
-  }
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
 
-  const handleSave = async () => {
-    setSaving(true)
-    for (const s of speakers) {
-      const newName = (names[s.sttLabel] || '').trim()
-      if (newName && newName !== s.displayName) {
-        try {
-          await invoke('rename_speaker', { sttLabel: s.sttLabel, displayName: newName })
-        } catch (_) { /* sidecar rename command — best effort */ }
-      }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = value.trim();
+    if (!name || saving) return;
+
+    setSaving(true);
+    setError(null);
+    try {
+      await onSubmit(name);
+      onCancel();
+    } catch (err) {
+      // The repository has already rolled the name back, so the transcript
+      // still shows the truth; this just explains why nothing changed.
+      setError(
+        typeof err === 'string' ? err : 'Could not save the name. Is a session running?'
+      );
+      setSaving(false);
     }
-    setSaving(false)
-    onClose()
-  }
+  };
 
   return (
-    <div className="fixed inset-0 bg-black/10 z-50 flex items-center justify-center">
-      <div className="glass-modal shadow-2xl w-[380px] overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-gray-900">Rename Speakers</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Names persist across sessions</p>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onMouseDown={onCancel}
+      role="presentation"
+    >
+      <form
+        onSubmit={submit}
+        onMouseDown={(e) => e.stopPropagation()}
+        className="w-[320px] p-5 shadow-2xl"
+        style={{
+          background: tokens.panelRaised,
+          border: `1px solid ${tokens.hairline}`,
+          borderRadius: radius.card,
+        }}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Rename ${sttLabel}`}
+      >
+        <div className="text-[15px] font-semibold mb-1" style={{ color: tokens.paper }}>
+          Rename speaker
+        </div>
+        <div className="text-[13px] mb-4" style={{ color: tokens.muteDim }}>
+          Applies to every line from {sttLabel}, and is remembered for future meetings.
+        </div>
+
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={sttLabel}
+          maxLength={80}
+          disabled={saving}
+          className="w-full px-3 py-2 text-[14px] outline-none"
+          style={{
+            background: tokens.ink,
+            color: tokens.paper,
+            border: `1px solid ${tokens.hairline}`,
+            borderRadius: radius.chip,
+          }}
+        />
+
+        {error && (
+          <div className="mt-2 text-[12px]" style={{ color: tokens.risk }}>
+            {error}
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-            <svg className="w-4 h-4 text-gray-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
-        <div className="px-5 py-4 space-y-3">
-          {speakers.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-4">No speakers detected yet. Start a capture first.</p>
-          ) : speakers.map(s => {
-            const idx = resolveSpeakerIdx(s.sttLabel)
-            const c = SPEAKER_COLORS[idx % SPEAKER_COLORS.length]
-            return (
-              <div key={s.sttLabel} className="flex items-center gap-3">
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.dot}`} />
-                <span className="text-xs text-gray-400 w-20 truncate flex-shrink-0 font-mono">{s.sttLabel}</span>
-                <input
-                  type="text"
-                  value={names[s.sttLabel] ?? s.displayName}
-                  onChange={e => setNames(prev => ({ ...prev, [s.sttLabel]: e.target.value }))}
-                  placeholder={s.displayName}
-                  className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all"
-                />
-              </div>
-            )
-          })}
-        </div>
-        <div className="px-5 py-4 border-t border-gray-100 flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
+        )}
+
+        <div className="mt-4 flex justify-end gap-2">
           <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-2 text-sm font-semibold text-white bg-[#1B4FCC] hover:bg-[#1644B8] rounded-lg transition-colors disabled:opacity-60"
+            type="button"
+            onClick={onCancel}
+            className="px-3 py-1.5 text-[13px]"
+            style={{ color: tokens.muteDim, borderRadius: radius.chip }}
           >
-            {saving ? 'Saving…' : 'Save Names'}
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!value.trim() || saving}
+            className="px-3 py-1.5 text-[13px] font-medium disabled:opacity-40"
+            style={{ background: tokens.signal, color: '#fff', borderRadius: radius.chip }}
+          >
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
-      </div>
+      </form>
     </div>
-  )
-}
+  );
+};

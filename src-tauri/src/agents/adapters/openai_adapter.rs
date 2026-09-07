@@ -131,6 +131,26 @@ impl LlmClient for OpenAiAdapter {
                     anyhow::anyhow!("No closing '}}' found in LLM response")
                 })?;
                 
+                if start_idx > end_idx {
+                    let err_msg = "Invalid JSON bounds: closing brace appears before opening brace".to_string();
+                    tracing::error!("[openai_adapter] {}", err_msg);
+                    UsageStore::record(UsageEntry {
+                        tag: self.tag.clone(),
+                        model: self.model.clone(),
+                        expect_json: true,
+                        status: "failed".to_string(),
+                        error_code: Some("json_invalid_bounds".to_string()),
+                        error_message: Some(err_msg.clone()),
+                        latency_ms,
+                        prompt_tokens: None,
+                        completion_tokens: None,
+                        system_prompt: system.to_string(),
+                        user_prompt: user.to_string(),
+                        response_text: Some(response.clone()),
+                    });
+                    return Err(anyhow::anyhow!(err_msg));
+                }
+
                 let extracted = &response[start_idx..=end_idx];
                 let json: Value = match serde_json::from_str(extracted) {
                     Ok(val) => val,

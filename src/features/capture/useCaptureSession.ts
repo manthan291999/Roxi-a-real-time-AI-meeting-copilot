@@ -1,43 +1,64 @@
-import { useState, useCallback, useContext } from 'react'
-import { ServicesContext } from '../../context/ServicesContext'
-import { Status } from '../../types'
+import { useState, useEffect, useCallback } from 'react';
+import { useServices } from '../../context';
+import { MeetingContext } from '../../shared/types';
 
-export function useCaptureSession(
-  setStatus: React.Dispatch<React.SetStateAction<Status>>,
-  resetSpeakers: () => void,
-  clearData: () => void,
-  setPartialId: (id: string | null) => void
-) {
-  const [isCapturing, setIsCapturing] = useState(false)
-  const services = useContext(ServicesContext)
+/**
+ * Owns the capture session: talks to ICaptureService and tracks provider status.
+ * Screen sequencing lives in useCaptureFlow, not here.
+ */
+export function useCaptureSession() {
+  const { captureService, eventBus } = useServices();
+  const [status, setStatus] = useState<'idle' | 'connecting' | 'live' | 'error'>('idle');
+  const [provider, setProvider] = useState<string>('Claude 3.5 Sonnet');
+  const [blackholeMissing, setBlackholeMissing] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
 
-  const handleStartCapture = useCallback(async (ctx: string, role: string = 'tech_lead') => {
+  useEffect(() => {
+    captureService.checkBlackholeInstalled().then((installed) => {
+      setBlackholeMissing(!installed);
+    });
+
+    const unlistenStatus = eventBus.onProviderStatus((s) => {
+      setProvider(s.provider);
+      setStatus(s.state as 'idle' | 'connecting' | 'live' | 'error');
+    });
+
+    const unlistenError = eventBus.onCaptureError((err) => {
+      setStatus('error');
+      console.error('Capture error:', err);
+    });
+
+    return () => {
+      unlistenStatus();
+      unlistenError();
+    };
+  }, [captureService, eventBus]);
+
+  const startCapture = useCallback(async (context?: MeetingContext) => {
+    if (blackholeMissing) return;
+    setStatus('connecting');
     try {
-      resetSpeakers()
-      setPartialId(null)
-      clearData()
-      setStatus('connecting')
-      setIsCapturing(true)
-
-      await services?.captureService.startCapture(ctx, role)
+      await captureService.startCapture(context);
+      setStatus('live');
     } catch (err) {
-      console.error('Failed to start capture:', err)
-      setStatus('unavailable')
-      setIsCapturing(false)
+      console.error('Failed to start capture:', err);
+      setStatus('error');
     }
-  }, [resetSpeakers, setPartialId, clearData, setStatus, services])
+  }, [captureService, blackholeMissing]);
 
-  const handleStopCapture = useCallback(async () => {
-    try {
-      await services?.captureService.stopCapture()
-    } catch (err) {
-      console.error('Failed to stop capture:', err)
-    } finally {
-      setPartialId(null)
-      setIsCapturing(false)
-      setStatus('idle')
-    }
-  }, [setPartialId, setStatus, services])
+  const stopCapture = useCallback(async () => {
+    setIsStopping(true);
+    await captureService.stopCapture();
+    setIsStopping(false);
+    setStatus('idle');
+  }, [captureService]);
 
-  return { isCapturing, handleStartCapture, handleStopCapture, setIsCapturing }
+  return {
+    status,
+    provider,
+    blackholeMissing,
+    isStopping,
+    startCapture,
+    stopCapture
+  };
 }

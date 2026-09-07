@@ -1,78 +1,72 @@
-import { useState, useRef, useCallback, useEffect, useContext } from 'react';
-import { TxLine } from '../../types';
-import { ServicesContext } from '../../context/ServicesContext';
-import { SpeakerEntry } from './SpeakerRenameModal';
-
-let lineIdCounter = 0;
-function newId() { return String(++lineIdCounter); }
-
-function nowTime() {
-  return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react';
+import { useServices } from '../../context';
+import { TxLine } from '../../shared/types';
 
 export function useTranscript() {
+  const { eventBus, speakerRepository } = useServices();
   const [lines, setLines] = useState<TxLine[]>([]);
-  const [sessionSpeakers, setSessionSpeakers] = useState<SpeakerEntry[]>([]);
-  
-  const partialIdRef = useRef<string | null>(null);
-  const lastActiveSpeakerRef = useRef<string | null>(null);
 
-  const services = useContext(ServicesContext);
-
-  const setPartialId = useCallback((id: string | null) => {
-    partialIdRef.current = id;
-  }, []);
+  // PERF FIX #8: Store partials in a ref (not state) to avoid creating new object
+  // references on every partial event. Partial events fire on every word the STT
+  // provider recognises — the previous `setPartials(prev => ({...prev, ...}))` was
+  // creating a new object on every word and forcing the whole TranscriptPane to
+  // re-render. Instead we store the Map in a ref and bump a lightweight counter to
+  // signal React that the partials content has changed.
+  const partialsRef = useRef<Map<string, TxLine>>(new Map());
+  const [partialsTick, setPartialsTick] = useState(0);
 
   useEffect(() => {
-    if (!services) return;
-
-    const eventBus = services.eventBus;
-    const speakerRepo = services.speakerRepo;
-
-    const unsubs: (() => void)[] = [];
-
-    eventBus.onTranscriptPartial(e => {
-      const { text, speaker } = e;
-      const time = nowTime();
-      setLines(prev => {
-        const pid = partialIdRef.current;
-        if (pid) {
-          return prev.map(l => l.id === pid ? { ...l, text, time } : l);
-        }
-        const id = newId();
-        partialIdRef.current = id;
-        return [...prev, { id, speaker, speakerIdx: speakerRepo.resolveIndex(speaker), text, partial: true, time }];
-      });
-    }).then(u => unsubs.push(u));
-
-    eventBus.onTranscriptFinal(e => {
-      const { text, speaker, sttLabel } = e;
-      lastActiveSpeakerRef.current = speaker;
-      const time = nowTime();
-
-      if (sttLabel) {
-        setSessionSpeakers(prev => {
-          const exists = prev.find(s => s.sttLabel === sttLabel);
-          if (!exists) return [...prev, { sttLabel, displayName: speaker }];
-          return prev.map(s => s.sttLabel === sttLabel ? { ...s, displayName: speaker } : s);
-        });
+    const unlistenPartial = eventBus.onTranscriptPartial((line) => {
+      const prev = partialsRef.current.get(line.speaker);
+      // Only trigger re-render when the displayed text actually changes
+      if (prev?.text !== line.text) {
+        partialsRef.current.set(line.speaker, line);
+        setPartialsTick(t => t + 1);
       }
+    });
 
-      setLines(prev => {
-        const pid = partialIdRef.current;
-        partialIdRef.current = null;
-        if (pid) {
-          return prev.map(l => l.id === pid ? { ...l, text, partial: false, time } : l);
-        }
-        const id = newId();
-        return [...prev, { id, speaker, speakerIdx: speakerRepo.resolveIndex(speaker), text, partial: false, time }];
-      });
-    }).then(u => unsubs.push(u));
+    const unlistenFinal = eventBus.onTranscriptFinal((line) => {
+      if (partialsRef.current.has(line.speaker)) {
+        partialsRef.current.delete(line.speaker);
+        setPartialsTick(t => t + 1);
+      }
+      setLines(prev => [...prev, line]);
+    });
 
     return () => {
-      unsubs.forEach(u => u());
+      unlistenPartial();
+      unlistenFinal();
     };
-  }, [services]);
+  }, [eventBus]);
 
-  return { lines, setLines, sessionSpeakers, setPartialId, lastActiveSpeakerRef };
+  // Expose a stable snapshot of partials derived from the ref
+  const partials = Object.fromEntries(partialsRef.current.entries());
+
+  // Display names live outside React (they are also written by the host), so
+  // subscribe rather than mirroring them into state.
+  const nameVersion = useSyncExternalStore(
+    useCallback((cb) => speakerRepository.subscribe(cb), [speakerRepository]),
+    () => speakerRepository.getVersion(),
+    () => 0
+  );
+
+  const getSpeakerName = useCallback(
+    (speaker: string) => speakerRepository.getDisplayName(speaker),
+    // nameVersion participates so memoized consumers re-resolve after a rename.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [speakerRepository, nameVersion]
+  );
+
+  const renameSpeaker = useCallback(
+    (sttLabel: string, displayName: string) => speakerRepository.rename(sttLabel, displayName),
+    [speakerRepository]
+  );
+
+  return {
+    lines,
+    partials,
+    getSpeakerName,
+    renameSpeaker,
+  };
 }
+

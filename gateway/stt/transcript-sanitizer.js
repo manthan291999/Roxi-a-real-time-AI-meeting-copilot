@@ -1,18 +1,33 @@
 /**
+ * Drops STT output that is noise rather than speech: hallucinated subtitle
+ * boilerplate, sub-threshold confidence, and degenerate repetition.
+ *
  * @implements {import('../interfaces/ITranscriptSanitizer')}
  */
+
+const DEFAULT_BLOCKLIST = Object.freeze([
+  'thank you',
+  'thanks for watching',
+  'please subscribe',
+  'subscribe to my channel',
+  'amara.org',
+  '\u5b57\u5e55',
+  'subs by',
+  'subtitles by',
+]);
+
+const DEFAULT_MIN_CONFIDENCE = 0.4;
+const MIN_WORDS = 2;
+
 class TranscriptSanitizer {
-  constructor() {
-    this.blocklist = [
-      'thank you',
-      'thanks for watching',
-      'please subscribe',
-      'subscribe to my channel',
-      'amara.org',
-      '字幕',
-      'subs by',
-      'subtitles by'
-    ];
+  /**
+   * @param {{blocklist?: string[], minConfidence?: number}} [opts]
+   *   Injectable so a deployment can tune the filter without editing this file,
+   *   and so tests can exercise the thresholds directly.
+   */
+  constructor({ blocklist = DEFAULT_BLOCKLIST, minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
+    this.blocklist = blocklist;
+    this.minConfidence = minConfidence;
   }
 
   /**
@@ -29,12 +44,17 @@ class TranscriptSanitizer {
 
     // Word count check
     const wordCount = lowerText.split(/\s+/).length;
-    if (wordCount < 2) {
+    if (wordCount < MIN_WORDS) {
       return { ok: false, text, reason: 'too_short' };
     }
 
-    // Confidence check
-    if (confidence < 0.40) {
+    // Confidence check. Every provider is contractually required to supply this
+    // (see interfaces/ISttProvider.js); a missing value is treated as a failure
+    // to report rather than as full confidence.
+    if (typeof confidence !== 'number' || !Number.isFinite(confidence)) {
+      return { ok: false, text, reason: 'missing_confidence' };
+    }
+    if (confidence < this.minConfidence) {
       return { ok: false, text, reason: 'low_confidence' };
     }
 
@@ -58,4 +78,4 @@ class TranscriptSanitizer {
   }
 }
 
-module.exports = new TranscriptSanitizer();
+module.exports = { TranscriptSanitizer, DEFAULT_BLOCKLIST, DEFAULT_MIN_CONFIDENCE };

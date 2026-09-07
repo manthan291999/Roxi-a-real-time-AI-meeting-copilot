@@ -128,13 +128,14 @@ class SpeechmaticsProvider extends EventEmitter {
         break;
       }
       case 'AddTranscript': {
-        const { text, speaker } = this.extractTranscript(data);
+        const { text, speaker, confidence } = this.extractTranscript(data);
         if (!text) break;
         this.emit('final', {
           text,
           speaker,
           start: data.metadata?.start_time,
           end: data.metadata?.end_time,
+          confidence,
         });
         break;
       }
@@ -156,21 +157,30 @@ class SpeechmaticsProvider extends EventEmitter {
   }
 
   /**
-   * Pull the formatted text and the dominant speaker label out of an
-   * AddTranscript / AddPartialTranscript message.
+   * Pull the formatted text, the dominant speaker label, and the mean word
+   * confidence out of an AddTranscript / AddPartialTranscript message.
+   *
+   * Confidence is part of the ISttProvider contract: the sanitizer drops
+   * low-confidence turns, and a provider that omitted the field used to have
+   * every one of its turns bypass that filter.
    */
   extractTranscript(data) {
     const text = String(data.metadata?.transcript || '').trim();
 
     // Speaker of the first word result; fall back to last known speaker.
     let rawSpeaker = null;
+    let confidenceSum = 0;
+    let confidenceCount = 0;
+
     if (Array.isArray(data.results)) {
       for (const result of data.results) {
         if (result.type !== 'word') continue;
         const alt = result.alternatives && result.alternatives[0];
-        if (alt && alt.speaker) {
-          rawSpeaker = alt.speaker;
-          break;
+        if (!alt) continue;
+        if (!rawSpeaker && alt.speaker) rawSpeaker = alt.speaker;
+        if (typeof alt.confidence === 'number' && Number.isFinite(alt.confidence)) {
+          confidenceSum += alt.confidence;
+          confidenceCount++;
         }
       }
     }
@@ -180,7 +190,11 @@ class SpeechmaticsProvider extends EventEmitter {
       this.lastKnownSpeaker = speaker;
     }
 
-    return { text, speaker };
+    // No word-level confidence reported (rare, and possible for punctuation-only
+    // results): treat as fully confident rather than silently dropping speech.
+    const confidence = confidenceCount > 0 ? confidenceSum / confidenceCount : 1;
+
+    return { text, speaker, confidence };
   }
 
   sendAudio(payload) {

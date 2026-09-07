@@ -1,51 +1,45 @@
-import { useState, useEffect, useContext } from 'react';
-import { ServicesContext } from '../../context/ServicesContext';
-import { DbMeeting, DbMeetingDetails } from '../../types';
+import { useState, useEffect } from 'react';
+import { useServices } from '../../context';
+import { Meeting } from '../../shared/types';
 
-/**
- * @param initialMeetingId when provided (e.g. deep-link from a chat source
- * card), that meeting is selected on load instead of the most recent one.
- */
-export function useHistory(initialMeetingId?: number | null) {
-  const [meetings, setMeetings] = useState<DbMeeting[]>([]);
-  const [selected, setSelected] = useState<DbMeeting | null>(null);
-  const [details, setDetails] = useState<DbMeetingDetails | null>(null);
+export function useHistory() {
+  const { historyRepository } = useServices();
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingDetails, setLoadingDetails] = useState(false);
-
-  const services = useContext(ServicesContext);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!services) return;
-    services.historyRepo.getMeetings()
-      .then((m) => {
-        setMeetings(m);
-        if (m.length > 0) {
-          const target = initialMeetingId != null
-            ? m.find((x) => x.id === initialMeetingId)
-            : undefined;
-          selectMeeting(target ?? m[0]);
+    let mounted = true;
+
+    async function loadMeetings() {
+      try {
+        setLoading(true);
+        const data = await historyRepository.getMeetings();
+        if (mounted) {
+          setMeetings(data);
+          setError(null);
         }
-      })
-      .catch(() => setMeetings([]))
-      .finally(() => setLoading(false));
-    // initialMeetingId is intentionally applied on mount only.
-  }, [services]);
-
-  function selectMeeting(m: DbMeeting | null) {
-    if (!m) {
-      setSelected(null);
-      setDetails(null);
-      return;
+      } catch (err: any) {
+        if (mounted) {
+          setError(err.toString());
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
     }
-    if (!services) return;
-    setSelected(m);
-    setLoadingDetails(true);
-    services.historyRepo.getMeetingDetails(m.id)
-      .then(setDetails)
-      .catch(() => setDetails(null))
-      .finally(() => setLoadingDetails(false));
-  }
 
-  return { meetings, selected, details, loading, loadingDetails, selectMeeting };
+    loadMeetings();
+
+    return () => {
+      mounted = false;
+    };
+  }, [historyRepository]);
+
+  return {
+    meetings,
+    loading,
+    error
+  };
 }

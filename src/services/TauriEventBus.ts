@@ -1,55 +1,108 @@
 import { listen } from '@tauri-apps/api/event';
-import {
-  IEventBus,
-  IEventHandler,
-  UnsubscribeFn,
-  TranscriptPayload,
-  ProviderStatusPayload,
-  TextPayload,
-  Decision,
-  ActionItem,
-  ApiHealthPayload,
-  BillingPayload
-} from '../interfaces/IEventBus';
+import { invoke } from '@tauri-apps/api/core';
+import { IEventBus, ProviderStatus } from '../shared/interfaces';
+import { SuggestCardType, TxLine, Significance } from '../shared/types';
+import { SuggestAnswerWire } from './wire';
+import { toSuggestCard } from './mappers';
 
 export class TauriEventBus implements IEventBus {
-  async onTranscriptPartial(handler: IEventHandler<TranscriptPayload>): Promise<UnsubscribeFn> {
-    return listen<TranscriptPayload>('transcript_partial', e => handler(e.payload));
+  /**
+   * Both event names carry the same payload (event_router.rs:55-57). The mapper
+   * derives a content-based id so the duplicate delivery collapses downstream
+   * instead of showing every suggestion twice.
+   */
+  onSuggestAnswer(cb: (card: SuggestCardType) => void) {
+    const handle = (wire: SuggestAnswerWire) => cb(toSuggestCard(wire));
+    // PERF FIX #6: Listen ONLY to 'suggest_answer'. The legacy 'suggested_response'
+    // listener was retained for backwards compat when the backend emitted both events,
+    // but event_router.rs now emits only 'suggest_answer'. Listening to both caused
+    // every suggestion to trigger 2x deduplication and 2x React state updates.
+    const unlisten = listen<SuggestAnswerWire>('suggest_answer', (e) => handle(e.payload));
+    return () => {
+      unlisten.then(f => f());
+    };
   }
-  async onTranscriptFinal(handler: IEventHandler<TranscriptPayload>): Promise<UnsubscribeFn> {
-    return listen<TranscriptPayload>('transcript_final', e => handler(e.payload));
+  
+  onTranscriptPartial(cb: (line: TxLine) => void) {
+    const unlisten = listen<TxLine>('transcript_partial', (e) => cb(e.payload));
+    return () => unlisten.then(f => f());
   }
-  async onProviderStatus(handler: IEventHandler<ProviderStatusPayload>): Promise<UnsubscribeFn> {
-    return listen<ProviderStatusPayload>('provider_status', e => handler(e.payload));
+
+  onTranscriptFinal(cb: (line: TxLine) => void) {
+    const unlisten = listen<TxLine>('transcript_final', (e) => cb(e.payload));
+    return () => unlisten.then(f => f());
   }
-  async onContextExplanation(handler: IEventHandler<TextPayload>): Promise<UnsubscribeFn> {
-    return listen<TextPayload>('context_explanation', e => handler(e.payload));
+
+  onContextExplanation(cb: (data: {text: string, speaker: string}) => void) {
+    const unlisten = listen<{text: string, speaker: string}>('context_explanation', (e) => cb(e.payload));
+    return () => unlisten.then(f => f());
   }
-  async onTechnicalExplanation(handler: IEventHandler<TextPayload>): Promise<UnsubscribeFn> {
-    return listen<TextPayload>('technical_explanation', e => handler(e.payload));
+
+  onTechnicalExplanation(cb: (data: {text: string, speaker: string}) => void) {
+    const unlisten = listen<{text: string, speaker: string}>('technical_explanation', (e) => cb(e.payload));
+    return () => unlisten.then(f => f());
   }
-  async onChunkSignificance(handler: IEventHandler<string>): Promise<UnsubscribeFn> {
-    return listen<string>('chunk_significance', e => handler(e.payload));
+
+  onMeetingRisks(cb: (risks: string[]) => void) {
+    const unlisten = listen<string[]>('meeting_risks', (e) => cb(e.payload));
+    return () => unlisten.then(f => f());
   }
-  async onMeetingDecisions(handler: IEventHandler<Decision[]>): Promise<UnsubscribeFn> {
-    return listen<Decision[]>('meeting_decisions', e => handler(e.payload));
+
+  onMeetingDecisions(cb: (decisions: string[]) => void) {
+    const unlisten = listen<string[]>('meeting_decisions', (e) => cb(e.payload));
+    return () => unlisten.then(f => f());
   }
-  async onMeetingActionItems(handler: IEventHandler<ActionItem[]>): Promise<UnsubscribeFn> {
-    return listen<ActionItem[]>('meeting_action_items', e => handler(e.payload));
+
+  onMeetingActionItems(cb: (actions: string[]) => void) {
+    const unlisten = listen<string[]>('meeting_action_items', (e) => cb(e.payload));
+    return () => unlisten.then(f => f());
   }
-  async onSuggestedResponse(handler: IEventHandler<TextPayload>): Promise<UnsubscribeFn> {
-    return listen<TextPayload>('suggested_response', e => handler(e.payload));
+
+  onChunkSignificance(cb: (sig: Significance) => void) {
+    const unlisten = listen<Significance>('chunk_significance', (e) => cb(e.payload));
+    return () => unlisten.then(f => f());
   }
-  async onCircuitBreaker(handler: IEventHandler<any>): Promise<UnsubscribeFn> {
-    return listen<any>('circuit_breaker', e => handler(e.payload));
+
+  onProviderStatus(cb: (status: ProviderStatus) => void) {
+    const unlisten = listen<ProviderStatus>('provider_status', (e) => cb(e.payload));
+    return () => unlisten.then(f => f());
   }
-  async onApiHealth(handler: IEventHandler<ApiHealthPayload>): Promise<UnsubscribeFn> {
-    return listen<ApiHealthPayload>('api_health', e => handler(e.payload));
+
+  onCircuitBreaker(cb: () => void) {
+    const unlisten = listen('circuit_breaker', () => cb());
+    return () => unlisten.then(f => f());
   }
-  async onCaptureError(handler: IEventHandler<string>): Promise<UnsubscribeFn> {
-    return listen<string>('capture_error', e => handler(e.payload));
+
+  onCaptureError(cb: (err: string) => void) {
+    const unlisten = listen<string>('capture_error', (e) => cb(e.payload));
+    return () => unlisten.then(f => f());
   }
-  async onBilling(handler: IEventHandler<BillingPayload>): Promise<UnsubscribeFn> {
-    return listen<BillingPayload>('billing', e => handler(e.payload));
+
+  onApiHealth(cb: (health: any) => void) {
+    const unlisten = listen<any>('api_health', (e) => cb(e.payload));
+    return () => unlisten.then(f => f());
+  }
+
+  onChatReply(cb: (msg: any) => void) {
+    const unlisten = listen<any>('chat_reply', (e) => cb(e.payload));
+    return () => unlisten.then(f => f());
+  }
+
+  onChatThinking(cb: (text: string) => void) {
+    const unlisten = listen<string>('chat_thinking', (e) => cb(e.payload));
+    return () => unlisten.then(f => f());
+  }
+
+  onChatError(cb: (err: any) => void) {
+    const unlisten = listen<any>('chat_error', (e) => cb(e.payload));
+    return () => unlisten.then(f => f());
+  }
+
+  async toggleToolbar(): Promise<void> {
+    await invoke('toggle_toolbar');
+  }
+
+  async toggleCaption(): Promise<void> {
+    await invoke('toggle_caption');
   }
 }

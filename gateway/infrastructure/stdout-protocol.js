@@ -1,96 +1,88 @@
 /**
- * Standardized typed event emission for the Rust backend protocol.
+ * AI Meeting Interpreter — Stdout Wire Protocol
+ *
+ * The single definition of every message the gateway sends to the Rust host.
+ * Stdout is the protocol channel; logs go to stderr (see logger.js).
+ *
+ * Why this module exists: these messages used to be built as inline
+ * `console.log(JSON.stringify({ type: '…' }))` calls scattered across the
+ * sidecar. Nothing tied them to the arms of the match in
+ * `src-tauri/src/sidecar/event_router.rs`, so drift was silent — the gateway
+ * emitted a `Connected` message for which Rust had no arm, and it was quietly
+ * dropped by the `_ => {}` fallback for an unknown length of time.
+ *
+ * Every type below is asserted against that match statement by
+ * test/protocol.test.js. Changing this file is one third of the three-file
+ * lockstep described in CLAUDE.md (events.rs → event_router.rs → here).
  */
 
+'use strict';
+
+/**
+ * Message types, each of which MUST have a corresponding arm in
+ * event_router.rs. Adding one here without adding the arm fails the test.
+ */
+const EventType = Object.freeze({
+  PARTIAL: 'Partial',
+  FINAL: 'Final',
+  PROVIDER_STATUS: 'ProviderStatus',
+  SPEAKER_REVISION: 'SpeakerRevision',
+  MEETING_SUMMARY: 'MeetingSummary',
+  ERROR: 'Error',
+});
+
+/**
+ * Write one protocol message. Serialization is centralized here so a payload
+ * can never be emitted with a mistyped or unregistered `type`.
+ *
+ * @param {string} type    one of EventType's values
+ * @param {Object} payload JSON-safe fields merged into the message
+ */
 function emit(type, payload = {}) {
-  console.log(JSON.stringify({ type, ...payload }));
+  if (!Object.values(EventType).includes(type)) {
+    // Fail loudly on stderr rather than silently shipping a message that the
+    // Rust router will drop on the floor.
+    process.stderr.write(
+      `${JSON.stringify({
+        ts: new Date().toISOString(),
+        level: 'error',
+        component: 'protocol',
+        event: 'unknown_event_type',
+        type,
+      })}\n`
+    );
+    return;
+  }
+  process.stdout.write(`${JSON.stringify({ type, ...payload })}\n`);
 }
 
-function emitFinalTranscript(text, speaker, sttLabel, start, end) {
-  emit('Final', { text, speaker, sttLabel, start, end });
-}
+// --- Typed emitters -----------------------------------------------------------
+// One per message, so call sites pass named arguments rather than assembling
+// object literals that only the Rust side can validate.
 
-function emitPartialTranscript(text, speaker, sttLabel) {
-  emit('Partial', { text, speaker, sttLabel });
-}
+const emitPartial = (text, speaker, sttLabel) =>
+  emit(EventType.PARTIAL, { text, speaker, sttLabel });
 
-function emitExplanation(text, speaker) {
-  emit('Explanation', { text, speaker });
-}
+const emitFinal = (text, speaker, sttLabel, start, end) =>
+  emit(EventType.FINAL, { text, speaker, sttLabel, start, end });
 
-function emitTechnicalExplanation(text, speaker) {
-  emit('TechnicalExplanation', { text, speaker });
-}
+const emitProviderStatus = (provider, state) =>
+  emit(EventType.PROVIDER_STATUS, { provider, state });
 
-function emitSignificance(level) {
-  emit('Significance', { level });
-}
+const emitSpeakerRevision = (revision) =>
+  emit(EventType.SPEAKER_REVISION, { revision });
 
-function emitDecisions(items) {
-  emit('Decisions', { items });
-}
+const emitMeetingSummary = (text) => emit(EventType.MEETING_SUMMARY, { text });
 
-function emitActionItems(items) {
-  emit('ActionItems', { items });
-}
-
-function emitRisks(items) {
-  emit('Risks', { items });
-}
-
-function emitSuggestedResponse(text, speaker, reply_type) {
-  emit('Response', { text, speaker, reply_type });
-}
-
-function emitCircuitBreakerState(snapshot) {
-  emit('CircuitBreaker', { items: snapshot });
-}
-
-function emitBilling(snapshot) {
-  emit('Billing', { items: { snapshot } });
-}
-
-function emitCostAnomaly(rule, label, value, threshold) {
-  emit('CostAnomaly', { rule, label, value, threshold });
-}
-
-function emitProviderStatus(provider, state) {
-  emit('ProviderStatus', { provider, state });
-}
-
-function emitConnected(sessionId) {
-  emit('Connected', { sessionId });
-}
-
-function emitApiHealth(keys) {
-  emit('ApiHealth', { items: { keys } });
-}
-
-function emitError(message) {
-  emit('Error', { message });
-}
-
-function emitSpeakerRevision(revision) {
-  emit('SpeakerRevision', { revision });
-}
+const emitError = (message) => emit(EventType.ERROR, { message });
 
 module.exports = {
+  EventType,
   emit,
-  emitFinalTranscript,
-  emitPartialTranscript,
-  emitExplanation,
-  emitTechnicalExplanation,
-  emitSignificance,
-  emitDecisions,
-  emitActionItems,
-  emitRisks,
-  emitSuggestedResponse,
-  emitCircuitBreakerState,
-  emitBilling,
+  emitPartial,
+  emitFinal,
   emitProviderStatus,
-  emitConnected,
-  emitApiHealth,
-  emitError,
   emitSpeakerRevision,
-  emitCostAnomaly,
+  emitMeetingSummary,
+  emitError,
 };

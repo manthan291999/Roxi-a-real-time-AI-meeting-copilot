@@ -1,34 +1,43 @@
-const MAX_RETRY_AFTER_MS = 10000;
+/**
+ * AI Meeting Interpreter — Connect Retry Policies
+ *
+ * `ProviderManager.connectWithRetry()` reads `descriptor.retryPolicy`. Before
+ * this module existed the chain descriptors never set that field, so the policy
+ * silently defaulted to `{ maxRetries: 0 }` — meaning exactly one connect
+ * attempt per provider, with none of the documented backoff. These are the
+ * policies that make that machinery live.
+ *
+ * Backoff is per-attempt and explicit rather than computed, so the total worst
+ * case before failing over is obvious at a glance.
+ */
 
-function sleepMs(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+'use strict';
+
+/**
+ * Primary provider: retried harder, because falling through to the fallback
+ * costs a reconnect and a ring-buffer replay.
+ */
+const PRIMARY = Object.freeze({
+  maxRetries: 2,
+  backoffMs: Object.freeze([500, 2000]), // worst case ~2.5s before failover
+});
+
+/**
+ * Last provider in the chain: there is nothing to fall through to, so it is
+ * retried more patiently before the session is declared exhausted.
+ */
+const LAST_RESORT = Object.freeze({
+  maxRetries: 3,
+  backoffMs: Object.freeze([500, 2000, 5000]), // worst case ~7.5s
+});
+
+/**
+ * Pick a policy by position in the chain.
+ * @param {number} index  0-based position
+ * @param {number} length total providers in the chain
+ */
+function policyFor(index, length) {
+  return index === length - 1 ? LAST_RESORT : PRIMARY;
 }
 
-function calculateBackoff(attempt) {
-  return 1000 * Math.pow(2, attempt) + Math.floor(Math.random() * 500);
-}
-
-function parseRetryAfterHeader(headerValue) {
-  if (!headerValue) return null;
-  const secs = Number(headerValue);
-  if (!Number.isFinite(secs) || secs < 0) return null;
-  return Math.min(secs * 1000, MAX_RETRY_AFTER_MS);
-}
-
-class RetryPolicy {
-  constructor({ maxRetries, retryableStatuses = new Set() }) {
-    this.maxRetries = maxRetries;
-    this.retryableStatuses = retryableStatuses;
-  }
-
-  isRetryable(status) {
-    return this.retryableStatuses.has(status);
-  }
-}
-
-module.exports = {
-  sleepMs,
-  calculateBackoff,
-  parseRetryAfterHeader,
-  RetryPolicy,
-};
+module.exports = { PRIMARY, LAST_RESORT, policyFor };

@@ -1,4 +1,4 @@
-use super::{action_item::ActionItem, agent_error::AgentError, decision::Decision, risk::Risk};
+use super::{action_item::ActionItem, agent_error::AgentError, decision::Decision, risk::Risk, context_item::ContextItem};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -27,6 +27,7 @@ pub struct ChunkState {
     pub risks: Vec<Risk>,
     pub suggested_response: Option<String>,
     pub suggested_response_type: Option<String>,
+    pub context_items: Vec<ContextItem>,
     pub errors: Vec<AgentError>,
 }
 
@@ -59,6 +60,8 @@ impl ChunkState {
             self.suggested_response = other.suggested_response;
             self.suggested_response_type = other.suggested_response_type;
         }
+        
+        self.context_items.extend(other.context_items);
         
         self.errors.extend(other.errors);
     }

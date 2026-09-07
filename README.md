@@ -92,6 +92,8 @@ Audio Capture → PCM1 Framing → STT Provider → Transcript Sanitizer → Sem
     → Chunk Runner → Agent Orchestrator → Chunk Broadcaster → Tauri Events → React UI
 ```
 
+> 📐 **Full architecture:** for the verified, file-by-file system architecture (process topology, ChunkGraph fast/slow-lane pipeline, storage topology, complete Tauri command & event catalog), see [`docs/SYSTEM-ARCHITECTURE.md`](docs/SYSTEM-ARCHITECTURE.md).
+
 ---
 
 ## 🛠️ Tech Stack

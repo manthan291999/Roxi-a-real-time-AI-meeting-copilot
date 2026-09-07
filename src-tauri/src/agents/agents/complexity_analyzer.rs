@@ -1,6 +1,16 @@
 //! ComplexityAnalyzerAgent — fast LLM classifier (≤ 20 completion tokens).
-//! Runs after context_manager, before the parallel stage-2 swarm.
+//!
+//! SUPERSEDED AND UNWIRED. Complexity classification now happens inside
+//! ContextManagerAgent as one extra JSON field, because this agent cost a full
+//! ~900ms sequential round-trip to emit ~5 tokens. Nothing constructs it.
+//!
+//! Kept because it is still a correct, self-contained implementation: if you ever
+//! need complexity on a different model or a different cadence from the context
+//! manager, re-wire this in lib.rs and split the two calls again.
+//!
 //! On any error: returns state unchanged → Complexity::Medium (default) → safe fallback.
+
+#![allow(dead_code)]
 
 use crate::agents::domain::chunk_state::{ChunkState, Complexity};
 use crate::agents::ports::{agent_port::Agent, llm_port::LlmClient};

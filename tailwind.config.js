@@ -7,8 +7,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['DM Mono', 'Courier New', 'monospace'],
+        sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', 'system-ui', 'sans-serif'],
+        mono: ['ui-monospace', '"SF Mono"', 'Menlo', 'monospace'],
       },
     },
   },

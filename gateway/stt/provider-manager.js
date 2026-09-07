@@ -199,7 +199,6 @@ class ProviderManager extends EventEmitter {
     this.failoverInFlight = true;
 
     try {
-      const failed = this.active;
       this.active = null; // detach: further events from it are ignored
 
       const nextIndex = this.chainIndex + 1;
