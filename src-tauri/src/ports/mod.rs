@@ -1,6 +1,10 @@
 pub mod audio_capture;
+pub mod brief_source;
 pub mod chat_gateway;
 pub mod control;
 pub mod db;
+pub mod document_source;
+pub mod embedding;
 pub mod gateway;
-
+pub mod project_repository;
+pub mod usage;

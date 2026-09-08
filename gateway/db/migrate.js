@@ -108,6 +108,45 @@ const MIGRATIONS = [
       )`,
     ],
   },
+  {
+    version: 8,
+    description: 'M008 projects + project scoping on meetings',
+    statements: [
+      // IF NOT EXISTS, unlike every migration above it, because the Rust host
+      // also ensures this one table: the project picker runs before the first
+      // capture ever happens, so on a fresh install there is no sidecar to have
+      // applied this migration yet and "+ New project" would have nothing to
+      // insert into. Kept byte-equivalent to `ensureProjects` in
+      // src-tauri/src/adapters/sqlite_schema.rs — change them together.
+      //
+      // The `meetings` columns below have no such counterpart: `project_seq`
+      // must be MAX + 1 inside the same transaction as the meeting insert, so
+      // only the writer of that row can assign it, and that writer is here.
+      `CREATE TABLE IF NOT EXISTS projects (
+        project_id  INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT NOT NULL,
+        code        TEXT NOT NULL UNIQUE,
+        description TEXT,
+        created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        archived_at TEXT
+      )`,
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_name ON projects (name)',
+
+      // Surrogate key stays `meetings.id`: every FK in the database already
+      // points at it, so a composite or hierarchical key would ripple through
+      // transcripts, chunks, decisions, action_items, risks, summaries and
+      // speaker_* for no benefit. `display_id` is the human identity instead.
+      'ALTER TABLE meetings ADD COLUMN project_id INTEGER REFERENCES projects(project_id)',
+      'ALTER TABLE meetings ADD COLUMN project_seq INTEGER',
+      'ALTER TABLE meetings ADD COLUMN display_id TEXT',
+      'CREATE INDEX IF NOT EXISTS idx_meetings_project ON meetings (project_id, start_time DESC)',
+
+      // Backfill: every existing meeting lands in one bucket, nothing orphaned.
+      // The row may already exist if the Rust host seeded it first.
+      "INSERT INTO projects (name, code) SELECT 'Unsorted', 'GEN' WHERE NOT EXISTS (SELECT 1 FROM projects WHERE code = 'GEN')",
+      "UPDATE meetings SET project_id = (SELECT project_id FROM projects WHERE code = 'GEN') WHERE project_id IS NULL",
+    ],
+  },
 ];
 
 /**

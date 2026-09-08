@@ -71,6 +71,9 @@ export const tokens = {
   technical: 'var(--t-technical)',
   technicalBg: 'var(--t-technical-bg)',
   technicalLine: 'var(--t-technical-line)',
+  
+  bulletBestBg: 'var(--t-bullet-best-bg)',
+  bulletBestDot: 'var(--t-bullet-best-dot)',
 
   /** Interaction chrome — focus, hover, and the dim behind a modal. */
   focusRing: 'var(--t-focus-ring)',

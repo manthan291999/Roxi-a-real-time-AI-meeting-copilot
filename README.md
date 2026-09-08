@@ -46,7 +46,7 @@ It captures combined system audio and microphone streams, delivers live transcri
 | Hybrid retrieval (meetings + documents, RRF-merged) | ✅ Shipped — wired into the live answer path |
 | Citations across both corpora (`[M3]` / `[D2]`) | ✅ Shipped |
 | Upload/list/delete over the sidecar protocol | ✅ Shipped |
-| **Document upload from the UI** | 🚧 **In progress** — needs the native file picker and the document tray. Until then the document corpus is empty in normal use, and Ask Roxi answers from meetings alone. |
+| Document upload from the UI | ✅ Shipped |
 | Screen-capture invisibility | ⛔ Currently **disabled** — `set_content_protected` is commented out so the window stays visible in screen shares. |
 | Token-level answer streaming | ⛔ Not implemented. Answers arrive complete; what streams today is *node progress*. |
 | Windows / Linux | ⛔ macOS-only. |

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { IconButton, tokens, radius } from '../../design-system';
 import { SendIcon } from '../../design-system/icons';
+import { DocumentUploadButton } from './components/documents/DocumentUploadButton';
 
 interface ChatInputProps {
   onSend: (text: string) => void;
   isLoading: boolean;
+  onUpload?: () => void;
 }
 
 /** Cycles while the field is unfocused, to suggest what Roxi can answer. */
@@ -22,7 +24,7 @@ const PLACEHOLDER_INTERVAL_MS = 4000;
  * only in the history pane (rotating placeholder, focus ring, Cmd+Enter); the
  * plainer duplicate in this folder has been retired.
  */
-export const ChatInput: React.FC<ChatInputProps> = ({ onSend, isLoading = false }) => {
+export const ChatInput: React.FC<ChatInputProps> = ({ onSend, isLoading = false, onUpload }) => {
   const [input, setInput] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
@@ -62,6 +64,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, isLoading = false 
           boxShadow: isFocused ? `0 0 0 1px ${tokens.signalFocus}` : 'none',
         }}
       >
+        {onUpload && (
+          <div className="p-2 shrink-0 self-center border-r" style={{ borderColor: tokens.hairline }}>
+            <DocumentUploadButton onUpload={onUpload} disabled={isLoading} />
+          </div>
+        )}
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -73,7 +80,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, isLoading = false 
           style={{ color: tokens.paper }}
           rows={1}
         />
-        <div className="p-2 shrink-0 group relative">
+        <div className="p-2 shrink-0 group relative self-end">
           <IconButton
             icon={<SendIcon />}
             onClick={handleSend}

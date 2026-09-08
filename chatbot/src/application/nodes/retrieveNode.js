@@ -21,6 +21,7 @@ function createRetrieveNode({ evidenceSource, logger }) {
       const hits = await evidenceSource.search({
         question: state.question || '',
         matchExprs: state.searchQueries || [],
+        liveContext: state.liveContext || '',
         limit: MAX_HITS,
       });
       logger.info('retrieve', 'search_done', {

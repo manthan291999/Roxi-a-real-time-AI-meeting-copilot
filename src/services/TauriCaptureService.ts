@@ -8,8 +8,8 @@ import { toStartCapturePayload } from './mappers';
  * callers pass a MeetingContext and stay unaware of the Rust signature.
  */
 export class TauriCaptureService implements ICaptureService {
-  async startCapture(context?: MeetingContext): Promise<void> {
-    await invoke('start_capture', toStartCapturePayload(context));
+  async startCapture(context?: MeetingContext): Promise<number> {
+    return await invoke<number>('start_capture', toStartCapturePayload(context));
   }
 
   async stopCapture(): Promise<void> {

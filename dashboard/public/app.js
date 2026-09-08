@@ -96,15 +96,17 @@ function setLive(active) {
       const { tab } = currentRoute();
       if (tab === 'overview') {
         // Soft refresh without wiping DOM loader
-        const [summary, byAgent, timeline, histogram, sessions] = await Promise.all([
+        const [summary, byAgent, timeline, histogram, sessions, cacheStats, prefixStats] = await Promise.all([
           api.get('/api/summary'),
           api.get('/api/by-agent'),
           api.get('/api/timeline'),
           api.get('/api/latency-histogram'),
           api.get('/api/sessions'),
+          api.get('/api/cache-stats'),
+          api.get('/api/prefix-stats'),
         ]);
         if (summary.dbAvailable && summary.requests > 0) {
-          renderOverviewCharts(byAgent, timeline, histogram);
+          renderOverviewCharts(byAgent, timeline, histogram, cacheStats);
         }
       } else if (tab === 'requests') {
         await loadRequestRows();
@@ -139,12 +141,14 @@ async function refreshDbStatus() {
 // --- Tab 1: Overview -----------------------------------------------------------------
 
 async function renderOverview() {
-  const [summary, byAgent, timeline, histogram, sessions] = await Promise.all([
+  const [summary, byAgent, timeline, histogram, sessions, cacheStats, prefixStats] = await Promise.all([
     api.get('/api/summary'),
     api.get('/api/by-agent'),
     api.get('/api/timeline'),
     api.get('/api/latency-histogram'),
     api.get('/api/sessions'),
+    api.get('/api/cache-stats'),
+    api.get('/api/prefix-stats'),
   ]);
 
   if (!summary.dbAvailable || summary.requests === 0) {
@@ -190,6 +194,15 @@ async function renderOverview() {
       <td class="num">${fmt.usd(s.cost_usd)}</td>
     </tr>`).join('');
 
+  const prefixRows = prefixStats.rows.map((p) => `
+    <tr>
+      <td><code>${esc(p.prefix_hash)}</code></td>
+      <td class="num">${fmt.int(p.session_count)}</td>
+      <td class="num">${fmt.int(p.total_cached_tokens)}</td>
+      <td>${fmt.ts(p.first_seen)}</td>
+      <td>${fmt.ts(p.last_seen)}</td>
+    </tr>`).join('');
+
   $view.innerHTML = `
     ${cards}
     <div class="grid charts">
@@ -197,7 +210,13 @@ async function renderOverview() {
       <div class="panel"><h3>Cumulative cost (USD)</h3><div class="chart-box"><canvas id="ch-cost"></canvas></div></div>
       <div class="panel"><h3>Calls per agent</h3><div class="chart-box"><canvas id="ch-agents"></canvas></div></div>
       <div class="panel"><h3>Latency distribution</h3><div class="chart-box"><canvas id="ch-latency"></canvas></div></div>
+      <div class="panel" style="grid-column: 1 / -1"><h3>Cache Hit Rate (rolling 30d)</h3><div class="chart-box" style="height: 250px"><canvas id="ch-cache"></canvas></div></div>
     </div>
+    <h2 class="section-title">Prefix Stability</h2>
+    <div class="panel"><table>
+      <thead><tr><th>Prefix Hash</th><th class="num">Sessions</th><th class="num">Cached Tokens</th><th>First Seen</th><th>Last Seen</th></tr></thead>
+      <tbody>${prefixRows || '<tr><td colspan="5" class="muted">No prefix data</td></tr>'}</tbody>
+    </table></div>
     <h2 class="section-title">Per-agent rollup</h2>
     <div class="panel"><table>
       <thead><tr><th>Source</th><th>Agent / Tag</th><th class="num">Calls</th><th class="num">Failed</th>
@@ -211,10 +230,10 @@ async function renderOverview() {
       <tbody>${sessionRows}</tbody>
     </table></div>`;
 
-  renderOverviewCharts(byAgent, timeline, histogram);
+  renderOverviewCharts(byAgent, timeline, histogram, cacheStats);
 }
 
-function renderOverviewCharts(byAgent, timeline, histogram) {
+function renderOverviewCharts(byAgent, timeline, histogram, cacheStats) {
   const labels = timeline.rows.map((r) => fmt.tshort(r.bucket));
   makeChart('ch-tokens', {
     type: 'bar',
@@ -255,6 +274,41 @@ function renderOverviewCharts(byAgent, timeline, histogram) {
       label: 'calls', data: histogram.rows.map((r) => r.calls), backgroundColor: 'rgba(251,191,36,0.55)' }] },
     options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
+  });
+
+  const cacheModels = [...new Set(cacheStats.rows.map(r => r.model))];
+  const cachePct = cacheModels.map(m => {
+    const mRows = cacheStats.rows.filter(r => r.model === m);
+    const cached = mRows.reduce((acc, r) => acc + r.cached_tokens, 0);
+    const billed = mRows.reduce((acc, r) => acc + r.billed_tokens, 0);
+    const pct = (billed + cached) > 0 ? (cached * 100.0 / (billed + cached)) : 0;
+    return { model: m, cached, billed, pct: pct.toFixed(1) };
+  });
+
+  makeChart('ch-cache', {
+    type: 'bar',
+    data: {
+      labels: cachePct.map(c => c.model),
+      datasets: [
+        { label: 'cached', data: cachePct.map(c => c.cached), backgroundColor: 'rgba(52,211,153,0.65)', stack: 'c' },
+        { label: 'uncached', data: cachePct.map(c => c.billed), backgroundColor: 'rgba(251,146,60,0.65)', stack: 'c' }
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      scales: { x: { stacked: true }, y: { stacked: true } },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            afterLabel: (ctx) => {
+              const model = cachePct[ctx.dataIndex];
+              return \`Hit rate: \${model.pct}%\`;
+            }
+          }
+        }
+      }
+    }
   });
 }
 

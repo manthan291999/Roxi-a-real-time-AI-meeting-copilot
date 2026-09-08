@@ -21,12 +21,27 @@
 //! Error model: run_agent_timed() wraps every agent — one crash never kills the pipeline.
 //! Fallback:    Complexity::Medium is the ChunkState default — if context_manager
 //!              fails or omits the field, the medium path (explanation + risk) runs.
+//!
+//! ## The brief
+//!
+//! Each agent's frozen prefix is resolved here, per agent, as it is dispatched —
+//! `seed_for(agent)` looks up `(session, agent.name())` in the `BriefStore` and
+//! hands the agent a state carrying its own brief. Agents never reach into the
+//! store: they receive a finished `CompiledBrief` and know nothing about where it
+//! came from, which is what keeps them testable without SQLite, an embedding
+//! gateway or project state.
+//!
+//! A missing brief is not an error. The agent falls back to its bare role
+//! contract, which is exactly the behaviour before the brain existed — so a
+//! brief that failed to compile degrades the grounding and nothing else.
 
 use crate::agents::agents::chit_chat_gate;
+use crate::agents::brief::store::BriefStore;
 use crate::agents::domain::chunk_state::{ChunkState, Complexity};
 use crate::agents::domain::pipeline_trace::{AgentSpan, PipelineTrace};
 use crate::agents::orchestrator::routing;
 use crate::agents::ports::agent_port::Agent;
+use crate::domain::session::SessionSnapshot;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -66,6 +81,9 @@ pub struct ChunkGraph {
     analyst:         Arc<dyn Agent>,
     // Stage 3 — always sequential
     response_agent:  Arc<dyn Agent>,
+    /// The compiled prefixes for whatever captures are live. Shared with the
+    /// brief use case, which fills it at `start_capture`.
+    briefs:          Arc<BriefStore>,
 }
 
 impl ChunkGraph {
@@ -76,18 +94,69 @@ impl ChunkGraph {
         risk:            Arc<dyn Agent>,
         analyst:         Arc<dyn Agent>,
         response_agent:  Arc<dyn Agent>,
+        briefs:          Arc<BriefStore>,
     ) -> Self {
-        Self { context_manager, explanation, technical, risk, analyst, response_agent }
+        Self { context_manager, explanation, technical, risk, analyst, response_agent, briefs }
+    }
+
+    /// Every agent this graph dispatches, for the dev-build contract check.
+    fn all_agents(&self) -> [&Arc<dyn Agent>; 6] {
+        [
+            &self.context_manager,
+            &self.explanation,
+            &self.technical,
+            &self.risk,
+            &self.analyst,
+            &self.response_agent,
+        ]
+    }
+
+    /// Fires in dev when an agent is dispatched here but has no entry in
+    /// `role_contracts::ALL`. Without it, forgetting the entry means that agent
+    /// silently runs un-grounded forever — no error, no log, just worse answers.
+    pub fn assert_every_agent_has_a_contract(&self) {
+        for agent in self.all_agents() {
+            debug_assert!(
+                crate::agents::agents::role_contracts::ALL
+                    .iter()
+                    .any(|(tag, _)| *tag == agent.name()),
+                "agent '{}' is dispatched by ChunkGraph but has no entry in role_contracts::ALL — it will never receive a brief",
+                agent.name()
+            );
+        }
+    }
+
+    /// A copy of `base` carrying `agent`'s own frozen prefix.
+    ///
+    /// One lookup per dispatch rather than one per chunk: each agent's prefix
+    /// differs (its role contract is the first section), so they cannot share.
+    fn seed_for(&self, agent: &Arc<dyn Agent>, base: &ChunkState) -> ChunkState {
+        let mut state = base.clone();
+        state.brief = base
+            .session_id
+            .and_then(|session| self.briefs.get(session, agent.name()));
+        state
     }
 
     /// Returns the reply-path state, its trace, and any detached slow-lane work.
     /// The caller MUST drive `DetachedWork` to completion (on a separate task) or
     /// the risk/decision/action-item signals for this chunk are silently dropped.
-    pub async fn run(&self, chunk: &str, speaker: &str) -> (ChunkState, PipelineTrace, Option<DetachedWork>) {
+    pub async fn run(
+        &self,
+        chunk: &str,
+        speaker: &str,
+        session: &SessionSnapshot,
+    ) -> (ChunkState, PipelineTrace, Option<DetachedWork>) {
         let overall_start = Instant::now();
+        // The session fields are seeded once, here. Agents read them and never
+        // write them; `merge_from` deliberately leaves them alone.
         let mut state = ChunkState {
             chunk_text: chunk.to_string(),
             speaker: speaker.to_string(),
+            session_id: Some(session.id),
+            meeting_id: session.meeting_id,
+            project_id: session.project.as_ref().map(|p| p.id),
+            rolling_window: session.rolling_window.clone(),
             ..Default::default()
         };
 
@@ -106,8 +175,14 @@ impl ChunkGraph {
         // unconditional (every branch of routing::decide sets run_explanation),
         // which is what makes starting it here safe rather than speculative.
         let (ctx_res, expl_res) = futures::future::join(
-            run_agent_timed(self.context_manager.clone(), state.clone()),
-            run_agent_timed(self.explanation.clone(), state.clone()),
+            run_agent_timed(
+                self.context_manager.clone(),
+                self.seed_for(&self.context_manager, &state),
+            ),
+            run_agent_timed(
+                self.explanation.clone(),
+                self.seed_for(&self.explanation, &state),
+            ),
         )
         .await;
 
@@ -143,14 +218,20 @@ impl ChunkGraph {
         let mut skipped: Vec<String> = Vec::new();
 
         // Detached: response_agent reads neither of these, so they must not block it.
-        let mut detached_agents: Vec<(Arc<dyn Agent>, &'static str)> = Vec::new();
+        // Each is seeded with its own brief here, on the calling task, because
+        // `self` does not outlive the detached future.
+        let mut detached_agents: Vec<(Arc<dyn Agent>, &'static str, ChunkState)> = Vec::new();
         if route.run_risk {
-            detached_agents.push((self.risk.clone(), "risk"));
+            detached_agents.push((self.risk.clone(), "risk", self.seed_for(&self.risk, &state)));
         } else {
             skipped.push("risk".to_string());
         }
         if route.run_analyst {
-            detached_agents.push((self.analyst.clone(), "analyst"));
+            detached_agents.push((
+                self.analyst.clone(),
+                "analyst",
+                self.seed_for(&self.analyst, &state),
+            ));
         } else {
             skipped.push("analyst".to_string());
         }
@@ -158,12 +239,10 @@ impl ChunkGraph {
         let detached: Option<DetachedWork> = if detached_agents.is_empty() {
             None
         } else {
-            let base = state.clone();
             Some(Box::pin(async move {
-                let futs = detached_agents.into_iter().map(|(agent, name)| {
-                    let s = base.clone();
+                let futs = detached_agents.into_iter().map(|(agent, name, seeded)| {
                     async move {
-                        let (st, ms, status) = run_agent_timed(agent, s).await;
+                        let (st, ms, status) = run_agent_timed(agent, seeded).await;
                         (st, name, ms, status)
                     }
                 });
@@ -189,8 +268,11 @@ impl ChunkGraph {
         // Awaited: response_agent reads `technical_explanation`, so this one stays
         // on the critical path — but only on the High route that actually asks for it.
         if route.run_technical {
-            let (tech_state, tech_ms, tech_status) =
-                run_agent_timed(self.technical.clone(), state.clone()).await;
+            let (tech_state, tech_ms, tech_status) = run_agent_timed(
+                self.technical.clone(),
+                self.seed_for(&self.technical, &state),
+            )
+            .await;
             state.technical_explanation = tech_state.technical_explanation;
             trace.add_span("technical", 2, tech_ms, &tech_status);
         } else {
@@ -203,8 +285,11 @@ impl ChunkGraph {
         // Skipped for Low: a simple fact or short statement doesn't need a
         // synthesised conversational reply, and this is the priciest call.
         if state.complexity != Complexity::Low {
-            let (resp_state, resp_ms, resp_status) =
-                run_agent_timed(self.response_agent.clone(), state.clone()).await;
+            let (resp_state, resp_ms, resp_status) = run_agent_timed(
+                self.response_agent.clone(),
+                self.seed_for(&self.response_agent, &state),
+            )
+            .await;
             state.suggested_response      = resp_state.suggested_response;
             state.suggested_response_type = resp_state.suggested_response_type;
             state.context_items           = resp_state.context_items;

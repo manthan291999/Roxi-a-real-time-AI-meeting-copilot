@@ -19,8 +19,12 @@ export interface ContextItemWire {
   match_confidence?: number;
   is_verbatim?: boolean;
   is_technical?: boolean;
-  /** Free-form LLM output; narrowed to SuggestTag by the mapper. */
   tags?: string[];
+}
+
+export interface ResponseBulletWire {
+  text: string;
+  isBest: boolean;
 }
 
 /** Payload of `transcript_partial` / `transcript_final`. */
@@ -31,11 +35,11 @@ export interface TranscriptWire {
 }
 
 export interface SuggestAnswerWire {
-  text?: string;
-  speaker?: string;
-  /** serde-renamed from `reply_type`. */
-  type?: string | null;
+  text: string;
+  speaker: string;
+  type?: string;
   context_items?: ContextItemWire[];
+  bullets?: ResponseBulletWire[];
 }
 
 /**
@@ -45,4 +49,7 @@ export interface SuggestAnswerWire {
 export interface StartCapturePayload extends Record<string, unknown> {
   context?: string;
   role?: string;
+  project_id?: number;
+  new_project_name?: string;
+  doc_ids?: string[];
 }

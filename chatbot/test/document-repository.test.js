@@ -39,7 +39,7 @@ function doc(overrides = {}) {
     errorMessage: null,
     uploadedAt: '2026-09-07T10:00:00.000Z',
     contentHash: 'hash-a',
-    meetingId: null,
+    projectId: null,
     ...overrides,
   };
 }
@@ -72,7 +72,23 @@ test('document lifecycle', async (t) => {
     assert.strictEqual(got.fileName, 'spec.pdf');
     assert.strictEqual(got.status, 'indexing');
     assert.strictEqual(got.dimensions, 4);
-    assert.strictEqual(got.meetingId, null, 'global by default');
+    assert.strictEqual(got.projectId, null, 'global by default');
+    r.close();
+  });
+
+  await t.test('a document can be filed under a project', () => {
+    const r = repo();
+    r.insertDocument(doc({ projectId: 7 }));
+    assert.strictEqual(r.getDocument('d1').projectId, 7);
+    r.close();
+  });
+
+  await t.test('a zero or junk project id is stored as global, not as a scope nothing matches', () => {
+    const r = repo();
+    r.insertDocument(doc({ docId: 'z', contentHash: 'h-z', projectId: 0 }));
+    r.insertDocument(doc({ docId: 'j', contentHash: 'h-j', projectId: 'oops' }));
+    assert.strictEqual(r.getDocument('z').projectId, null);
+    assert.strictEqual(r.getDocument('j').projectId, null);
     r.close();
   });
 
@@ -191,6 +207,70 @@ test('cosine ranking over a hand-built corpus', async (t) => {
     const r = ready();
     assert.deepStrictEqual(r.searchByVector(new Float32Array(0)), []);
     assert.deepStrictEqual(r.searchByVector(null), []);
+    r.close();
+  });
+});
+
+test('project scope', async (t) => {
+  const east = unit([1, 0, 0, 0]);
+
+  /**
+   * Three documents at the same angle, differing only in scope: one global,
+   * one in project 1, one in project 2. Identical vectors on purpose — scope is
+   * then the only thing that can change a result.
+   */
+  function scoped() {
+    const r = repo();
+    for (const [docId, projectId, text] of [
+      ['global', null, 'global template'],
+      ['p1', 1, 'project one contract'],
+      ['p2', 2, 'project two contract'],
+    ]) {
+      r.insertDocument(doc({ docId, contentHash: `h-${docId}`, projectId }));
+      r.insertChunks(docId, [chunk(0, east, text)]);
+      r.markReady(docId, { chunkCount: 1, pageCount: 1 });
+    }
+    return r;
+  }
+
+  await t.test('an unscoped search sees the whole library', () => {
+    const r = scoped();
+    assert.strictEqual(r.searchByVector(east, { limit: 10 }).length, 3);
+    r.close();
+  });
+
+  await t.test('a scoped search sees its own project plus the global documents', () => {
+    const r = scoped();
+    const texts = r
+      .searchByVector(east, { limit: 10, projectId: 1 })
+      .map((h) => h.text)
+      .sort();
+    assert.deepStrictEqual(texts, ['global template', 'project one contract']);
+    r.close();
+  });
+
+  // The reason scope is pushed into SQL rather than applied to the results:
+  // searchByVector truncates to `limit`, so filtering afterwards would let
+  // out-of-scope chunks consume slots and silently shrink the answer.
+  await t.test('out-of-scope documents do not consume result slots', () => {
+    const r = scoped();
+    const hits = r.searchByVector(east, { limit: 2, projectId: 1 });
+    assert.strictEqual(hits.length, 2, 'both in-scope documents must survive the limit');
+    assert.ok(!hits.some((h) => h.text === 'project two contract'));
+    r.close();
+  });
+
+  await t.test('stats count in scope, so an empty scope short-circuits retrieval', () => {
+    const r = scoped();
+    assert.strictEqual(r.stats().count, 3);
+    assert.strictEqual(r.stats({ projectId: 1 }).count, 2, 'own project plus global');
+    assert.strictEqual(r.stats({ projectId: 99 }).count, 1, 'a project with only the global doc');
+    r.close();
+  });
+
+  await t.test('listDocuments stays unscoped — the library view shows everything', () => {
+    const r = scoped();
+    assert.strictEqual(r.listDocuments().length, 3);
     r.close();
   });
 });

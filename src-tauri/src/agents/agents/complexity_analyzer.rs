@@ -12,9 +12,22 @@
 
 #![allow(dead_code)]
 
+use crate::agents::agents::prompt;
 use crate::agents::domain::chunk_state::{ChunkState, Complexity};
 use crate::agents::ports::{agent_port::Agent, llm_port::LlmClient};
 use std::sync::Arc;
+
+/// Not registered in `role_contracts::ALL`: nothing constructs this agent, so
+/// compiling a brief for it would pay for a prefix nobody sends. Re-wiring the
+/// agent means adding it there too.
+pub const ROLE_CONTRACT: &str = "\
+You are a meeting-chunk classifier. Classify the chunk complexity.
+Return ONLY this JSON, no other text:
+{\"complexity\":\"low\"|\"medium\"|\"high\"}
+
+low    = filler, pleasantry, single-word ack, chit-chat, single simple fact
+medium = question, explanation needed, multi-sentence discussion
+high   = decision being made, technical deep-dive, multiple concepts, risk or deadline mentioned";
 
 pub struct ComplexityAnalyzerAgent {
     llm: Arc<dyn LlmClient>,
@@ -33,21 +46,14 @@ impl Agent for ComplexityAnalyzerAgent {
     }
 
     async fn run(&self, state: &ChunkState) -> anyhow::Result<ChunkState> {
-        let system = "\
-You are a meeting-chunk classifier. Classify the chunk complexity.
-Return ONLY this JSON, no other text:
-{\"complexity\":\"low\"|\"medium\"|\"high\"}
+        let built = prompt::build(ROLE_CONTRACT, self.name(), state)
+            .with("Speaker", &state.speaker)
+            .with_optional("Current topic", state.current_topic.as_ref());
 
-low    = filler, pleasantry, single-word ack, chit-chat, single simple fact
-medium = question, explanation needed, multi-sentence discussion
-high   = decision being made, technical deep-dive, multiple concepts, risk or deadline mentioned";
-
-        let user = format!(
-            "Topic: {:?}\nChunk: {}\nSpeaker: {}",
-            state.current_topic, state.chunk_text, state.speaker
-        );
-
-        let json = self.llm.complete_json(system, &user).await?;
+        let json = self
+            .llm
+            .complete_json(&built.prompt.system, &built.prompt.user, &built.meta)
+            .await?;
 
         let complexity = match json
             .get("complexity")

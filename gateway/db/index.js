@@ -37,6 +37,16 @@ class MeetingSession {
     return this.meetings.meetingId;
   }
 
+  /** `ROXI-007`, or null on an unscoped meeting. */
+  get displayId() {
+    return this.meetings.displayId;
+  }
+
+  /** The resolved project, or null on an unscoped meeting. */
+  get project() {
+    return this.meetings.project;
+  }
+
   /**
    * Flush pending writes, close the meeting row, and release the file.
    * Idempotent.
@@ -66,12 +76,13 @@ class MeetingSession {
  *
  * @param {string} dbPath          from config; ':memory:' in tests
  * @param {string} [meetingContext] user-supplied briefing
+ * @param {{id?: number|null}} [projectSelection] resolved by the Rust host
  * @returns {MeetingSession}
  * @throws if the database cannot be opened or migrated
  */
-function startSession(dbPath, meetingContext = '') {
+function startSession(dbPath, meetingContext = '', projectSelection = {}) {
   const { db } = open(dbPath);
-  const meetings = MeetingRepository.start(db, meetingContext);
+  const meetings = MeetingRepository.start(db, meetingContext, projectSelection);
   return new MeetingSession(
     db,
     meetings,

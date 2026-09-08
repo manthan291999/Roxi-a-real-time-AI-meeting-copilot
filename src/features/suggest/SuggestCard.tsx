@@ -30,9 +30,46 @@ export const SuggestCard: React.FC<SuggestCardProps> = memo(({ card, onThumbUp, 
         </span>
       </div>
 
-      <p className="text-[14px] leading-relaxed" style={{ color: tokens.paper }}>
-        {card.text}
-      </p>
+      {card.bullets && card.bullets.length > 0 ? (
+        /* Structured bullets — LLM produced is_best metadata */
+        <ul className="flex flex-col gap-1 mt-1" role="list">
+          {card.bullets.map((bullet, i) => (
+            <li
+              key={`bullet-${i}`}
+              className="flex items-start gap-2.5 text-[14px] leading-relaxed rounded-lg px-2.5 py-1.5 transition-colors"
+              style={bullet.isBest ? {
+                backgroundColor: tokens.bulletBestBg,
+                fontFamily: '"New York", "Georgia", ui-serif, serif',
+                color: tokens.paper,
+              } : {
+                color: tokens.paper,
+              }}
+            >
+              {/* Bullet marker: star for best, dot for others */}
+              {bullet.isBest ? (
+                <span
+                  className="mt-[3px] shrink-0 text-[11px] leading-none"
+                  style={{ color: tokens.bulletBestDot }}
+                  aria-label="Best suggestion"
+                >
+                  ★
+                </span>
+              ) : (
+                <span
+                  className="mt-[7px] shrink-0 w-1.5 h-1.5 rounded-full"
+                  style={{ backgroundColor: tokens.muteDim }}
+                />
+              )}
+              <span>{bullet.text}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        /* Prose fallback — old cache, parse miss, or raw gateway path */
+        <p className="text-[14px] leading-relaxed" style={{ color: tokens.paper }}>
+          {card.text}
+        </p>
+      )}
 
       <div className="flex justify-between items-center pt-2.5 border-t" style={{ borderColor: tokens.hairlineSoft }}>
         <div className="flex gap-3">

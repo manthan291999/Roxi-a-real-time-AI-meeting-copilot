@@ -22,10 +22,11 @@ class AnswerQuestionUseCase {
    * @param {string} input.question   user question (required, non-empty)
    * @param {string} [input.threadId] conversation thread for memory
    * @param {Array<{role:string,content:string}>} [input.history] prior turns (rehydration)
+   * @param {string} [input.liveContext] recent lines from the meeting currently being recorded
    * @param {(nodeName:string)=>void} [input.onNode] progress callback per node
    * @returns {Promise<{answer:string, sources:Array, clarifyingQuestion:string, followUps:Array, route:string, attempts:number, degradedNote:string}>}
    */
-  async run({ question, threadId = 'default', history = [], onNode = null }) {
+  async run({ question, threadId = 'default', history = [], liveContext = '', onNode = null }) {
     if (!question || typeof question !== 'string' || !question.trim()) {
       throw new ChatbotError('Question must be a non-empty string', 'INVALID_INPUT');
     }
@@ -36,7 +37,7 @@ class AnswerQuestionUseCase {
     // streamMode:'updates' yields {nodeName: partialState} after each node —
     // used for ChatThinking progress events without touching node code.
     const stream = await this.graph.stream(
-      { question: question.trim(), history },
+      { question: question.trim(), history, liveContext },
       { ...config, streamMode: 'updates' }
     );
 

@@ -33,7 +33,7 @@ function seed(documents, docId, overrides = {}) {
     errorMessage: null,
     uploadedAt: '2026-09-07T10:00:00.000Z',
     contentHash: `hash-${docId}`,
-    meetingId: null,
+    projectId: null,
     ...overrides,
   });
   return documents;

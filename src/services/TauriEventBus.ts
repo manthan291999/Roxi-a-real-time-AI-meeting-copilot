@@ -10,6 +10,10 @@ import {
   ChatReplyEvent,
   ChatThinkingEvent,
   ChatErrorEvent,
+  DocumentProgress,
+  DocumentReady,
+  UploadedDocument,
+  DocumentDeleted
 } from '../shared/types';
 import { SuggestAnswerWire, TranscriptWire } from './wire';
 import { toSuggestCard, toTxLine } from './mappers';
@@ -103,4 +107,23 @@ export class TauriEventBus implements IEventBus {
     return () => unlisten.then(f => f());
   }
 
+  onDocumentProgress(cb: (progress: DocumentProgress) => void) {
+    const unlisten = listen<DocumentProgress>('document_progress', (e) => cb(e.payload));
+    return () => unlisten.then(f => f());
+  }
+
+  onDocumentReady(cb: (ready: DocumentReady) => void) {
+    const unlisten = listen<DocumentReady>('document_ready', (e) => cb(e.payload));
+    return () => unlisten.then(f => f());
+  }
+
+  onDocumentList(cb: (docs: UploadedDocument[]) => void) {
+    const unlisten = listen<UploadedDocument[]>('document_list', (e) => cb(e.payload));
+    return () => unlisten.then(f => f());
+  }
+
+  onDocumentDeleted(cb: (deleted: DocumentDeleted) => void) {
+    const unlisten = listen<DocumentDeleted>('document_deleted', (e) => cb(e.payload));
+    return () => unlisten.then(f => f());
+  }
 }

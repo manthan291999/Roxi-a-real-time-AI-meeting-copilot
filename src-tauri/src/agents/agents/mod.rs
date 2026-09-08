@@ -3,6 +3,8 @@ pub mod chit_chat_gate;
 pub mod complexity_analyzer;
 pub mod context_manager;
 pub mod explanation;
+pub mod prompt;
 pub mod response_agent;
 pub mod risk_detector;
+pub mod role_contracts;
 pub mod technical;

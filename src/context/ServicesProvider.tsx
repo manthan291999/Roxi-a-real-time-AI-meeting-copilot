@@ -5,7 +5,10 @@ import {
   TauriEventBus,
   TauriChatService,
   TauriHistoryRepository,
-  SpeakerRepository
+  SpeakerRepository,
+  TauriProjectRepository,
+  TauriDocumentService,
+  TauriUsageRepository
 } from '../services';
 
 interface ServicesProviderProps {
@@ -26,6 +29,9 @@ export const ServicesProvider: React.FC<ServicesProviderProps> = ({ children, se
       chatService: new TauriChatService(),
       historyRepository: new TauriHistoryRepository(),
       speakerRepository: new SpeakerRepository(),
+      projectRepository: new TauriProjectRepository(),
+      documentService: new TauriDocumentService(),
+      usageRepository: new TauriUsageRepository(),
       ...overrides,
     };
   }, [overrides]);

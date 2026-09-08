@@ -198,3 +198,70 @@ test('an indexing document is not searched', async () => {
   assert.deepStrictEqual(hits, []);
   repo.close();
 });
+
+test('the project scope reaches the corpus', async () => {
+  const repo = new DocumentRepositorySqlite(':memory:');
+  for (const [docId, projectId, text] of [
+    ['global', null, 'shared template'],
+    ['owned', 1, 'our contract'],
+    ['other', 2, 'someone elses contract'],
+  ]) {
+    repo.insertDocument({
+      docId,
+      fileName: `${docId}.pdf`,
+      mimeType: 'application/pdf',
+      byteSize: 10,
+      pageCount: 1,
+      embedModel: 'fake-embed',
+      dimensions: 4,
+      status: 'indexing',
+      uploadedAt: '2026-09-07T00:00:00.000Z',
+      contentHash: `h-${docId}`,
+      projectId,
+    });
+    repo.insertChunks(docId, [
+      { chunkIndex: 0, pageNumber: 1, charStart: 0, charEnd: 5, text, embedding: unit([1, 0, 0, 0]) },
+    ]);
+    repo.markReady(docId, { chunkCount: 1, pageCount: 1 });
+  }
+
+  const source = sourceFor(repo, fakeEmbeddings(), { minSimilarity: 0 });
+
+  const unscoped = await source.search({ question: 'q', limit: 10 });
+  assert.strictEqual(unscoped.length, 3, 'no scope searches the whole library');
+
+  const scoped = await source.search({ question: 'q', limit: 10, projectId: 1 });
+  assert.deepStrictEqual(
+    scoped.map((h) => h.text).sort(),
+    ['our contract', 'shared template'],
+    'own project plus the global documents',
+  );
+  repo.close();
+});
+
+test('a scope with nothing in it short-circuits BEFORE embedding', async () => {
+  // The cost case: an install whose documents all belong to other projects must
+  // not bill an embedding request on every question asked from this one.
+  const repo = new DocumentRepositorySqlite(':memory:');
+  repo.insertDocument({
+    docId: 'other',
+    fileName: 'other.pdf',
+    mimeType: 'application/pdf',
+    byteSize: 10,
+    pageCount: 1,
+    embedModel: 'fake-embed',
+    dimensions: 4,
+    status: 'indexing',
+    uploadedAt: '2026-09-07T00:00:00.000Z',
+    contentHash: 'h-other',
+    projectId: 2,
+  });
+  repo.markReady('other', { chunkCount: 0, pageCount: 1 });
+
+  const embeddings = fakeEmbeddings();
+  const hits = await sourceFor(repo, embeddings).search({ question: 'q', projectId: 1 });
+
+  assert.deepStrictEqual(hits, []);
+  assert.strictEqual(embeddings.calls.length, 0, 'no billable call for an out-of-scope corpus');
+  repo.close();
+});

@@ -3,6 +3,7 @@ use super::events::{SidecarEvent, TranscriptPayload, ExplanationPayload, Respons
 use super::persistence;
 use crate::agents::orchestrator::chunk_graph::ChunkGraph;
 use crate::application::capture_usecase::CaptureUseCase;
+use crate::application::session_registry::SessionRegistry;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
@@ -57,13 +58,55 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                     let _ = app.emit("transcript_partial", TranscriptPayload { text: t, speaker: s, stt_label: event.stt_label });
                 }
             }
+            "MeetingStarted" => {
+                // The gateway is the writer of `meetings`, so its row id only
+                // exists once it has inserted one. The brief store keys on the
+                // Rust-side SessionId precisely so nothing has to wait for this;
+                // recording it here is what lets a usage row name its meeting.
+                if let (Some(registry), Some(meeting_id)) =
+                    (app.try_state::<Arc<SessionRegistry>>(), event.meeting_id)
+                {
+                    registry.record_meeting(meeting_id, event.display_id.clone());
+                }
+                let _ = app.emit(
+                    "meeting_started",
+                    serde_json::json!({
+                        "meetingId": event.meeting_id,
+                        "displayId": event.display_id,
+                        "projectId": event.project_id,
+                    }),
+                );
+            }
             "Final" => {
                 if let Some(t) = event.text {
                     let s = event.speaker.unwrap_or_else(|| "Speaker A".to_string());
                     // 1. Emit the final transcript instantly to the UI — never blocked by LLM
                     let _ = app.emit("transcript_final", TranscriptPayload { text: t.clone(), speaker: s.clone(), stt_label: event.stt_label });
-                    
-                    // 2. Run the Rust Native ChunkGraph. See PIPELINE_SEMAPHORE above
+
+                    // 2. Snapshot the session BEFORE recording this turn, so the
+                    //    rolling window this chunk sees is the turns that
+                    //    preceded it — the current turn is passed separately and
+                    //    would otherwise appear twice.
+                    //
+                    //    Taken here, on the gateway's stdout reader thread rather
+                    //    than inside the task, for the same reason `chunk_ref` is
+                    //    minted here: the window must follow the order turns were
+                    //    spoken, not the order pipelines happen to be scheduled.
+                    let registry = app
+                        .try_state::<Arc<SessionRegistry>>()
+                        .map(|state| state.inner().clone());
+                    let Some(session) = registry.as_ref().and_then(|r| r.snapshot()) else {
+                        // No live capture. A transcript arriving now belongs to
+                        // nothing, and analysing it would bill an LLM call
+                        // against a session that has ended.
+                        tracing::debug!("[event_router] final transcript with no live session — not analysed");
+                        return;
+                    };
+                    if let Some(registry) = registry.as_ref() {
+                        registry.push_turn(&s, &t);
+                    }
+
+                    // 3. Run the Rust Native ChunkGraph. See PIPELINE_SEMAPHORE above
                     //    for why the permit is taken inside the task rather than here.
                     let app_clone = app.clone();
                     let sem = get_semaphore();
@@ -72,7 +115,7 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                     // turns were spoken rather than the order pipelines happened to
                     // finish (routes differ: Low is 1 LLM hop, High is 3).
                     let chunk_ref = persistence::next_chunk_ref();
-                    
+
                     tauri::async_runtime::spawn(async move {
                         // Acquire permit — auto-released when `_permit` is dropped at end of scope
                         let _permit = match sem.acquire_owned().await {
@@ -86,7 +129,7 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
 
                         match app_clone.try_state::<Arc<ChunkGraph>>() {
                             Some(graph) => {
-                                let (state, trace, detached) = graph.run(&t, &s).await;
+                                let (state, trace, detached) = graph.run(&t, &s, &session).await;
 
                                 // `chunk_ref` (minted before this task was spawned)
                                 // identifies the chunk to the gateway so the detached
@@ -169,11 +212,16 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                                     let _ = app_clone.emit("meeting_risks", state.risks);
                                 }
                                 if let Some(resp) = state.suggested_response {
-                                    let payload = ResponsePayload { 
-                                        text: resp, 
-                                        speaker: s.clone(), 
+                                    let payload = ResponsePayload {
+                                        text: resp,
+                                        speaker: s.clone(),
                                         reply_type: state.suggested_response_type,
-                                        context_items: state.context_items
+                                        context_items: state.context_items,
+                                        bullets: state.suggested_bullets
+                                            .unwrap_or_default()
+                                            .into_iter()
+                                            .map(|b| crate::sidecar::events::ResponseBulletWire { text: b.text, is_best: b.is_best })
+                                            .collect(),
                                     };
                                     // PERF FIX: Emit ONLY 'suggest_answer' — do NOT also emit
                                     // 'suggested_response'. TauriEventBus subscribes to both and
@@ -225,11 +273,12 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
             "Response" => {
                 if let Some(t) = event.text {
                     let s = event.speaker.unwrap_or_else(|| "Unknown".to_string());
-                    let _ = app.emit("suggested_response", ResponsePayload { 
-                        text: t, 
-                        speaker: s, 
+                    let _ = app.emit("suggested_response", ResponsePayload {
+                        text: t,
+                        speaker: s,
                         reply_type: event.reply_type,
-                        context_items: vec![] 
+                        context_items: vec![],
+                        bullets: vec![],
                     });
                 }
             }

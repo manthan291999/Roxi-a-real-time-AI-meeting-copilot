@@ -28,28 +28,33 @@ class DocumentEvidenceSource {
   }
 
   /**
-   * @param {{question: string, limit: number}} query
+   * @param {{question: string, limit: number, projectId?: number|null}} query
+   *   `projectId` restricts the search to that project's documents plus the
+   *   global ones. Omit it to search the whole library.
    * @returns {Promise<import('../../domain/ports/EvidenceSource').EvidenceHit[]>}
    */
-  async search({ question, limit = 24 } = {}) {
+  async search({ question, limit = 24, projectId = null } = {}) {
     if (!question || !String(question).trim()) return [];
 
-    // Check the corpus BEFORE embedding. With no documents uploaded there is
-    // nothing to match, and embedding anyway would bill a request on every
-    // question asked for the entire life of an install with no documents.
-    const { count } = this.documents.stats();
+    // Check the corpus BEFORE embedding, and check it *in scope*: with nothing
+    // matching there is nothing to search, and embedding anyway would bill a
+    // request on every question asked for the entire life of an install whose
+    // documents all belong to other projects.
+    const { count } = this.documents.stats({ projectId });
     if (count === 0) return [];
 
     const vector = await this.embeddings.embedOne(question, { tag: 'embed_query' });
     const hits = this.documents.searchByVector(vector, {
       limit,
       minSimilarity: this.minSimilarity,
+      projectId,
     });
 
     this.logger?.debug('doc_search', 'done', {
       documents: count,
       hits: hits.length,
       minSimilarity: this.minSimilarity,
+      projectId,
     });
 
     return hits.map((hit) => ({

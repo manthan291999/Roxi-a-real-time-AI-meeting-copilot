@@ -51,5 +51,8 @@ export function toSuggestCard(wire: SuggestAnswerWire, receivedAt: number = Date
     timestamp: receivedAt,
     replyType: wire.type ?? undefined,
     contextItems: (wire.context_items ?? []).map(toContextItem),
+    bullets: wire.bullets?.length
+      ? wire.bullets.map((b) => ({ text: b.text, isBest: b.isBest }))
+      : undefined,
   };
 }

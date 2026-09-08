@@ -7,11 +7,12 @@ interface IdleScreenProps {
   /** Opens the context intake — this screen does not start capture itself. */
   onStart: () => void;
   onHistory: () => void;
+  onLibrary: () => void;
   blackholeMissing: boolean;
 }
 
 /** The ready screen shown on launch. Presentational: no services, no session state. */
-export const IdleScreen: React.FC<IdleScreenProps> = ({ onStart, onHistory, blackholeMissing }) => (
+export const IdleScreen: React.FC<IdleScreenProps> = ({ onStart, onHistory, onLibrary, blackholeMissing }) => (
   <div
     className="h-full w-full flex flex-col items-center justify-center gap-8 px-10 text-center relative"
     // Transparent so the shell's glass shows through; this used to paint an
@@ -50,13 +51,23 @@ export const IdleScreen: React.FC<IdleScreenProps> = ({ onStart, onHistory, blac
         <StartCaptureButton onClick={onStart} />
       )}
       
-      <button
-        onClick={onHistory}
-        className="text-[13px] font-medium transition-colors hover:text-[var(--t-paper)]"
-        style={{ color: tokens.mute }}
-      >
-        View Past Meetings
-      </button>
+      <div className="flex items-center gap-4">
+        <button
+          onClick={onHistory}
+          className="text-[13px] font-medium transition-colors hover:text-[var(--t-paper)]"
+          style={{ color: tokens.mute }}
+        >
+          View Past Meetings
+        </button>
+        <div className="w-[1px] h-3 bg-white/20" />
+        <button
+          onClick={onLibrary}
+          className="text-[13px] font-medium transition-colors hover:text-[var(--t-paper)]"
+          style={{ color: tokens.mute }}
+        >
+          Manage Library
+        </button>
+      </div>
     </div>
   </div>
 );

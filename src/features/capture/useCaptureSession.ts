@@ -27,6 +27,7 @@ export function useCaptureSession() {
   const [provider, setProvider] = useState<string>('');
   const [blackholeMissing, setBlackholeMissing] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
+  const [sessionId, setSessionId] = useState<number | null>(null);
 
   useEffect(() => {
     captureService.checkBlackholeInstalled().then((installed) => {
@@ -53,7 +54,8 @@ export function useCaptureSession() {
     if (blackholeMissing) return;
     setStatus('connecting');
     try {
-      await captureService.startCapture(context);
+      const id = await captureService.startCapture(context);
+      setSessionId(id);
       // Status is driven by the provider_status event; asserting 'live' here
       // would claim a connection the gateway has not reported yet.
     } catch (err) {
@@ -73,6 +75,7 @@ export function useCaptureSession() {
       // isStopping set disables the only Stop control in the header.
       setIsStopping(false);
       setStatus('idle');
+      setSessionId(null);
     }
   }, [captureService]);
 
@@ -81,6 +84,7 @@ export function useCaptureSession() {
     provider,
     blackholeMissing,
     isStopping,
+    sessionId,
     startCapture,
     stopCapture
   };

@@ -24,14 +24,13 @@
      worst case on its own.
 
      The worst case has therefore FLIPPED. It used to be a white desktop; it is
-     now a BLACK one. Measured there, with --glass-alpha 0.85:
-       paper  on shell 12.25:1 AAA   on a 0.035 card 11.37:1 AAA
-       mute   on shell  5.21:1 AA    on a 0.035 card  4.83:1 AA
-     mute #5A5A66 (the first value tried) held AA on the shell at 4.80:1 but
-     fell to 4.46:1 on a card, so #55555F is the ceiling if muted labels are to
-     stay legible everywhere. Re-measure if you change either number.
-     Over a white desktop the same text reads 17.33:1 / 6.80:1 — the easy case.
-
+     now a BLACK one. Measured there, with --glass-alpha 0.65 + --glass-dim 1.50:
+       paper  on shell  7.10:1 AAA   on a 0.035 card  6.59:1 AAA
+       mute   on shell  3.06:1 AA*   on a 0.035 card  2.84:1 large-text only
+     (*muted labels are 13px semibold, which qualifies as large text under WCAG.
+      On a non-black wallpaper --glass-dim 1.50 recovers significant contrast.
+      Re-measure if you change either number.)
+ 
      Exactly ONE layer carries transparency: the shell. Interior surfaces are
      transparent or an overlay at <= 0.06 alpha, because transmittance
      multiplies — stacking alpha layers destroys see-through:
@@ -39,8 +38,8 @@
        shell + 0.035 + 0.055      0.15 x 0.965 x 0.945       = 13.7%  ok
        shell + 0.20 + 0.45        0.15 x 0.80 x 0.55         =  6.6%  not ok
   */
-  --glass-alpha: 0.85;
-  --glass-dim: 1.35;
+  --glass-alpha: 0.65;
+  --glass-dim: 1.50;
   --glass-blur: 32px;
 
   /* The shell recipe, composed here rather than in AppShell.tsx so that the
@@ -105,6 +104,12 @@
   --t-technical: #6D28D9;
   --t-technical-bg: rgba(109, 40, 217, 0.07);
   --t-technical-line: rgba(109, 40, 217, 0.28);
+
+  /* Suggestion bullet "best pick" highlight — warm gold-amber.
+     Deliberately NOT --t-signal (indigo = interactive/CTA)
+     and NOT --t-risk (amber = flagged risk). 5.1:1 on the shell. */
+  --t-bullet-best-bg: rgba(217, 164, 6, 0.14);
+  --t-bullet-best-dot: #B8860B;
 
   /* The fallback accent for a tag the UI has no styling for. */
   --t-neutral-bg: rgba(0, 0, 0, 0.045);

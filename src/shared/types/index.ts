@@ -4,3 +4,6 @@ export * from './suggest';
 export * from './chat';
 export * from './history';
 export * from './analysis';
+export * from './project';
+export * from './document';
+export * from './usage';

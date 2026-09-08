@@ -10,6 +10,13 @@
  * Every vector is stored L2-normalized, which makes cosine similarity a plain
  * dot product at query time — no per-query square roots.
  *
+ * Documents are scoped to a project, or global. `projectId: null` means global
+ * — visible to every project — which is both the pre-D002 behaviour and the
+ * right default for a shared template. Scoped reads match
+ * `project_id IS NULL OR project_id = ?`, and implementations must push that
+ * into the query rather than filter results: `searchByVector` truncates to
+ * `limit`, so post-filtering would let out-of-scope chunks eat slots.
+ *
  * @typedef {Object} DocumentRow
  * @property {string} docId
  * @property {string} fileName
@@ -23,7 +30,7 @@
  * @property {string|null} errorMessage
  * @property {string} uploadedAt
  * @property {string} contentHash  sha256; dedupes re-uploads of the same file
- * @property {number|null} meetingId  reserved for optional per-meeting scoping
+ * @property {number|null} projectId  owning project; null = global
  *
  * @typedef {Object} ChunkInput
  * @property {number} chunkIndex
@@ -49,10 +56,11 @@
  * @method markFailed       @param {string} docId @param {string} message
  * @method getDocument      @param {string} docId @returns {DocumentRow|null}
  * @method findByContentHash @param {string} hash @returns {DocumentRow|null}
- * @method listDocuments    @returns {DocumentRow[]}
+ * @method listDocuments    @returns {DocumentRow[]} always the whole library — the
+ *   manage/library view shows everything regardless of the active project
  * @method deleteDocument   @param {string} docId @returns {boolean}
- * @method stats            @returns {{count:number, totalBytes:number}}
- * @method searchByVector   @param {Float32Array} queryVector @param {{limit?:number, minSimilarity?:number}} [opts] @returns {ChunkHit[]}
+ * @method stats            @param {{projectId?:number|null}} [opts] @returns {{count:number, totalBytes:number}}
+ * @method searchByVector   @param {Float32Array} queryVector @param {{limit?:number, minSimilarity?:number, projectId?:number|null}} [opts] @returns {ChunkHit[]}
  * @method close            @returns {void}
  */
 module.exports = {};

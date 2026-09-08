@@ -25,7 +25,8 @@ dotenv.config({ path: fs.existsSync(ROOT_ENV) ? ROOT_ENV : LOCAL_ENV });
 
 const express = require('express');
 const Database = require('better-sqlite3');
-const { MODEL_PRICES, costOf } = require('./lib/schema.js');
+const schema = require('./lib/schema.js');
+const { MODEL_PRICES, costOf } = schema;
 
 const PORT = parseInt(process.env.DASHBOARD_PORT || '3300', 10);
 const DB_PATH = process.env.LLM_USAGE_DB || path.join(__dirname, '..', 'gateway', 'llm_usage.db');
@@ -262,6 +263,24 @@ app.get('/api/latency-histogram', (req, res) => {
     const byBucket = Object.fromEntries(rows.map((r) => [r.bucket, r.calls]));
     return { dbAvailable: true, rows: ORDER.map((b) => ({ bucket: b, calls: byBucket[b] || 0 })) };
   });
+  res.json(out);
+});
+
+// --- Cache & Prefix Stats --------------------------------------------------------
+
+app.get('/api/cache-stats', (req, res) => {
+  const out = withDb({ dbAvailable: false, rows: [] }, (d) => ({
+    dbAvailable: true,
+    rows: schema.queryCacheStats(d)
+  }));
+  res.json(out);
+});
+
+app.get('/api/prefix-stats', (req, res) => {
+  const out = withDb({ dbAvailable: false, rows: [] }, (d) => ({
+    dbAvailable: true,
+    rows: schema.queryPrefixStats(d)
+  }));
   res.json(out);
 });
 

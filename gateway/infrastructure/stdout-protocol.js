@@ -23,6 +23,7 @@
  * event_router.rs. Adding one here without adding the arm fails the test.
  */
 const EventType = Object.freeze({
+  MEETING_STARTED: 'MeetingStarted',
   PARTIAL: 'Partial',
   FINAL: 'Final',
   PROVIDER_STATUS: 'ProviderStatus',
@@ -60,6 +61,17 @@ function emit(type, payload = {}) {
 // One per message, so call sites pass named arguments rather than assembling
 // object literals that only the Rust side can validate.
 
+/**
+ * The meeting row this process just inserted.
+ *
+ * The gateway is the sole writer of `meetings`, so this is the only way the
+ * Rust host learns the id — it needs it to stamp usage rows with the meeting
+ * they belong to. Nothing waits on it: the brief store keys on a Rust-side
+ * session id that exists from the moment Start is pressed.
+ */
+const emitMeetingStarted = (meetingId, displayId, projectId) =>
+  emit(EventType.MEETING_STARTED, { meetingId, displayId, projectId });
+
 const emitPartial = (text, speaker, sttLabel) =>
   emit(EventType.PARTIAL, { text, speaker, sttLabel });
 
@@ -79,6 +91,7 @@ const emitError = (message) => emit(EventType.ERROR, { message });
 module.exports = {
   EventType,
   emit,
+  emitMeetingStarted,
   emitPartial,
   emitFinal,
   emitProviderStatus,

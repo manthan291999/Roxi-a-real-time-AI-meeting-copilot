@@ -20,6 +20,17 @@ const GATEWAY_DIR = path.join(__dirname, '..');
 const ROOT_ENV = path.join(GATEWAY_DIR, '..', '.env');
 const LOCAL_ENV = path.join(GATEWAY_DIR, '.env');
 
+/**
+ * Parse a positive integer, or null.
+ *
+ * Anything else — absent, empty, `NaN`, `0`, negative — is null rather than a
+ * number the repository would then have to re-validate.
+ */
+function toPositiveInt(value) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 /** Read one `--flag value` pair out of argv. */
 function readArg(argv, flag) {
   const idx = argv.indexOf(flag);
@@ -68,6 +79,18 @@ function load({ env = process.env, argv = process.argv } = {}) {
        * which builds its own profile. Kept so the CLI contract stays stable.
        */
       role: readArg(argv, '--role') || null,
+
+      /**
+       * The project the Rust host resolved. It owns the picker and the
+       * `projects` table; this process only files the meeting under the id it
+       * is given, and falls back to `Unsorted` if that id no longer resolves.
+       *
+       * `--project-code` is accepted so `display_id` can be built without a
+       * second query, but the id is authoritative — the code is re-read from
+       * the row that the id resolves to.
+       */
+      projectId: toPositiveInt(readArg(argv, '--project-id')),
+      projectCode: readArg(argv, '--project-code') || null,
     }),
   });
 }

@@ -71,10 +71,13 @@ class IndexDocumentUseCase {
    *                              row before indexing finishes
    * @param {string} req.filePath absolute path from the native file dialog
    * @param {string} [req.fileName]
+   * @param {number|null} [req.projectId] file the document under a project.
+   *   Omitted means global — visible to every project, which is right for a
+   *   shared template and wrong for a client contract.
    * @param {(p: {phase: string, done?: number, total?: number}) => void} [req.onProgress]
    * @returns {Promise<{docId:string, fileName:string, chunkCount:number, pageCount:number|null, deduped:boolean}>}
    */
-  async execute({ docId, filePath, fileName, onProgress = () => {} }) {
+  async execute({ docId, filePath, fileName, projectId = null, onProgress = () => {} }) {
     if (!docId || !String(docId).trim()) {
       throw new DocumentError('docId is required', 'DOCUMENT_INVALID_REQUEST');
     }
@@ -123,7 +126,7 @@ class IndexDocumentUseCase {
       errorMessage: null,
       uploadedAt: new Date().toISOString(),
       contentHash,
-      meetingId: null,
+      projectId,
     });
 
     try {

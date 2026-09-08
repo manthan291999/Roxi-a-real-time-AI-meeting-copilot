@@ -179,6 +179,7 @@ Two independent SQLite databases, never joined at the query level:
 - **`meeting_history.db`** — written by the gateway sidecar (`better-sqlite3`), read by Rust (`rusqlite`, `adapters/sqlite.rs`) and by the chatbot **read-only** (to avoid WAL conflicts between the two Node processes). Tables: `meetings`, `transcripts`, `chunks`, `decisions`, `action_items`, `risks`, `technical_analyses`, `suggested_replies`, `summaries`, `glossary_terms`, `speaker_profiles`, `speaker_names`, `speaker_embeddings`. Schema evolves via **forward-only** migrations in `gateway/db/migrate.js` — never edit a shipped migration, add a new one.
 - **`llm_usage.db`** — written by Rust `agents/adapters/usage_store.rs` (one row per LLM call: tag, model, status, latency, tokens, prompts, response). Read by `dashboard/` for observability.
 - **`chatbot/data/chat_index.db`** — the chatbot's own FTS5 index, separate from both of the above, rebuilt with `chatbot/bin/rebuild-index.js`.
+- **`chatbot/data/doc_store.db`** — uploaded documents and their vectors, populated via the UI's document upload tray in the chat pane.
 
 ## Commands & events reference
 

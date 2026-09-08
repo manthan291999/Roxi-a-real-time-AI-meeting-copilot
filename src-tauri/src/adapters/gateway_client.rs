@@ -1,4 +1,4 @@
-use crate::ports::gateway::GatewayClient;
+use crate::ports::gateway::{GatewayClient, SessionRequest};
 use anyhow::{anyhow, Result};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
@@ -20,8 +20,7 @@ impl NodeGatewayClient {
 impl GatewayClient for NodeGatewayClient {
     fn start_session(
         &self,
-        context: Option<String>,
-        role: Option<String>,
+        request: SessionRequest,
         on_event: Box<dyn Fn(String) + Send + 'static>,
     ) -> Result<Box<dyn Write + Send>> {
         let mut sidecar_lock = self.sidecar.lock().unwrap();
@@ -35,16 +34,24 @@ impl GatewayClient for NodeGatewayClient {
         let mut cmd = Command::new("node");
         cmd.arg(&sidecar_path);
 
-        if let Some(ctx) = context {
+        if let Some(ctx) = request.context {
             if !ctx.trim().is_empty() {
                 cmd.arg("--context").arg(ctx);
             }
         }
-        
-        if let Some(r) = role {
+
+        if let Some(r) = request.role {
             if !r.trim().is_empty() {
                 cmd.arg("--role").arg(r);
             }
+        }
+
+        // The project is resolved on this side, so the gateway receives an id
+        // it can trust and never has to create a taxonomy row mid-capture. The
+        // code comes along so `display_id` can be built without a second query.
+        if let Some(project) = request.project {
+            cmd.arg("--project-id").arg(project.id.value().to_string());
+            cmd.arg("--project-code").arg(project.code);
         }
 
         let mut sidecar_process = cmd

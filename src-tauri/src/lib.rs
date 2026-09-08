@@ -14,9 +14,22 @@ use adapters::chat_client::NodeChatClient;
 use adapters::gateway_client::NodeGatewayClient;
 use adapters::mac_audio::MacAudioCapture;
 use adapters::sqlite::SqliteDatabase;
+use adapters::sqlite_brief_source::SqliteBriefSource;
+use adapters::sqlite_document_source::SqliteDocumentSource;
+use adapters::sqlite_projects::SqliteProjectRepository;
+use adapters::sqlite_usage::SqliteUsageRepository;
+use agents::adapters::openai_embedding_adapter::OpenAiEmbeddingAdapter;
+use agents::brief::store::BriefStore;
+use application::brief_usecase::BriefUseCase;
 use application::capture_usecase::CaptureUseCase;
+use application::session_registry::SessionRegistry;
+use ports::brief_source::BriefSource;
 use ports::chat_gateway::ChatGatewayClient;
 use ports::db::Database;
+use ports::document_source::DocumentSource;
+use ports::embedding::EmbeddingGateway;
+use ports::project_repository::ProjectRepository;
+use ports::usage::UsageRepository;
 use std::sync::Arc;
 use tauri::Manager;
 
@@ -40,18 +53,44 @@ pub fn run() {
     let audio_capture = Arc::new(MacAudioCapture::new());
     let gateway_client = Arc::new(NodeGatewayClient::new());
     let db: Arc<dyn Database> = Arc::new(SqliteDatabase::new());
+    let usage: Arc<dyn UsageRepository> = Arc::new(SqliteUsageRepository::new());
     let chat_client: Arc<dyn ChatGatewayClient> = Arc::new(NodeChatClient::new());
+    let projects: Arc<dyn ProjectRepository> = Arc::new(SqliteProjectRepository::new());
+    let brief_source: Arc<dyn BriefSource> = Arc::new(SqliteBriefSource::new());
+    let documents: Arc<dyn DocumentSource> = Arc::new(SqliteDocumentSource::new());
+    let embeddings: Arc<dyn EmbeddingGateway> = Arc::new(OpenAiEmbeddingAdapter::new(
+        &std::env::var("OPENAI_API_KEY").unwrap_or_default(),
+    ));
+
+    // 2. The brain. One store, shared by the use case that fills it at
+    //    start_capture and the graph that reads it per chunk.
+    let briefs = Arc::new(BriefStore::new());
+    let brief_usecase = Arc::new(BriefUseCase::new(
+        projects.clone(),
+        brief_source,
+        documents,
+        embeddings,
+        briefs.clone(),
+    ));
 
     // Initialize Rust Native Agents
-    let graph = crate::application::agent_registry::initialize_agent_graph();
+    let graph = crate::application::agent_registry::initialize_agent_graph(briefs);
 
-    // 2. Initialize Use Cases
-    let capture_usecase = Arc::new(CaptureUseCase::new(audio_capture, gateway_client));
+    // 3. Initialize Use Cases
+    let sessions = Arc::new(SessionRegistry::new());
+    let capture_usecase = Arc::new(CaptureUseCase::new(
+        audio_capture,
+        gateway_client,
+        projects.clone(),
+        brief_usecase,
+        sessions.clone(),
+    ));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -70,8 +109,11 @@ pub fn run() {
         )
         .manage(capture_usecase)
         .manage(db)
+        .manage(usage)
         .manage(chat_client)
         .manage(graph)
+        .manage(projects)
+        .manage(sessions)
         .setup(|app| {
             #[cfg(target_os = "macos")]
             {
@@ -130,9 +172,16 @@ pub fn run() {
             commands::audio_devices::check_blackhole_installed,
             commands::db::get_meetings,
             commands::db::get_meeting_details,
+            commands::usage::get_session_usage,
             commands::chat::ask_chat,
             commands::chat::close_chat,
             commands::speaker::rename_speaker,
+            commands::projects::list_projects,
+            commands::projects::create_project,
+            commands::documents::pick_document,
+            commands::documents::upload_document,
+            commands::documents::list_documents,
+            commands::documents::delete_document,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -18,6 +18,7 @@ const { DocumentRepositorySqlite } = require('../infrastructure/documents/Docume
 const { DocumentEvidenceSource } = require('../infrastructure/documents/DocumentEvidenceSource');
 const { FtsEvidenceSource } = require('../infrastructure/persistence/FtsEvidenceSource');
 const { CompositeEvidenceSource } = require('../application/retrieval/CompositeEvidenceSource');
+const { LiveTranscriptEvidenceSource } = require('../application/retrieval/LiveTranscriptEvidenceSource');
 const { createParserRegistry } = require('../infrastructure/documents/parsers/parserRegistry');
 
 const { createAnalyzeQueryNode } = require('../application/nodes/analyzeQueryNode');
@@ -113,6 +114,7 @@ function buildContainer(overrides = {}) {
       sources: [
         new FtsEvidenceSource(retriever, logger),
         new DocumentEvidenceSource({ documents, embeddings, logger }),
+        new LiveTranscriptEvidenceSource(),
       ],
       logger,
     });

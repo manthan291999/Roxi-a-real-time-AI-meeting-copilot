@@ -10,6 +10,17 @@
  * Never throws for a missing row — callers get null/[]/false. A genuine
  * database failure does throw, wrapped as StoreError, because the caller must
  * not report a document as indexed when it is not.
+ *
+ * ## Project scope
+ *
+ * Scope is pushed into the SQL, never applied to the results afterwards. That
+ * matters for correctness, not just speed: `searchByVector` takes the top `limit`
+ * hits, so filtering after the fact would let out-of-scope chunks consume slots
+ * and silently shrink the result set. Two prepared statements per scoped query
+ * rather than string concatenation, so both stay prepared.
+ *
+ * `null` project scope means unscoped — every ready document, which is the
+ * behaviour before D002 and what an un-scoped caller still gets.
  */
 
 'use strict';
@@ -46,6 +57,18 @@ function dot(a, b) {
   return sum;
 }
 
+/**
+ * Normalize a project scope to a positive integer or null.
+ *
+ * `0`, `NaN`, `''` and `undefined` all collapse to null (unscoped) rather than
+ * reaching SQL as a value that matches nothing — a typo'd scope should show
+ * everything, not silently show an empty library.
+ */
+function toProjectId(value) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 function toRow(r) {
   if (!r) return null;
   return {
@@ -61,7 +84,7 @@ function toRow(r) {
     errorMessage: r.error_message,
     uploadedAt: r.uploaded_at,
     contentHash: r.content_hash,
-    meetingId: r.meeting_id,
+    projectId: r.project_id,
   };
 }
 
@@ -101,11 +124,11 @@ class DocumentRepositorySqlite {
         INSERT INTO documents (
           doc_id, file_name, mime_type, byte_size, page_count, chunk_count,
           embed_model, dimensions, status, error_message, uploaded_at,
-          content_hash, meeting_id
+          content_hash, project_id
         ) VALUES (
           @docId, @fileName, @mimeType, @byteSize, @pageCount, @chunkCount,
           @embedModel, @dimensions, @status, @errorMessage, @uploadedAt,
-          @contentHash, @meetingId
+          @contentHash, @projectId
         )
       `),
       insertChunk: this.db.prepare(`
@@ -128,6 +151,11 @@ class DocumentRepositorySqlite {
       stats: this.db.prepare(
         'SELECT COUNT(*) AS count, COALESCE(SUM(byte_size), 0) AS totalBytes FROM documents',
       ),
+      statsScoped: this.db.prepare(`
+        SELECT COUNT(*) AS count, COALESCE(SUM(byte_size), 0) AS totalBytes
+          FROM documents
+         WHERE project_id IS NULL OR project_id = ?
+      `),
       // Only ready documents are searchable: a half-indexed one would answer
       // from a partial corpus without saying so.
       readyChunks: this.db.prepare(`
@@ -136,6 +164,14 @@ class DocumentRepositorySqlite {
           FROM document_chunks c
           JOIN documents d ON d.doc_id = c.doc_id
          WHERE d.status = 'ready'
+      `),
+      readyChunksScoped: this.db.prepare(`
+        SELECT c.chunk_id, c.doc_id, c.chunk_index, c.page_number, c.text, c.embedding,
+               d.file_name
+          FROM document_chunks c
+          JOIN documents d ON d.doc_id = c.doc_id
+         WHERE d.status = 'ready'
+           AND (d.project_id IS NULL OR d.project_id = ?)
       `),
     };
   }
@@ -154,7 +190,9 @@ class DocumentRepositorySqlite {
       errorMessage: doc.errorMessage ?? null,
       uploadedAt: doc.uploadedAt || new Date().toISOString(),
       contentHash: doc.contentHash,
-      meetingId: doc.meetingId ?? null,
+      // null = global. An upload with no project selected stays visible to
+      // every project, which is what a shared template should do.
+      projectId: toProjectId(doc.projectId),
     });
   }
 
@@ -201,14 +239,21 @@ class DocumentRepositorySqlite {
     return this.stmts.deleteDoc.run(docId).changes > 0;
   }
 
-  stats() {
-    const r = this.stmts.stats.get();
+  /**
+   * @param {{projectId?: number|null}} [opts] omit for the whole library
+   * @returns {{count:number, totalBytes:number}}
+   */
+  stats(opts = {}) {
+    const projectId = toProjectId(opts.projectId);
+    const r = projectId === null ? this.stmts.stats.get() : this.stmts.statsScoped.get(projectId);
     return { count: r.count || 0, totalBytes: r.totalBytes || 0 };
   }
 
   /**
    * @param {Float32Array} queryVector must be L2-normalized
-   * @param {{limit?: number, minSimilarity?: number}} [opts]
+   * @param {{limit?: number, minSimilarity?: number, projectId?: number|null}} [opts]
+   *   `projectId` restricts the scan to that project's documents plus the
+   *   global ones; omit it to search everything.
    * @returns {import('../../domain/ports/DocumentRepository').ChunkHit[]}
    */
   searchByVector(queryVector, opts = {}) {
@@ -216,8 +261,14 @@ class DocumentRepositorySqlite {
     const minSimilarity = opts.minSimilarity == null ? 0 : opts.minSimilarity;
     if (!queryVector || !queryVector.length) return [];
 
+    const projectId = toProjectId(opts.projectId);
+    const rows =
+      projectId === null
+        ? this.stmts.readyChunks.all()
+        : this.stmts.readyChunksScoped.all(projectId);
+
     const hits = [];
-    for (const row of this.stmts.readyChunks.all()) {
+    for (const row of rows) {
       const similarity = dot(queryVector, decodeVector(row.embedding));
       if (similarity < minSimilarity) continue;
       hits.push({
@@ -245,4 +296,4 @@ class DocumentRepositorySqlite {
   }
 }
 
-module.exports = { DocumentRepositorySqlite, encodeVector, decodeVector, dot };
+module.exports = { DocumentRepositorySqlite, encodeVector, decodeVector, dot, toProjectId };

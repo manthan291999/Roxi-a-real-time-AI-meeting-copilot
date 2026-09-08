@@ -20,6 +20,7 @@ pub async fn ask_chat(
     question: String,
     thread_id: Option<String>,
     history: Option<Vec<ChatMessage>>,
+    live_context: Option<String>,
 ) -> Result<(), String> {
     let app_clone = app.clone();
     chat.start_session(Box::new(move |text| {
@@ -32,6 +33,7 @@ pub async fn ask_chat(
         "question": question,
         "threadId": thread_id.unwrap_or_else(|| "default".into()),
         "history": history.unwrap_or_default(),
+        "liveContext": live_context.unwrap_or_default(),
     });
 
     chat.send(payload.to_string()).map_err(|e| e.to_string())

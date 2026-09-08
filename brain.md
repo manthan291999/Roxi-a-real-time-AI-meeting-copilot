@@ -265,9 +265,9 @@ meeting-interpreter-mac-main/
 
 `startStdioSidecar(container, io?)` takes optional `{input, output, exit}` defaulting to the real process streams, so the protocol is testable without touching stdio or calling `process.exit`.
 
-### Not yet wired
+### Fully Wired
 
-Documents are **not reachable from the UI yet** — that needs the Rust file picker (plan Phase 10) and the tray UI (Phase 11). `ChatSource` and `SourceChip` already handle the document shape.
+Documents are now reachable from the UI. The `DocumentTray`, `DocumentUploadButton`, and Rust-side Tauri commands (`upload_document`, `list_documents`, `delete_document`) provide full UI integration. `ChatSource` and `SourceChip` render citations pointing to documents seamlessly.
 
 ## Database Schema
 

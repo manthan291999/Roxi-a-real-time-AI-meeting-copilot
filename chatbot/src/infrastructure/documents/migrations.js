@@ -58,6 +58,33 @@ const MIGRATIONS = [
       'CREATE UNIQUE INDEX idx_chunks_doc_seq ON document_chunks (doc_id, chunk_index)',
     ],
   },
+  {
+    version: 2,
+    description: 'D002 project scoping on documents (supersedes reserved meeting_id)',
+    statements: [
+      // Nullable, and null means global. That preserves exactly the behaviour
+      // D001 shipped — documents were global — so this migration changes no
+      // existing document's visibility.
+      //
+      // The scope predicate every reader uses is therefore
+      //   project_id IS NULL OR project_id = ?
+      // A shared template (a proposal boilerplate, a rate card) stays global;
+      // a client's contract scopes to its project.
+      'ALTER TABLE documents ADD COLUMN project_id INTEGER',
+      'CREATE INDEX idx_docs_project ON documents (project_id)',
+
+      // `meeting_id` is dropped rather than left reserved. It was the wrong
+      // grain: an SOW belongs to a *project*, not to whichever meeting it
+      // happened to be uploaded during. It was nullable and unread by anything,
+      // so nothing depended on it — and leaving two nullable scope columns side
+      // by side, one of them permanently unread, is worse than one.
+      //
+      // The index goes first: SQLite refuses to drop a column an index still
+      // references.
+      'DROP INDEX idx_docs_meeting',
+      'ALTER TABLE documents DROP COLUMN meeting_id',
+    ],
+  },
 ];
 
 /**

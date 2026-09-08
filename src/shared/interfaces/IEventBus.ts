@@ -8,6 +8,10 @@ import {
   ChatReplyEvent,
   ChatThinkingEvent,
   ChatErrorEvent,
+  DocumentProgress,
+  DocumentReady,
+  UploadedDocument,
+  DocumentDeleted
 } from '../types';
 
 export interface ProviderStatus {
@@ -32,4 +36,9 @@ export interface IEventBus {
   onChatReply(cb: (reply: ChatReplyEvent) => void): () => void;
   onChatThinking(cb: (event: ChatThinkingEvent | string) => void): () => void;
   onChatError(cb: (err: ChatErrorEvent) => void): () => void;
+  
+  onDocumentProgress(cb: (progress: DocumentProgress) => void): () => void;
+  onDocumentReady(cb: (ready: DocumentReady) => void): () => void;
+  onDocumentList(cb: (docs: UploadedDocument[]) => void): () => void;
+  onDocumentDeleted(cb: (deleted: DocumentDeleted) => void): () => void;
 }

@@ -1,1 +1,1 @@
-export type WidgetTab = 'ask' | 'listen' | 'suggest' | 'history';
+export type WidgetTab = 'ask' | 'listen' | 'suggest' | 'history' | 'library';

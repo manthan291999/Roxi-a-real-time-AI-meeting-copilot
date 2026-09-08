@@ -1,7 +1,6 @@
 use chrono::Utc;
 use rusqlite::{params, Connection};
 use serde_json::json;
-use std::path::PathBuf;
 use std::time::Duration;
 
 const REQUEST_MESSAGES_MAX: usize = 16000;
@@ -31,12 +30,35 @@ CREATE TABLE IF NOT EXISTS llm_requests (
   cost_usd REAL NOT NULL DEFAULT 0,
   request_messages TEXT,
   response_preview TEXT,
-  pid INTEGER NOT NULL
+  pid INTEGER NOT NULL,
+  cached_tokens INTEGER NOT NULL DEFAULT 0,
+  prefix_hash TEXT,
+  brief_tokens INTEGER NOT NULL DEFAULT 0,
+  session_id INTEGER,
+  meeting_id INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_llm_requests_ts ON llm_requests (ts);
 CREATE INDEX IF NOT EXISTS idx_llm_requests_tag ON llm_requests (tag);
 CREATE INDEX IF NOT EXISTS idx_llm_requests_status ON llm_requests (status);
+CREATE INDEX IF NOT EXISTS idx_llm_requests_session ON llm_requests (session_id, tag);
 ";
+
+/// Columns added after `llm_requests` shipped.
+///
+/// This table has no migration runner — it is created with
+/// `CREATE TABLE IF NOT EXISTS`, so a database from a previous build keeps the
+/// shape it was created with and would reject an INSERT naming a new column.
+/// Each entry is applied only when `PRAGMA table_info` says it is missing,
+/// which makes this idempotent and safe to run on every write path.
+///
+/// Adding a column here is the whole migration. Never change an existing one.
+const ADDED_COLUMNS: &[(&str, &str)] = &[
+    ("cached_tokens", "INTEGER NOT NULL DEFAULT 0"),
+    ("prefix_hash", "TEXT"),
+    ("brief_tokens", "INTEGER NOT NULL DEFAULT 0"),
+    ("session_id", "INTEGER"),
+    ("meeting_id", "INTEGER"),
+];
 
 #[derive(Debug, Clone)]
 pub struct UsageEntry {
@@ -49,28 +71,76 @@ pub struct UsageEntry {
     pub latency_ms: i64,
     pub prompt_tokens: Option<i64>,
     pub completion_tokens: Option<i64>,
+    /// Prompt tokens the provider served from its prefix cache. The number the
+    /// brain design is judged on: near-zero on a meeting's first chunk, then
+    /// 70–90% of prompt tokens for every chunk after. Flat zero means the
+    /// prefix is mutating or is under the 1024-token caching floor.
+    pub cached_tokens: i64,
+    /// Hash of the frozen prefix this call carried.
+    pub prefix_hash: Option<String>,
+    /// Estimated size of that prefix.
+    pub brief_tokens: i64,
+    pub session_id: Option<i64>,
+    pub meeting_id: Option<i64>,
     pub system_prompt: String,
     pub user_prompt: String,
     pub response_text: Option<String>,
 }
 
+impl UsageEntry {
+    /// An entry with no call attached. For tests and for callers that fill in
+    /// fields incrementally — cheaper to keep correct than a 17-field literal
+    /// repeated per exit path.
+    pub fn blank() -> Self {
+        Self {
+            tag: None,
+            model: String::new(),
+            expect_json: false,
+            status: "ok".to_string(),
+            error_code: None,
+            error_message: None,
+            latency_ms: 0,
+            prompt_tokens: None,
+            completion_tokens: None,
+            cached_tokens: 0,
+            prefix_hash: None,
+            brief_tokens: 0,
+            session_id: None,
+            meeting_id: None,
+            system_prompt: String::new(),
+            user_prompt: String::new(),
+            response_text: None,
+        }
+    }
+}
+
 pub struct UsageStore;
 
 impl UsageStore {
-    fn resolve_db_path() -> PathBuf {
-        if let Ok(custom) = std::env::var("LLM_USAGE_DB") {
-            if !custom.is_empty() {
-                return PathBuf::from(custom);
+    /// Bring an existing database up to the current column set.
+    ///
+    /// Cheap enough to run per write (one `PRAGMA` on an open connection), and
+    /// running it per write rather than once at startup means a database
+    /// deleted mid-session is repaired rather than swallowing every subsequent
+    /// row.
+    fn ensure_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
+        let mut existing = Vec::new();
+        {
+            let mut stmt = conn.prepare("PRAGMA table_info(llm_requests)")?;
+            let names = stmt.query_map([], |row| row.get::<_, String>(1))?;
+            for name in names {
+                existing.push(name?);
             }
         }
 
-        let mut path = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        if path.ends_with("src-tauri") {
-            path.pop();
+        for (column, definition) in ADDED_COLUMNS {
+            if !existing.iter().any(|name| name == column) {
+                conn.execute_batch(&format!(
+                    "ALTER TABLE llm_requests ADD COLUMN {column} {definition}"
+                ))?;
+            }
         }
-        path.push("gateway");
-        path.push("llm_usage.db");
-        path
+        Ok(())
     }
 
     fn calculate_cost(model: &str, prompt_tokens: i64, completion_tokens: i64) -> f64 {
@@ -116,13 +186,14 @@ impl UsageStore {
             return;
         }
 
-        let db_path = Self::resolve_db_path();
+        let db_path = crate::adapters::db_paths::llm_usage_db();
 
         let res = (|| -> Result<(), rusqlite::Error> {
             let conn = Connection::open(&db_path)?;
             let _ = conn.pragma_update(None, "journal_mode", "WAL");
             let _ = conn.busy_timeout(Duration::from_millis(3000));
             conn.execute_batch(SCHEMA)?;
+            Self::ensure_columns(&conn)?;
 
             let ts = Utc::now().to_rfc3339();
             let source = "rust".to_string();
@@ -178,8 +249,9 @@ impl UsageStore {
                     ts, source, tag, provider, endpoint, model, expect_json, max_tokens, timeout_ms,
                     status, error_code, error_message, attempts, latency_ms,
                     prompt_tokens, completion_tokens, total_tokens, cost_usd,
-                    request_messages, response_preview, pid
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+                    request_messages, response_preview, pid,
+                    cached_tokens, prefix_hash, brief_tokens, session_id, meeting_id
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
                 params![
                     ts,
                     source,
@@ -201,7 +273,12 @@ impl UsageStore {
                     cost_usd,
                     request_messages,
                     response_preview,
-                    pid
+                    pid,
+                    entry.cached_tokens,
+                    entry.prefix_hash,
+                    entry.brief_tokens,
+                    entry.session_id,
+                    entry.meeting_id
                 ],
             )?;
 

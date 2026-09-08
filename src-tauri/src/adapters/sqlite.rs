@@ -14,19 +14,9 @@ impl SqliteDatabase {
     }
 
     fn open_db(&self) -> Result<Connection> {
-        let conn = Connection::open(self.get_db_path())?;
+        let conn = Connection::open(crate::adapters::db_paths::meeting_history_db())?;
         conn.busy_timeout(Duration::from_secs(5))?;
         Ok(conn)
-    }
-
-    fn get_db_path(&self) -> String {
-        let mut path = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-        if path.ends_with("src-tauri") {
-            path.pop();
-        }
-        path.push("gateway");
-        path.push("meeting_history.db");
-        path.to_string_lossy().to_string()
     }
 }
 

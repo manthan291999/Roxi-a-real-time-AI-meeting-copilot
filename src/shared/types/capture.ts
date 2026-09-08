@@ -15,6 +15,8 @@ export interface MeetingPreset {
   description: string;
 }
 
+import { ProjectSelection } from './project';
+
 /**
  * What the user tells Roxi before capture starts. Both fields are optional —
  * "Skip this context" starts a session with neither.
@@ -22,4 +24,7 @@ export interface MeetingPreset {
 export interface MeetingContext {
   description?: string;
   role?: MeetingRole;
+  project?: ProjectSelection;
+  docIds?: string[];
 }
+

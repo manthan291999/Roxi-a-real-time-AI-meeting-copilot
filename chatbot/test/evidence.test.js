@@ -40,6 +40,20 @@ function docHit(docId, chunkId, text = 'doc text', pageNumber = 1) {
   };
 }
 
+function liveHit(sourceId, text = 'we just said this', speaker = 'Speaker A') {
+  return {
+    sourceType: 'live',
+    groupKey: 'live:current',
+    sourceTable: 'live_transcript',
+    sourceId,
+    meetingId: null,
+    meetingDate: '',
+    speaker,
+    text,
+    score: 1,
+  };
+}
+
 test('boundEvidence caps groups and snippets per group', () => {
   const hits = [];
   for (let m = 1; m <= MAX_EVIDENCE_GROUPS + 3; m++) {
@@ -187,4 +201,36 @@ test('toSources with an unmatched ref returns nothing rather than everything', (
 test('toSources dedupes two documents that share a chunk index', () => {
   const hits = boundEvidence([docHit('abc', 'c1'), docHit('xyz', 'c1')]);
   assert.strictEqual(toSources(hits).length, 2);
+});
+
+test('live hits get ref L1, not a fabricated meeting ref', () => {
+  const hits = boundEvidence([liveHit(0), liveHit(1)]);
+  assert.ok(hits.every((h) => h.ref === 'L1'));
+  assert.ok(hits.every((h) => h.sourceType === 'live'));
+});
+
+test('a live hit and a meeting hit never collide into the same group', () => {
+  const hits = boundEvidence([liveHit(0), hit(3, 1)]);
+  const groupKeys = new Set(hits.map((h) => h.groupKey));
+  assert.strictEqual(groupKeys.size, 2);
+  assert.ok(groupKeys.has('live:current'));
+});
+
+test('toSources emits speaker but no meetingId/date for live hits', () => {
+  const hits = boundEvidence([liveHit(0, 'we should ship Friday', 'Speaker B')]);
+  const [card] = toSources(hits);
+  assert.deepStrictEqual(
+    Object.keys(card).sort(),
+    ['ref', 'snippet', 'sourceTable', 'sourceType', 'speaker'],
+  );
+  assert.ok(!('meetingId' in card));
+  assert.ok(!('date' in card));
+  assert.strictEqual(card.speaker, 'Speaker B');
+  assert.strictEqual(card.ref, 'L1');
+});
+
+test('toSources filters cited refs across all three source types', () => {
+  const hits = boundEvidence([hit(3, 1), docHit('abc', 'c1'), liveHit(0)]);
+  const sources = toSources(hits, ['L1']);
+  assert.deepStrictEqual(sources.map((s) => s.ref), ['L1']);
 });

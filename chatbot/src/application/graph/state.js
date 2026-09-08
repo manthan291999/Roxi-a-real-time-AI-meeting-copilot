@@ -17,6 +17,8 @@ const GraphState = Annotation.Root({
   question: Annotation({ reducer: lastWrite, default: () => '' }),
   /** @type {Array<{role:string,content:string}>} prior turns (rehydration) */
   history: Annotation({ reducer: lastWrite, default: () => [] }),
+  /** @type {string} recent lines from the meeting currently being recorded, if any */
+  liveContext: Annotation({ reducer: lastWrite, default: () => '' }),
 
   // ---- analyze_query outputs --------------------------------------------
   /** @type {string[]} sanitized FTS match expressions */

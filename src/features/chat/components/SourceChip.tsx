@@ -9,25 +9,35 @@ import { tokens, radius } from '../../../design-system';
  * inline version read `meeting_title` and `text` — fields that have never been
  * on the wire — so every card rendered with a blank title and a blank body.
  *
- * Handles both corpora. A meeting hit has no `sourceType`, so its absence is
- * treated as 'meeting' and document support stays purely additive.
+ * Handles all three corpora. A meeting hit has no `sourceType`, so its
+ * absence is treated as 'meeting' and document/live support stays additive.
  */
 export const SourceChip: React.FC<{ source: ChatSource }> = ({ source }) => {
-  const isDocument = source.sourceType === 'document';
+  const kind = source.sourceType === 'document' || source.sourceType === 'live'
+    ? source.sourceType
+    : 'meeting';
 
-  const title = isDocument
-    ? source.fileName || 'Document'
-    : source.meetingId != null
-      ? `Meeting #${source.meetingId}`
-      : 'Meeting';
+  const icon = kind === 'document' ? '\u{1F4C4}' : kind === 'live' ? '\u{1F534}' : '\u{1F399}\u{FE0F}';
 
-  const detail = isDocument
-    ? source.pageNumber != null
-      ? `p${source.pageNumber}`
-      : ''
-    : source.date
-      ? new Date(source.date).toLocaleDateString()
-      : '';
+  const title =
+    kind === 'document'
+      ? source.fileName || 'Document'
+      : kind === 'live'
+        ? 'Live'
+        : source.meetingId != null
+          ? `Meeting #${source.meetingId}`
+          : 'Meeting';
+
+  const detail =
+    kind === 'document'
+      ? source.pageNumber != null
+        ? `p${source.pageNumber}`
+        : ''
+      : kind === 'live'
+        ? 'now'
+        : source.date
+          ? new Date(source.date).toLocaleDateString()
+          : '';
 
   return (
     <div
@@ -44,7 +54,7 @@ export const SourceChip: React.FC<{ source: ChatSource }> = ({ source }) => {
       >
         <span className="truncate">
           <span aria-hidden="true" className="mr-1">
-            {isDocument ? '\u{1F4C4}' : '\u{1F399}\u{FE0F}'}
+            {icon}
           </span>
           {title}
         </span>
@@ -52,7 +62,7 @@ export const SourceChip: React.FC<{ source: ChatSource }> = ({ source }) => {
       </div>
 
       <div className="line-clamp-3" style={{ color: tokens.paper }}>
-        {!isDocument && source.speaker && (
+        {kind !== 'document' && source.speaker && (
           <span className="font-medium mr-1" style={{ color: tokens.signal }}>
             {source.speaker}:
           </span>

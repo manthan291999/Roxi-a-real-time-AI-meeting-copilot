@@ -2,7 +2,10 @@
  * stdioSidecar — transport boundary for the Tauri/Rust integration.
  *
  * Protocol (line-delimited JSON):
- *   stdin  -> {"type":"Ask","question":"...","threadId":"...","history":[...]}
+ *   stdin  -> {"type":"Ask","question":"...","threadId":"...","history":[...],"liveContext":"..."}
+ *             liveContext: recent lines from the meeting currently being
+ *             recorded, if any — covers the gap before those lines are
+ *             indexed into chat_index.db. Optional, omitted when idle.
  *             {"type":"UploadDocument","docId":"uuid","filePath":"/abs/spec.pdf","fileName":"spec.pdf"}
  *             {"type":"ListDocuments"}
  *             {"type":"DeleteDocument","docId":"uuid"}
@@ -108,6 +111,7 @@ function startStdioSidecar(container, io = {}) {
             question: msg.question,
             threadId,
             history: Array.isArray(msg.history) ? msg.history : [],
+            liveContext: typeof msg.liveContext === 'string' ? msg.liveContext : '',
             onNode: (node) => emit({ type: 'ChatThinking', threadId, node }),
           });
           emit({ type: 'ChatReply', threadId, payload });
@@ -148,6 +152,9 @@ function startStdioSidecar(container, io = {}) {
             docId: msg.docId,
             filePath: msg.filePath,
             fileName: msg.fileName,
+            // Absent means global. The host sends this only when a project was
+            // active at upload time.
+            projectId: msg.projectId ?? null,
             onProgress: ({ phase, done, total }) =>
               emit({ type: 'DocumentProgress', docId: msg.docId, phase, done, total }),
           });

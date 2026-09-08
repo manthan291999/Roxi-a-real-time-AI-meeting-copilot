@@ -14,8 +14,21 @@ function toOptionalText(value: string | undefined): string | undefined {
  * straight into an LLM prompt, where "Technical Lead" reads better than a slug.
  */
 export function toStartCapturePayload(context?: MeetingContext): StartCapturePayload {
+  let project_id: number | undefined;
+  let new_project_name: string | undefined;
+
+  if (context?.project?.kind === 'existing') {
+    project_id = context.project.project.id;
+  } else if (context?.project?.kind === 'new') {
+    new_project_name = context.project.name;
+  }
+  // kind === 'unsorted' → both undefined → Rust uses GEN bucket
+
   return {
     context: toOptionalText(context?.description),
     role: toOptionalText(context?.role?.label),
+    project_id,
+    new_project_name,
+    doc_ids: context?.docIds?.length ? context.docIds : undefined,
   };
 }

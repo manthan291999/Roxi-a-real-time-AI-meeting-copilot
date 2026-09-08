@@ -44,7 +44,7 @@ async function main() {
   // --- Persistence ------------------------------------------------------------
   let session;
   try {
-    session = startSession(cfg.dbPath, cfg.meeting.context);
+    session = startSession(cfg.dbPath, cfg.meeting.context, { id: cfg.meeting.projectId });
   } catch (err) {
     protocol.emitError(`Database init failed: ${err.message}`);
     logger.log('error', 'sidecar', 'db_init_failed', {
@@ -52,6 +52,14 @@ async function main() {
     });
     process.exit(1);
   }
+
+  // Announced before any transcript can arrive, so the host has the meeting id
+  // for the first chunk's usage rows.
+  protocol.emitMeetingStarted(
+    session.meetingId,
+    session.displayId,
+    session.project ? session.project.projectId : null
+  );
 
   // --- Collaborators ----------------------------------------------------------
   // Each receives only what it needs: the diarization layer gets the 4-method

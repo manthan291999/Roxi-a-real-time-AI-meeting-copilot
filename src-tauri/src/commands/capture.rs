@@ -1,7 +1,8 @@
 use crate::application::capture_usecase::CaptureUseCase;
+use crate::domain::project::ProjectSelection;
+use crate::sidecar::event_router;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
-use crate::sidecar::event_router;
 
 #[tauri::command]
 pub async fn start_capture(
@@ -9,11 +10,28 @@ pub async fn start_capture(
     capture_use_case: State<'_, Arc<CaptureUseCase>>,
     context: Option<String>,
     role: Option<String>,
-) -> Result<(), String> {
+    // `project_id` wins over `new_project_name`: the picker only sends a name
+    // for its inline "+ New project" row, which has no id yet.
+    project_id: Option<i64>,
+    new_project_name: Option<String>,
+    doc_ids: Option<Vec<String>>,
+) -> Result<u64, String> {
     let app_clone = app.clone();
-    capture_use_case.start(context, role, Box::new(move |text| {
-        event_router::route_sidecar_event(&app_clone, &text);
-    })).map_err(|e| e.to_string())
+    let selection = ProjectSelection::from_parts(project_id, new_project_name);
+
+    capture_use_case
+        .start(
+            selection,
+            context,
+            role,
+            doc_ids,
+            Box::new(move |text| {
+                event_router::route_sidecar_event(&app_clone, &text);
+            }),
+        )
+        .await
+        .map(|session_id| session_id.value())
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

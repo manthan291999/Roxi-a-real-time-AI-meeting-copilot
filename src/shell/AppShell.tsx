@@ -27,8 +27,19 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => (
         boxShadow: tokens.shellShadow,
       }}
     >
-      {/* Drag region for Tauri, overlaid across the top strip. */}
-      <div data-tauri-drag-region className="absolute top-0 left-0 right-0 h-14 z-0 cursor-move"></div>
+      {/*
+        Drag region: spans the full header height. z-[1] keeps it ABOVE the
+        shell background (z-0) but BELOW button rows (z-20), so empty header
+        space is draggable and buttons remain clickable.
+        pointer-events-none on individual intercepting children is NOT needed:
+        Tauri's drag region only fires when no child with pointer-events
+        intercepts first — the buttons already do that correctly.
+      */}
+      <div
+        data-tauri-drag-region
+        className="absolute top-0 left-0 right-0 z-[1] cursor-move"
+        style={{ height: '72px' }}
+      />
 
       <main className="flex-1 overflow-hidden relative z-10 flex flex-col custom-scrollbar">
         {children}

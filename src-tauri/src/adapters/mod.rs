@@ -1,6 +1,11 @@
 pub mod chat_client;
 pub mod control_channel;
+pub mod db_paths;
 pub mod gateway_client;
 pub mod mac_audio;
 pub mod sqlite;
-
+pub mod sqlite_brief_source;
+pub mod sqlite_document_source;
+pub mod sqlite_projects;
+pub mod sqlite_schema;
+pub mod sqlite_usage;

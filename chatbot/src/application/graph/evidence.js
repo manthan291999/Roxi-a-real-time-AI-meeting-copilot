@@ -19,18 +19,24 @@ const {
 
 /**
  * Which corpus a hit came from. EvidenceSource adapters stamp sourceType; the
- * fallbacks cover hits assembled by hand (tests, older callers).
- * @returns {'meeting'|'document'}
+ * fallbacks cover hits assembled by hand (tests, older callers) and default
+ * to 'meeting' — the vocabulary the shipped prompt already used.
+ * @returns {'meeting'|'document'|'live'}
  */
 function sourceTypeOf(hit) {
-  if (hit.sourceType === 'meeting' || hit.sourceType === 'document') return hit.sourceType;
+  if (hit.sourceType === 'meeting' || hit.sourceType === 'document' || hit.sourceType === 'live') {
+    return hit.sourceType;
+  }
   return hit.docId ? 'document' : 'meeting';
 }
 
 /** Stable identity of the thing a hit belongs to, derived if not stamped. */
 function groupKeyOf(hit) {
   if (hit.groupKey) return String(hit.groupKey);
-  return sourceTypeOf(hit) === 'document' ? `doc:${hit.docId}` : `meeting:${hit.meetingId}`;
+  const type = sourceTypeOf(hit);
+  if (type === 'document') return `doc:${hit.docId}`;
+  if (type === 'live') return 'live:current';
+  return `meeting:${hit.meetingId}`;
 }
 
 /**
@@ -86,7 +92,9 @@ function boundEvidence(hits) {
   return selectGroups([...groups.values()]).flatMap((group) => {
     const ref = group.sourceType === 'document'
       ? `D${(docSeq += 1)}`
-      : `M${group.hits[0].meetingId}`;
+      : group.sourceType === 'live'
+        ? 'L1' // one group, 'live:current' — always the sole live citation in an answer
+        : `M${group.hits[0].meetingId}`;
     return group.hits.map((h) => ({
       ...h,
       ref,
@@ -135,6 +143,10 @@ function toSources(hits, citedRefs = null) {
       card.docId = h.docId || '';
       card.fileName = h.fileName || '';
       card.pageNumber = h.pageNumber ?? null;
+    } else if (sourceType === 'live') {
+      // No meetingId/date to attach — it hasn't been persisted as a
+      // completed meeting record yet, unlike a 'meeting' hit.
+      card.speaker = h.speaker || '';
     } else {
       card.meetingId = Number(h.meetingId);
       card.date = h.meetingDate || '';

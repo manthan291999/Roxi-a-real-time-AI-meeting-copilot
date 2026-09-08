@@ -421,3 +421,27 @@ Every OpenAI-touching class is behind a port, so **no test makes a network call*
 4. **Token-level streaming.** Your draft says "answer streams in real-time", but the current pipeline is **not** token-streaming: `generateNode` requests `response_format: json_object` and awaits the whole object, so `ChatReply` arrives complete (`AnswerQuestionUseCase.js:38-51`). What streams today is **node progress** (`ChatThinking`). Real token streaming would mean dropping the JSON response format on `generate`, re-deriving citations from the streamed prose, and a new `ChatToken` protocol message — a meaningful redesign of the answer contract, ~2 days. **This plan keeps node-progress streaming** with a better `ThinkingIndicator`. Say the word if you want true token streaming and I will plan it as a separate phase.
 
 5. **Windows/Linux (C-1).** Confirm macOS-only for now. Making the app actually build elsewhere is its own project (`Cargo.toml` target gating + per-platform loopback audio), not a UI change.
+
+## Phase 11: Document Upload Tray Integration (UI) [COMPLETED]
+
+**Goal:** Provide the UI to upload, track, and manage documents within `ChatPane.tsx`, replacing the originally planned separate `ProjectLibrary` route to adhere to the decoupled and simplified layout constraints requested.
+
+1. **Upload Mechanism:**
+   - [x] Embed a document attachment button within `ChatInput`.
+   - [x] Wire the button to trigger the Rust `upload_document` command (from Phase 10).
+2. **Document Tray:**
+   - [x] Create `DocumentTray` and `DocumentPill` components to display uploaded and parsing documents.
+   - [x] Show progress for documents actively being parsed/chunked/embedded (using the `DocumentProgress` event).
+   - [x] Render `DocumentTray` directly above the `ChatInput` within the chat pane.
+   - [x] Integrate `delete_document` functionality into the `DocumentPill`.
+
+## Phase 12: End-to-End Testing and Final Documentation [COMPLETED]
+
+**Goal:** Ensure the entire pipeline works perfectly from UI down to the LLM agent graph, and all architectural changes are fully documented.
+
+1. **End-to-End Tests:**
+   - [x] Run `npm run test:all` to ensure all tests still pass with the new chat events and nodes.
+   - [x] Validate the flow: upload document (UI) -> Rust -> Chatbot Sidecar -> parsing/embedding -> progress events -> UI updates.
+2. **Update Architecture Docs:**
+   - [x] Update `README.md` to mark document upload features as complete (removing the 🚧 markers).
+   - [x] Update `brain.md` and `CLAUDE.md` to document the new `DocumentTray` integration within `ChatPane`, overriding previous plans of a separate library route.

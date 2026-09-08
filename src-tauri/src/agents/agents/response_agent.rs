@@ -1,6 +1,46 @@
+use crate::agents::agents::prompt;
 use crate::agents::domain::chunk_state::ChunkState;
 use crate::agents::ports::{agent_port::Agent, llm_port::LlmClient};
 use std::sync::Arc;
+
+/// See `explanation::ROLE_CONTRACT` for why this is public and `const`.
+pub const ROLE_CONTRACT: &str = r#"You are the Response Agent. You MUST respond with ONLY a JSON object matching this exact schema — no prose, no markdown fences, no extra keys. Missing any required field is a failure. Suggest a conversational reply, clarifying question, or formalize a decision based on the chunk and extracted context.
+Speak as the user, in the role the brief states, and stay consistent with the project's prior decisions.
+Cite the brief's reference material or prior meetings when a claim rests on them.
+Schema:
+{
+  "suggested_response": "...",
+  "suggested_bullets": [
+    { "text": "...", "is_best": true },
+    { "text": "...", "is_best": false }
+  ],
+  "type": "reply|question|decision",
+  "context_items": [
+    {
+      "text": "source snippet from the context",
+      "match_confidence": 0.95,
+      "is_technical": false,
+      "tags": ["decision"]
+    }
+  ]
+}
+suggested_bullets: 2–3 short bullets (one sentence each).
+Exactly one must have "is_best": true.
+
+HOW TO PICK is_best — this is the critical rule:
+Mark the bullet that most directly serves what the user needs to say
+RIGHT NOW given: (a) their stated role from the brief, (b) what the
+speaker just said in this exact moment, and (c) the project's prior
+decisions and context. Do NOT pick the bullet that sounds generically
+best — pick the one that fits THIS user, in THIS role, in THIS moment.
+Example: if the user is a Technical Lead and the speaker raised a
+deployment risk, mark the technical mitigation bullet as is_best,
+not the polite acknowledgement bullet, even if the acknowledgement
+reads more naturally.
+Each bullet must stand alone without the others.
+
+For each source fact you used, rate how closely it matches the speaker's exact wording from 0.0 to 1.0 (match_confidence). Do not include an "is_verbatim" field — it is derived automatically from match_confidence.
+CRITICAL: Output ONLY raw JSON. No markdown, no ```json fences, no explanation text."#;
 
 pub struct ResponseAgent {
     llm: Arc<dyn LlmClient>,
@@ -19,34 +59,17 @@ impl Agent for ResponseAgent {
     }
 
     async fn run(&self, state: &ChunkState) -> anyhow::Result<ChunkState> {
-        let system = r#"You are the Response Agent. Suggest a conversational reply, clarifying question, or formalize a decision based on the chunk and extracted context.
-Return JSON:
-{
-  "suggested_response": "...",
-  "type": "reply|question|decision",
-  "context_items": [
-    {
-      "text": "source snippet from the context",
-      "match_confidence": 0.95,
-      "is_technical": false,
-      "tags": ["decision"]
-    }
-  ]
-}
-For each source fact you used, rate how closely it matches the speaker's exact wording from 0.0 to 1.0 (match_confidence). Do not include an "is_verbatim" field — it is derived automatically from match_confidence.
-CRITICAL: Output ONLY raw JSON. No markdown, no ```json fences, no explanation text."#;
+        // Upstream agents' output is per-chunk, so it goes below the frozen
+        // prefix as an addendum rather than into it.
+        let built = prompt::build(ROLE_CONTRACT, self.name(), state)
+            .with("Speaker", &state.speaker)
+            .with_optional("Explanation context", state.explanation.as_ref())
+            .with_optional("Technical context", state.technical_explanation.as_ref());
 
-        // See context_manager.rs: {:?} leaked `Some("...")` / `None` into the
-        // prompt. Absent context now contributes no line at all.
-        let mut user = format!("Chunk: {}\nSpeaker: {}", state.chunk_text, state.speaker);
-        if let Some(explanation) = &state.explanation {
-            user.push_str(&format!("\nExplanation Context: {}", explanation));
-        }
-        if let Some(technical) = &state.technical_explanation {
-            user.push_str(&format!("\nTechnical Context: {}", technical));
-        }
-
-        let json = self.llm.complete_json(system, &user).await?;
+        let json = self
+            .llm
+            .complete_json(&built.prompt.system, &built.prompt.user, &built.meta)
+            .await?;
 
         let mut next = state.clone();
         
@@ -67,6 +90,20 @@ CRITICAL: Output ONLY raw JSON. No markdown, no ```json fences, no explanation t
                 }
                 Err(e) => {
                     tracing::error!("[response_agent] Failed to parse context_items: {:?}", e);
+                }
+            }
+        }
+        
+        if let Some(bullets_val) = json.get("suggested_bullets").and_then(|v| v.as_array()) {
+            match serde_json::from_value::<Vec<crate::agents::domain::chunk_state::ResponseBullet>>(
+                serde_json::Value::Array(bullets_val.clone())
+            ) {
+                Ok(parsed) if !parsed.is_empty() => {
+                    next.suggested_bullets = Some(parsed);
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::warn!("[response_agent] suggested_bullets parse failed: {:?}", e);
                 }
             }
         }

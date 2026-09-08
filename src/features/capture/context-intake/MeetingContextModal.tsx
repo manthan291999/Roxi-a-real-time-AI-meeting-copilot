@@ -9,6 +9,11 @@ import { FieldLabel } from './FieldLabel';
 import { IntakeBrand } from './IntakeBrand';
 import { QuickSelectChips } from './QuickSelectChips';
 import { RolePicker } from './RolePicker';
+import { ProjectPicker } from './ProjectPicker';
+import { useProjectPicker } from './useProjectPicker';
+import { useServices } from '../../../context/useServices';
+import { useDocumentLibrary } from '../../library/useDocumentLibrary';
+import { ContextDocumentPicker } from './ContextDocumentPicker';
 
 interface MeetingContextModalProps {
   /** Receives the assembled context, or undefined when the user skips. */
@@ -22,6 +27,13 @@ interface MeetingContextModalProps {
  */
 export const MeetingContextModal: React.FC<MeetingContextModalProps> = ({ onConfirm, onCancel }) => {
   const form = useMeetingContextForm();
+  const services = useServices();
+  const picker = useProjectPicker(services.projectRepository);
+  const { documents, progressMap, addDocument } = useDocumentLibrary(0);
+
+  useEffect(() => {
+    form.setProject(picker.selection);
+  }, [picker.selection, form.setProject]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -85,6 +97,26 @@ export const MeetingContextModal: React.FC<MeetingContextModalProps> = ({ onConf
               onSelect={form.selectRole}
             />
           </section>
+
+          <section className="flex shrink-0 flex-col gap-3">
+            <ProjectPicker
+              projects={picker.projects}
+              isLoading={picker.isLoading}
+              selection={picker.selection}
+              onSelectExisting={picker.selectExisting}
+              onSetNewName={picker.setNewName}
+              onSelectUnsorted={picker.selectUnsorted}
+              displayIdPreview={picker.displayIdPreview}
+            />
+          </section>
+
+          <ContextDocumentPicker 
+            documents={documents}
+            selectedDocIds={form.selectedDocIds}
+            progressMap={progressMap}
+            onToggle={form.toggleDoc}
+            onUpload={addDocument}
+          />
         </div>
 
         <footer className="mt-5 flex shrink-0 items-center justify-between gap-4">

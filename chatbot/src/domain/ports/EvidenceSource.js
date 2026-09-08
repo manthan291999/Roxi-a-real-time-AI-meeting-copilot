@@ -41,7 +41,10 @@
  * @interface EvidenceSource
  * @property {string} name for logging and for the per-source quota
  * @method search
- *   @param {{question: string, matchExprs: string[], limit: number}} query
+ *   @param {{question: string, matchExprs: string[], limit: number, projectId?: number|null}} query
+ *     `projectId` narrows the corpus where a source can honour it. Sources that
+ *     cannot must ignore it rather than fail — an un-scoped source returning
+ *     everything is degraded, not broken. Omit or pass null for no scope.
  *   @returns {Promise<EvidenceHit[]>} sorted best-first
  */
 module.exports = {};

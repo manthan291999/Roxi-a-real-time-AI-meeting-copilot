@@ -86,7 +86,7 @@ export function useChatThread(threadId: ChatThreadId) {
   }, [eventBus, accepts]);
 
   const askQuestion = useCallback(
-    async (question: string) => {
+    async (question: string, liveContext?: string) => {
       const trimmed = question.trim();
       if (!trimmed) return;
 
@@ -98,7 +98,7 @@ export function useChatThread(threadId: ChatThreadId) {
       setThinkingNode('');
 
       try {
-        await chatService.ask(trimmed, threadId, history);
+        await chatService.ask(trimmed, threadId, history, liveContext);
       } catch (err) {
         pendingRef.current = false;
         setIsLoading(false);

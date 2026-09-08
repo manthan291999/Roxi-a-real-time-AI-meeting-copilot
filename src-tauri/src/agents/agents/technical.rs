@@ -1,6 +1,14 @@
+use crate::agents::agents::prompt;
 use crate::agents::domain::chunk_state::ChunkState;
 use crate::agents::ports::{agent_port::Agent, llm_port::LlmClient};
 use std::sync::Arc;
+
+/// See `explanation::ROLE_CONTRACT` for why this is public and `const`.
+pub const ROLE_CONTRACT: &str = "You are a Technical Agent. Extract purely technical architectural decisions, constraints, or engineering notes from the meeting chunk.
+Ground your notes in the project's reference material where it is relevant.
+Return JSON: { \"technical_explanation\": \"notes\" }
+If there are no technical notes, omit the \"technical_explanation\" key entirely.
+CRITICAL: Output ONLY raw JSON. No markdown, no ```json fences, no explanation text.";
 
 pub struct TechnicalAgent {
     llm: Arc<dyn LlmClient>,
@@ -19,14 +27,13 @@ impl Agent for TechnicalAgent {
     }
 
     async fn run(&self, state: &ChunkState) -> anyhow::Result<ChunkState> {
-        let system = "You are a Technical Agent. Extract purely technical architectural decisions, constraints, or engineering notes from the meeting chunk.
-Return JSON: { \"technical_explanation\": \"notes\" }
-If there are no technical notes, omit the \"technical_explanation\" key entirely.
-CRITICAL: Output ONLY raw JSON. No markdown, no ```json fences, no explanation text.";
+        let built = prompt::build(ROLE_CONTRACT, self.name(), state)
+            .with("Speaker", &state.speaker);
 
-        let user = format!("Chunk: {}\nSpeaker: {}", state.chunk_text, state.speaker);
-
-        let json = self.llm.complete_json(system, &user).await?;
+        let json = self
+            .llm
+            .complete_json(&built.prompt.system, &built.prompt.user, &built.meta)
+            .await?;
 
         let mut next = state.clone();
         if let Some(e) = json.get("technical_explanation").and_then(|v| v.as_str()) {
