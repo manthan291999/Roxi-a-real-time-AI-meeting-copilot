@@ -166,5 +166,5 @@ main().catch((err) => {
   logger.log('error', 'sidecar', 'startup_failed', {
     message: (err.message || '').slice(0, 300),
   });
-  process.exit(1);
+  exitAfterDrain(1);
 });
