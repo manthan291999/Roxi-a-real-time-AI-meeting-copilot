@@ -105,6 +105,74 @@ class SqliteMeetingStore {
     }
     return rows;
   }
+  getAllGlossaryTerms() {
+    const db = this._open();
+    if (!db) return [];
+    
+    // Check if table exists
+    const exists = db
+      .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='glossary_terms'")
+      .get();
+    if (!exists) return [];
+
+    // Group by LOWER(term) across every meeting it was seen in. "Most recent
+    // definition" is genuinely by time (first_seen DESC), not an alphabetic
+    // MAX() over the definition text — two different things that only agree
+    // by accident. project_id is populated only when every contributing
+    // meeting shares one non-null project; mixed or absent project_id is
+    // unscoped (null), matching "a term shouldn't look project-scoped from
+    // one stray mention" (plan §06).
+    return db.prepare(`
+      WITH scoped AS (
+        SELECT
+          LOWER(g.term) AS term,
+          g.definition AS definition,
+          g.meeting_id AS meeting_id,
+          g.first_seen AS first_seen,
+          m.project_id AS project_id
+        FROM glossary_terms g
+        JOIN meetings m ON g.meeting_id = m.id
+        WHERE g.definition IS NOT NULL AND TRIM(g.definition) != ''
+      ),
+      latest AS (
+        SELECT term, definition,
+          ROW_NUMBER() OVER (PARTITION BY term ORDER BY first_seen DESC, meeting_id DESC) AS rn
+        FROM scoped
+      )
+      SELECT
+        s.term AS term,
+        l.definition AS definition,
+        JSON_GROUP_ARRAY(DISTINCT s.meeting_id) AS meeting_ids,
+        CASE
+          WHEN COUNT(*) = COUNT(s.project_id) AND MIN(s.project_id) = MAX(s.project_id)
+          THEN MIN(s.project_id)
+          ELSE NULL
+        END AS project_id,
+        MAX(s.first_seen) AS last_seen
+      FROM scoped s
+      JOIN latest l ON l.term = s.term AND l.rn = 1
+      GROUP BY s.term
+    `).all().map(r => ({
+      term: r.term,
+      definition: r.definition,
+      meeting_ids: JSON.parse(r.meeting_ids),
+      project_id: r.project_id,
+      last_seen: r.last_seen
+    }));
+  }
+
+  getMeetingRole(meetingId) {
+    if (!meetingId) return null;
+    const db = this._open();
+    if (!db) return null;
+    try {
+      const row = db.prepare('SELECT role FROM meetings WHERE id = ?').get(meetingId);
+      return row ? row.role : null;
+    } catch (err) {
+      this.logger?.warn('store', 'get_meeting_role_failed', { message: err.message });
+      return null;
+    }
+  }
 
   close() {
     if (this.db) {

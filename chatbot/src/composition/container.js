@@ -14,6 +14,14 @@ const { OpenAiLlmGateway } = require('../infrastructure/llm/OpenAiLlmGateway');
 const { LangchainLlmGateway } = require('../infrastructure/llm/LangchainLlmGateway');
 const { UsageRecorder } = require('../infrastructure/usage/UsageRecorder');
 const { OpenAiEmbeddingGateway } = require('../infrastructure/embedding/OpenAiEmbeddingGateway');
+const { SqliteChunkStore } = require('../infrastructure/persistence/SqliteChunkStore');
+const { QdrantVectorIndex } = require('../infrastructure/vectorstore/QdrantVectorIndex');
+const { EpisodicMemoryEvidenceSource } = require('../infrastructure/vectorstore/EpisodicMemoryEvidenceSource');
+const { SemanticMemoryEvidenceSource } = require('../infrastructure/vectorstore/SemanticMemoryEvidenceSource');
+const { SyncStateStore } = require('../infrastructure/sync/SyncStateStore');
+const { SyncEpisodicMemoryUseCase } = require('../application/useCases/SyncEpisodicMemoryUseCase');
+const { SyncSemanticMemoryUseCase } = require('../application/useCases/SyncSemanticMemoryUseCase');
+const { PurgeEpisodicMemoryUseCase } = require('../application/useCases/PurgeEpisodicMemoryUseCase');
 const { DocumentRepositorySqlite } = require('../infrastructure/documents/DocumentRepositorySqlite');
 const { DocumentEvidenceSource } = require('../infrastructure/documents/DocumentEvidenceSource');
 const { FtsEvidenceSource } = require('../infrastructure/persistence/FtsEvidenceSource');
@@ -63,6 +71,13 @@ function buildContainer(overrides = {}) {
   let parsers = null;
   let indexDocument = null;
   let manageDocuments = null;
+  let chunkStore = null;
+  let vectorIndex = null;
+  let syncState = null;
+  let syncEpisodicMemory = null;
+  let syncSemanticMemory = null;
+  let semanticVectorIndex = null;
+  let purgeEpisodicMemory = null;
 
   if (!overrides.skipLlm) {
     budget = new CallCountBudgetGuard({
@@ -108,6 +123,41 @@ function buildContainer(overrides = {}) {
     });
     documents = new DocumentRepositorySqlite(config.docStorePath, logger);
 
+    // Meeting Semantic Memory: Phase 2 built the backfill (bin/sync-
+    // vectors.js); Phase 3 reads it back via EpisodicMemoryEvidenceSource
+    // below, registered into the same evidence array as everything else.
+    chunkStore = new SqliteChunkStore(config.meetingDbPath, logger);
+    vectorIndex = new QdrantVectorIndex({
+      baseUrl: config.qdrantUrl,
+      collection: config.qdrantEpisodicCollection,
+      logger,
+    });
+    syncState = new SyncStateStore(config.indexDbPath);
+    syncEpisodicMemory = new SyncEpisodicMemoryUseCase({
+      chunkStore,
+      embeddings,
+      vectorIndex,
+      syncState,
+      logger,
+    });
+    purgeEpisodicMemory = new PurgeEpisodicMemoryUseCase({
+      vectorIndex,
+      retentionDays: config.episodicRetentionDays,
+      logger,
+    });
+
+    semanticVectorIndex = new QdrantVectorIndex({
+      baseUrl: config.qdrantUrl,
+      collection: config.qdrantSemanticCollection,
+      logger,
+    });
+    syncSemanticMemory = new SyncSemanticMemoryUseCase({
+      meetingStore: store,
+      embeddings,
+      vectorIndex: semanticVectorIndex,
+      logger,
+    });
+
     // retrieveNode gets one EvidenceSource and cannot tell how many corpora
     // are behind it. Adding a source is one more entry in this array.
     const evidenceSource = new CompositeEvidenceSource({
@@ -115,6 +165,23 @@ function buildContainer(overrides = {}) {
         new FtsEvidenceSource(retriever, logger),
         new DocumentEvidenceSource({ documents, embeddings, logger }),
         new LiveTranscriptEvidenceSource(),
+        new EpisodicMemoryEvidenceSource({
+          vectorIndex,
+          embeddings,
+          chunkStore,
+          logger,
+          scoring: {
+            wRelevance: config.episodicWeightRelevance,
+            wImportance: config.episodicWeightImportance,
+            wRecency: config.episodicWeightRecency,
+            recencyHalflifeDays: config.episodicRecencyHalflifeDays,
+          },
+        }),
+        new SemanticMemoryEvidenceSource({
+          vectorIndex: semanticVectorIndex,
+          embeddings,
+          logger,
+        }),
       ],
       logger,
     });
@@ -125,7 +192,7 @@ function buildContainer(overrides = {}) {
       gradeDocuments: createGradeDocumentsNode({ llm, logger }),
       rewriteQuery: createRewriteQueryNode({ llm, logger }),
       clarify: createClarifyNode({ llm, logger }),
-      generate: createGenerateNode({ llm, logger }),
+      generate: createGenerateNode({ llm, logger, store }),
       respondNoData: createRespondNoDataNode({ logger, retriever }),
     });
 
@@ -155,6 +222,8 @@ function buildContainer(overrides = {}) {
     retriever.close();
     documents?.close();
     usageRecorder?.close();
+    chunkStore?.close();
+    syncState?.close();
   };
 
   return {
@@ -172,6 +241,13 @@ function buildContainer(overrides = {}) {
     parsers,
     indexDocument,
     manageDocuments,
+    chunkStore,
+    vectorIndex,
+    semanticVectorIndex,
+    syncState,
+    syncEpisodicMemory,
+    syncSemanticMemory,
+    purgeEpisodicMemory,
     shutdown,
   };
 }

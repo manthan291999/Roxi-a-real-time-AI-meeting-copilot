@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  run.sh — Roxi AI  |  Full Project Launcher
+#  run.sh — BIG 4  |  Full Project Launcher
 #  Starts: Dashboard (background) → Tauri App (foreground)
 #  Cleans up all background processes on Ctrl+C / exit
 # =============================================================================
@@ -35,10 +35,98 @@ ok()      { echo -e "  ${GREEN}✔${RESET}  $1"; }
 warn()    { echo -e "  ${YELLOW}⚠${RESET}  $1"; }
 fatal()   { echo -e "  ${RED}✗  FATAL: $1${RESET}"; exit 1; }
 
+# ─── Qdrant data inspector (`./run.sh inspect-qdrant [limit]`) ────────────────
+# Read-only look at what's actually in the Meeting Semantic Memory vector
+# store — no API keys needed, no LLM calls made. If Qdrant is already running
+# (e.g. the real app is up), this reuses it and leaves it running on exit;
+# otherwise it starts a temporary instance against the same storage dir the
+# app uses and stops it again via the same cleanup trap as everything else.
+inspect_qdrant() {
+  local limit="${1:-10}"
+  local qdrant_url="http://127.0.0.1:6333"
+  local storage_dir="./gateway/qdrant_storage"
+  local we_started_it=0
+
+  step "Meeting Semantic Memory — Qdrant inspector"
+
+  if curl -sf -o /dev/null "$qdrant_url/readyz" --max-time 2; then
+    ok "Qdrant already running at $qdrant_url — using it as-is"
+  else
+    if [ ! -f "qdrant" ] && ! command -v qdrant >/dev/null 2>&1; then
+      fatal "No qdrant binary found. Run ./run.sh once first (it downloads one), or place a 'qdrant' binary at the repo root."
+    fi
+    ok "Starting a temporary Qdrant instance against $storage_dir"
+    QDRANT__SERVICE__HOST=127.0.0.1 QDRANT__SERVICE__PORT=6333 \
+      QDRANT__STORAGE__STORAGE_PATH="$storage_dir" \
+      ./qdrant >/tmp/roxi_qdrant_inspect.log 2>&1 &
+    local qdrant_pid=$!
+    BACKGROUND_PIDS+=("$qdrant_pid")
+    we_started_it=1
+
+    local ready=0
+    for i in {1..15}; do
+      sleep 0.5
+      if curl -sf -o /dev/null "$qdrant_url/readyz" --max-time 2; then ready=1; break; fi
+    done
+    [ "$ready" -eq 1 ] || fatal "Qdrant did not become healthy. Check /tmp/roxi_qdrant_inspect.log"
+    ok "Qdrant healthy (PID $qdrant_pid)"
+  fi
+
+  command -v python3 >/dev/null 2>&1 || fatal "python3 is required to pretty-print this output."
+
+  step "Episodic memory (roxi_episodic_memory) — chunk metadata, top $limit"
+  local episodic_json
+  episodic_json=$(curl -s -X POST "$qdrant_url/collections/roxi_episodic_memory/points/scroll" \
+    -H "Content-Type: application/json" \
+    -d "{\"limit\": $limit, \"with_payload\": true, \"with_vector\": false}")
+  echo "$episodic_json" | python3 -m json.tool
+
+  # Same points, joined against the real meeting text (Qdrant never stores
+  # verbatim text — meeting_history.db is the source of truth, see plan §05).
+  local ids
+  ids=$(echo "$episodic_json" | python3 -c "
+import json, sys
+pts = json.load(sys.stdin)['result']['points']
+print(','.join(str(p['id']) for p in pts))
+")
+  if [ -n "$ids" ] && command -v sqlite3 >/dev/null 2>&1; then
+    step "Same chunks, with their real text (joined from meeting_history.db)"
+    sqlite3 gateway/meeting_history.db \
+      "SELECT id, meeting_id, speaker, significance, text FROM chunks WHERE id IN ($ids) ORDER BY id;" \
+      -header -column
+  fi
+
+  step "Semantic memory (roxi_semantic_memory) — glossary terms, top $limit"
+  curl -s -X POST "$qdrant_url/collections/roxi_semantic_memory/points/scroll" \
+    -H "Content-Type: application/json" \
+    -d "{\"limit\": $limit, \"with_payload\": true, \"with_vector\": false}" \
+    | python3 -c "
+import json, sys
+pts = json.load(sys.stdin)['result']['points']
+for p in pts:
+    pl = p['payload']
+    print(f\"- {pl['term']}: {pl['definition']}  (meetings {pl['meeting_ids']}, project={pl.get('project_id')})\")
+"
+
+  if [ "$we_started_it" -eq 1 ]; then
+    ok "Stopping the temporary Qdrant instance (PID $qdrant_pid)"
+  fi
+}
+
+if [[ "${1:-}" == "inspect-qdrant" ]]; then
+  inspect_qdrant "${2:-10}"
+  exit 0
+fi
+
 # ─── Banner ───────────────────────────────────────────────────────────────────
 echo -e "${BOLD}${CYAN}"
+echo '  ____ ___  ____   _  _  '
+echo ' | __ )_ _|/ ___| | || | '
+echo ' |  _ \| || |  _  | || |_ '
+echo ' | |_) | || |_| | |__   _|'
+echo ' |____/___|\____|    |_|  '
 echo "  ╔══════════════════════════════════════════════════╗"
-echo "  ║          🎙  Roxi AI — Project Launcher          ║"
+echo "  ║            BIG 4 — Project Launcher              ║"
 echo "  ║      Meeting Intelligence Platform · v0.1        ║"
 echo "  ╚══════════════════════════════════════════════════╝"
 echo -e "${RESET}"
@@ -52,6 +140,16 @@ command -v cargo >/dev/null 2>&1 || fatal "cargo is not installed. Install Rust 
 ok "node  $(node --version)"
 ok "npm   $(npm --version)"
 ok "cargo $(cargo --version | awk '{print $2}')"
+
+# ─── Qdrant Dependency Check ────────────────────────────────────────────────
+step "Checking Qdrant binary"
+if [ ! -f "qdrant" ] && ! command -v qdrant >/dev/null 2>&1; then
+  warn "Qdrant binary not found locally or in PATH. Downloading for macOS (Apple Silicon)..."
+  curl -L "https://github.com/qdrant/qdrant/releases/latest/download/qdrant-aarch64-apple-darwin.tar.gz" | tar -xz
+  ok "Downloaded Qdrant binary"
+else
+  ok "Qdrant binary is present"
+fi
 
 # ─── 2. .env validation ───────────────────────────────────────────────────────
 step "Validating environment variables"
@@ -116,7 +214,7 @@ step "Verifying Rust crates (cargo check)"
 # ─── 5. Start LLM Usage Dashboard (background) ───────────────────────────────
 step "Starting LLM Usage Dashboard"
 
-DASHBOARD_PORT="${DASHBOARD_PORT:-3001}"
+export DASHBOARD_PORT="${DASHBOARD_PORT:-3300}"
 DASHBOARD_LOG="/tmp/roxi_dashboard.log"
 
 # Check if port is already in use
@@ -149,7 +247,7 @@ fi
 # ─── 6. Summary before launch ─────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}${CYAN}  ╔══════════════════════════════════════════════════╗${RESET}"
-echo -e "${BOLD}${CYAN}  ║              🚀  Launching Roxi AI               ║${RESET}"
+echo -e "${BOLD}${CYAN}  ║               🚀  Launching BIG 4                ║${RESET}"
 echo -e "${BOLD}${CYAN}  ╚══════════════════════════════════════════════════╝${RESET}"
 echo ""
 echo -e "  ${BOLD}Services:${RESET}"

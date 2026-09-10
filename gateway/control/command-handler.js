@@ -34,10 +34,12 @@ class CommandHandler {
    * @param {Object} deps
    * @param {Object} deps.meetings     MeetingRepository
    * @param {Object} deps.diarization  DiarizationLayer
+   * @param {Object} deps.protocol     StdoutProtocol (optional)
    */
-  constructor({ meetings, diarization }) {
+  constructor({ meetings, diarization, protocol }) {
     this.meetings = meetings;
     this.diarization = diarization;
+    this.protocol = protocol;
     this.chunkSeq = 0;
     // chunkRef -> chunk row id. The host's pipeline has two lanes, so a chunk's
     // artifacts arrive in two waves and the second must find the first's row.
@@ -108,6 +110,10 @@ class CommandHandler {
       this.meetings.upsertGlossary(message.glossary);
     }
     this.meetings.upsertSpeakerProfile(chunk.speaker, chunk.topic, chunk.significance);
+
+    if (this.protocol && this.protocol.emitChunkPersisted) {
+      this.protocol.emitChunkPersisted(chunkId);
+    }
 
     log('info', 'control', 'chunk_persisted', {
       seq,

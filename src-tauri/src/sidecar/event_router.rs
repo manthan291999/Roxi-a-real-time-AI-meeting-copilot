@@ -299,6 +299,14 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                     let _ = app.emit("meeting_summary", t);
                 }
             }
+            "ChunkPersisted" => {
+                if let Some(chat_client) = app.try_state::<Arc<dyn crate::ports::chat_gateway::ChatGatewayClient + Send + Sync>>() {
+                    let _ = chat_client.send(serde_json::json!({
+                        "type": "SyncVectors",
+                        "force": false
+                    }).to_string());
+                }
+            }
             "ProviderStatus" => {
                 let payload = serde_json::json!({
                     "provider": event.provider,

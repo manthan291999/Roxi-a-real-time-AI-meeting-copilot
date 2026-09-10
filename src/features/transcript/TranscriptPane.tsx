@@ -19,7 +19,7 @@ export const TranscriptPane: React.FC<TranscriptPaneProps> = ({ isLive }) => {
 
   if (lines.length === 0 && Object.keys(partials).length === 0) {
     return (
-      <div className="h-full flex flex-col items-center justify-center italic text-[14px]" style={{ color: tokens.muteDim }}>
+      <div className="h-full relative flex flex-col items-center justify-center italic text-[14px]" style={{ color: tokens.muteDim }}>
         <div className="w-full h-full absolute top-0 left-0 flex flex-col">
           <TranscriptStatusBar
             isLive={isLive}

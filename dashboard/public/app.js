@@ -57,6 +57,7 @@ function makeChart(id, config) {
 
 const routes = {
   overview: renderOverview,
+  embeddings: renderEmbeddings,
   requests: renderRequests,
   detail: renderDetail,
   codemap: renderCodemap,
@@ -110,6 +111,8 @@ function setLive(active) {
         }
       } else if (tab === 'requests') {
         await loadRequestRows();
+      } else if (tab === 'embeddings') {
+        await renderEmbeddings();
       }
       refreshDbStatus();
     }, 5000);
@@ -303,12 +306,108 @@ function renderOverviewCharts(byAgent, timeline, histogram, cacheStats) {
           callbacks: {
             afterLabel: (ctx) => {
               const model = cachePct[ctx.dataIndex];
-              return \`Hit rate: \${model.pct}%\`;
+              return `Hit rate: ${model.pct}%`;
             }
           }
         }
       }
     }
+  });
+}
+
+// --- Tab: Embeddings -----------------------------------------------------------------
+//
+// Isolated from renderOverview on purpose: every embedding call (document
+// upload chunks + query embeddings) is invisible inside the completion-
+// dominated Overview aggregates otherwise. Backed by /api/embeddings/* —
+// same llm_requests table, filtered server-side by the `endpoint` column.
+
+async function renderEmbeddings() {
+  const [summary, byTag, timeline, sessions] = await Promise.all([
+    api.get('/api/embeddings/summary'),
+    api.get('/api/embeddings/by-tag'),
+    api.get('/api/embeddings/timeline'),
+    api.get('/api/embeddings/sessions'),
+  ]);
+
+  if (!summary.dbAvailable || summary.requests === 0) {
+    $view.innerHTML = emptyState(summary.dbAvailable
+      ? 'No embedding calls recorded yet — upload a document in Ask Roxi, or:'
+      : 'Usage database not found.');
+    return;
+  }
+
+  const cards = `
+    <div class="grid cards">
+      <div class="card"><div class="k">Embedding calls</div><div class="v">${fmt.int(summary.requests)}</div></div>
+      <div class="card"><div class="k">OK / Failed</div>
+        <div class="v"><span class="ok">${fmt.int(summary.ok)}</span> <small>/</small> <span class="${summary.failed ? 'bad' : ''}">${fmt.int(summary.failed)}</span></div></div>
+      <div class="card"><div class="k">Tokens embedded</div><div class="v">${fmt.int(summary.tokens_embedded)}</div></div>
+      <div class="card"><div class="k">Total cost</div><div class="v">${fmt.usd(summary.cost_usd)}</div></div>
+      <div class="card"><div class="k">Avg latency</div><div class="v">${fmt.ms(summary.avg_latency_ms)}</div></div>
+      <div class="card"><div class="k">P95 latency</div><div class="v">${fmt.ms(summary.p95_latency_ms)}</div></div>
+    </div>`;
+
+  const byTagRows = byTag.rows.map((r) => `
+    <tr>
+      <td>${badge(`src-${r.source}`, r.source)}</td>
+      <td>${badge('tag', r.tag)}</td>
+      <td>${esc(r.model)}</td>
+      <td class="num">${fmt.int(r.calls)}</td>
+      <td class="num">${r.failed ? `<span class="bad">${fmt.int(r.failed)}</span>` : '0'}</td>
+      <td class="num">${fmt.int(r.tokens_embedded)}</td>
+      <td class="num">${fmt.usd(r.cost_usd)}</td>
+      <td class="num">${fmt.ms(r.avg_latency_ms)}</td>
+    </tr>`).join('');
+
+  const sessionRows = sessions.rows.map((s) => `
+    <tr>
+      <td class="num">${esc(s.pid)}</td>
+      <td>${esc(s.sources)}</td>
+      <td>${fmt.ts(s.started)}</td>
+      <td>${fmt.ts(s.last_seen)}</td>
+      <td class="num">${fmt.int(s.requests)}</td>
+      <td class="num">${s.failed ? `<span class="bad">${fmt.int(s.failed)}</span>` : '0'}</td>
+      <td class="num">${fmt.int(s.tokens_embedded)}</td>
+      <td class="num">${fmt.usd(s.cost_usd)}</td>
+    </tr>`).join('');
+
+  $view.innerHTML = `
+    ${cards}
+    <div class="grid charts">
+      <div class="panel"><h3>Tokens embedded over time (${esc(timeline.bucket)})</h3><div class="chart-box"><canvas id="ch-embed-tokens"></canvas></div></div>
+      <div class="panel"><h3>Embedding cost over time (USD)</h3><div class="chart-box"><canvas id="ch-embed-cost"></canvas></div></div>
+    </div>
+    <h2 class="section-title">By tag / model (e.g. embed_query vs. embed_document)</h2>
+    <div class="panel"><table>
+      <thead><tr><th>Source</th><th>Tag</th><th>Model</th><th class="num">Calls</th><th class="num">Failed</th>
+      <th class="num">Tokens embedded</th><th class="num">Cost</th><th class="num">Avg latency</th></tr></thead>
+      <tbody>${byTagRows || '<tr><td colspan="8" class="muted">No embedding calls yet</td></tr>'}</tbody>
+    </table></div>
+    <h2 class="section-title">Sessions (embedding calls only)</h2>
+    <div class="panel"><table>
+      <thead><tr><th class="num">PID</th><th>Sources</th><th>Started</th><th>Last seen</th>
+      <th class="num">Requests</th><th class="num">Failed</th><th class="num">Tokens embedded</th><th class="num">Cost</th></tr></thead>
+      <tbody>${sessionRows || '<tr><td colspan="8" class="muted">No embedding sessions yet</td></tr>'}</tbody>
+    </table></div>`;
+
+  makeChart('ch-embed-tokens', {
+    type: 'line',
+    data: { labels: timeline.rows.map((r) => r.bucket), datasets: [{
+      label: 'tokens embedded', data: timeline.rows.map((r) => r.tokens_embedded),
+      borderColor: 'rgba(124,92,255,0.9)', backgroundColor: 'rgba(124,92,255,0.15)', fill: true, tension: 0.3 }] },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
+  });
+
+  let cumulative = 0;
+  makeChart('ch-embed-cost', {
+    type: 'line',
+    data: { labels: timeline.rows.map((r) => r.bucket), datasets: [{
+      label: 'cumulative cost', data: timeline.rows.map((r) => (cumulative += r.cost_usd)),
+      borderColor: 'rgba(52,211,153,0.9)', backgroundColor: 'rgba(52,211,153,0.15)', fill: true, tension: 0.3 }] },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
   });
 }
 

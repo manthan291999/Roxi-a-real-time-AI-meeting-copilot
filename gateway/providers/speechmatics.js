@@ -142,8 +142,23 @@ class SpeechmaticsProvider extends EventEmitter {
       case 'Error': {
         const message = data.reason || data.type || 'Speechmatics error';
         const fatal = data.type === 'not_authorised' || data.type === 'not_allowed';
+        const wasConnected = this.isConnected;
         this.isConnected = false;
         this.emit('error', { message: `Speechmatics: ${message}`, fatal });
+        // This flips isConnected to false unconditionally (sendAudio above is
+        // now a permanent no-op), but only auth errors are marked `fatal` for
+        // ProviderManager. For every other case it waits on a subsequent
+        // 'closed' event instead — except the socketStateChange listener below
+        // only emits 'closed' when `wasConnected` is still true at the time
+        // the socket actually closes, and by then this handler has already
+        // set it false. That race meant a non-auth server error (e.g. a quota
+        // or session-limit error) could leave ProviderManager believing this
+        // dead connection was still active for the rest of the session, with
+        // audio going in and nothing ever coming back out. Emit 'closed'
+        // ourselves so the manager always finds out and fails over.
+        if (!this.closing && wasConnected) {
+          this.emit('closed', { code: undefined, reason: `server error: ${message}` });
+        }
         break;
       }
       case 'EndOfTranscript': {

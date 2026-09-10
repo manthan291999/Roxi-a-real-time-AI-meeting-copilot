@@ -80,9 +80,9 @@ class MeetingSession {
  * @returns {MeetingSession}
  * @throws if the database cannot be opened or migrated
  */
-function startSession(dbPath, meetingContext = '', projectSelection = {}) {
+function startSession(dbPath, meetingContext = '', projectSelection = {}, meetingRole = null) {
   const { db } = open(dbPath);
-  const meetings = MeetingRepository.start(db, meetingContext, projectSelection);
+  const meetings = MeetingRepository.start(db, meetingContext, projectSelection, meetingRole);
   return new MeetingSession(
     db,
     meetings,

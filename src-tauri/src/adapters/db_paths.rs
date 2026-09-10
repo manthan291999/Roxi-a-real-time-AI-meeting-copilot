@@ -9,11 +9,12 @@
 //! Each path is overridable by the same environment variable the owning runtime
 //! reads, so a test or a packaged bundle points every process at one file:
 //!
-//! | Database            | Env var          | Owner                       |
-//! |---------------------|------------------|-----------------------------|
-//! | `meeting_history.db`| `MEETING_DB_PATH`| gateway (sole writer)       |
-//! | `llm_usage.db`      | `LLM_USAGE_DB`   | Rust (`usage_store`)        |
-//! | `doc_store.db`      | `CHATBOT_DOC_DB` | chatbot (Rust reads only)   |
+//! | Database            | Env var             | Owner                       |
+//! |---------------------|---------------------|------------------------------|
+//! | `meeting_history.db`| `MEETING_DB_PATH`   | gateway (sole writer)       |
+//! | `llm_usage.db`      | `LLM_USAGE_DB`      | Rust (`usage_store`)        |
+//! | `doc_store.db`      | `CHATBOT_DOC_DB`    | chatbot (Rust reads only)   |
+//! | Qdrant storage dir  | `QDRANT_STORAGE_DIR`| Qdrant sidecar (Rust-spawned, chatbot-consumed) |
 
 use std::path::PathBuf;
 
@@ -55,5 +56,17 @@ pub fn doc_store_db() -> PathBuf {
             .join("chatbot")
             .join("data")
             .join("doc_store.db")
+    })
+}
+
+/// Where the Qdrant sidecar persists its collections (episodic + semantic
+/// memory, per the Meeting Semantic Memory plan). Co-located with
+/// `meeting_history.db`/`llm_usage.db` rather than under `chatbot/`: Qdrant
+/// is shared infrastructure Rust spawns and the chatbot alone talks vectors
+/// to — the same "not exclusively owned by one runtime" situation
+/// `llm_usage.db` is already in.
+pub fn qdrant_storage_dir() -> PathBuf {
+    from_env_or("QDRANT_STORAGE_DIR", || {
+        repo_root().join("gateway").join("qdrant_storage")
     })
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { tokens, SignalRing } from '../../design-system';
+import { tokens, typeScale, SignalRing } from '../../design-system';
 import { StartCaptureButton } from './StartCaptureButton';
 import { BlackholeNotice } from './BlackholeNotice';
 
@@ -32,10 +32,21 @@ export const IdleScreen: React.FC<IdleScreenProps> = ({ onStart, onHistory, onLi
     <SignalRing scale="macro" isReady />
 
     <div className="flex flex-col gap-3">
-      <h2 className="text-[28px] font-bold tracking-tight leading-[1.25]" style={{ color: tokens.paper }}>
+      <h2
+        style={{
+          color: tokens.paper,
+          fontSize: typeScale.display.fontSize,
+          lineHeight: typeScale.display.lineHeight,
+          fontWeight: typeScale.display.fontWeight,
+          letterSpacing: typeScale.display.letterSpacing,
+        }}
+      >
         Ready to capture your meeting
       </h2>
-      <p className="max-w-[380px] text-[15px] leading-relaxed" style={{ color: tokens.mute }}>
+      <p
+        className="max-w-[380px]"
+        style={{ color: tokens.mute, fontSize: typeScale.body.fontSize, lineHeight: typeScale.body.lineHeight }}
+      >
         Press{' '}
         <span className="font-semibold" style={{ color: tokens.paper }}>
           Start Capture
@@ -50,20 +61,20 @@ export const IdleScreen: React.FC<IdleScreenProps> = ({ onStart, onHistory, onLi
       ) : (
         <StartCaptureButton onClick={onStart} />
       )}
-      
+
       <div className="flex items-center gap-4">
         <button
           onClick={onHistory}
-          className="text-[13px] font-medium transition-colors hover:text-[var(--t-paper)]"
-          style={{ color: tokens.mute }}
+          className="transition-colors hover:text-[var(--t-paper)]"
+          style={{ color: tokens.mute, fontSize: typeScale.label.fontSize, fontWeight: typeScale.label.fontWeight }}
         >
           View Past Meetings
         </button>
         <div className="w-[1px] h-3 bg-white/20" />
         <button
           onClick={onLibrary}
-          className="text-[13px] font-medium transition-colors hover:text-[var(--t-paper)]"
-          style={{ color: tokens.mute }}
+          className="transition-colors hover:text-[var(--t-paper)]"
+          style={{ color: tokens.mute, fontSize: typeScale.label.fontSize, fontWeight: typeScale.label.fontWeight }}
         >
           Manage Library
         </button>

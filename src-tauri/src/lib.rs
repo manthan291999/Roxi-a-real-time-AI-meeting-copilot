@@ -2,7 +2,6 @@ mod adapters;
 mod agents;
 mod application;
 #[cfg(target_os = "macos")]
-mod macos_overlay;
 mod commands;
 mod domain;
 mod ports;
@@ -18,6 +17,7 @@ use adapters::sqlite_brief_source::SqliteBriefSource;
 use adapters::sqlite_document_source::SqliteDocumentSource;
 use adapters::sqlite_projects::SqliteProjectRepository;
 use adapters::sqlite_usage::SqliteUsageRepository;
+use adapters::vector_client::QdrantVectorStore;
 use agents::adapters::openai_embedding_adapter::OpenAiEmbeddingAdapter;
 use agents::brief::store::BriefStore;
 use application::brief_usecase::BriefUseCase;
@@ -30,6 +30,7 @@ use ports::document_source::DocumentSource;
 use ports::embedding::EmbeddingGateway;
 use ports::project_repository::ProjectRepository;
 use ports::usage::UsageRepository;
+use ports::vector_store::VectorStore;
 use std::sync::Arc;
 use tauri::Manager;
 
@@ -61,6 +62,9 @@ pub fn run() {
     let embeddings: Arc<dyn EmbeddingGateway> = Arc::new(OpenAiEmbeddingAdapter::new(
         &std::env::var("OPENAI_API_KEY").unwrap_or_default(),
     ));
+    // Meeting Semantic Memory, Phase 1: process supervision + collection
+    // bootstrap only. Nothing reads from this yet — see ports::vector_store.
+    let vector_store: Arc<dyn VectorStore> = Arc::new(QdrantVectorStore::new());
 
     // 2. The brain. One store, shared by the use case that fills it at
     //    start_capture and the graph that reads it per chunk.
@@ -86,6 +90,8 @@ pub fn run() {
         sessions.clone(),
     ));
 
+    let vector_store_for_exit = vector_store.clone();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
@@ -110,20 +116,41 @@ pub fn run() {
         .manage(capture_usecase)
         .manage(db)
         .manage(usage)
-        .manage(chat_client)
+        .manage(chat_client.clone())
         .manage(graph)
         .manage(projects)
         .manage(sessions)
-        .setup(|app| {
+        .setup(move |app| {
+            // Started once here, not per capture, per the plan. Spawned onto
+            // the async runtime rather than awaited: a slow or missing Qdrant
+            // binary must not delay window setup, and every existing feature
+            // (capture, chat, history) works with no vector store at all —
+            // this is additive infrastructure nothing else depends on yet.
+            let vector_store_for_setup = vector_store.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = vector_store_for_setup.start().await {
+                    tracing::warn!(
+                        "[qdrant] not available, continuing without it: {e:#}"
+                    );
+                }
+            });
+
+            // Phase 7: Start Chatbot sidecar immediately at launch, so it's
+            // always-on and can receive push events (SyncVectors) from the
+            // live meeting pipeline, rather than only booting on first Ask.
+            let app_handle_for_chat = app.handle().clone();
+            if let Err(e) = chat_client.start_session(Box::new(move |text| {
+                crate::sidecar::chat_events::route_chat_event(&app_handle_for_chat, &text);
+            })) {
+                tracing::warn!("[chatbot] failed to boot sidecar at launch: {e:#}");
+            }
+
             #[cfg(target_os = "macos")]
             {
                 app.set_activation_policy(tauri::ActivationPolicy::Regular);
 
-                // Configure all windows as overlays
-                for (_label, win) in app.webview_windows() {
-                    // win.set_content_protected(true)?; // Removed so the window is visible in screen shares
-                    win.set_always_on_top(true)?;
-                    macos_overlay::make_overlay(&win)?;
+                for (_label, _win) in app.webview_windows() {
+                    // Normal window setup, no overlay needed
                 }
 
                 app.global_shortcut().register("Option+Space")?;
@@ -158,14 +185,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .on_window_event(|window, event| {
-            // Close means "minimize to tray", not "quit" — the macOS menu-bar-app
-            // pattern. Quitting is only ever via tray → Quit Roxi.
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
-            }
-        })
+        // Removed custom on_window_event to allow standard close button behavior
         .invoke_handler(tauri::generate_handler![
             commands::capture::start_capture,
             commands::capture::stop_capture,
@@ -183,6 +203,17 @@ pub fn run() {
             commands::documents::list_documents,
             commands::documents::delete_document,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(move |_app_handle, event| {
+            // Qdrant has no other natural stop trigger — unlike the gateway/
+            // chatbot sidecars, which are tied to a capture/chat session and
+            // stopped by explicit user action, it runs for the app's whole
+            // lifetime. Without this it would be orphaned on quit.
+            if let tauri::RunEvent::Exit = event {
+                if let Err(e) = vector_store_for_exit.stop() {
+                    tracing::warn!("[qdrant] shutdown error: {e:#}");
+                }
+            }
+        });
 }

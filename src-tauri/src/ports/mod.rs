@@ -8,3 +8,4 @@ pub mod embedding;
 pub mod gateway;
 pub mod project_repository;
 pub mod usage;
+pub mod vector_store;

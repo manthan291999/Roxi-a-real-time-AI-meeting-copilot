@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { tokens } from '../design-system/tokens';
+import { tokens, typeScale } from '../design-system/tokens';
+import { IconButton } from '../design-system/components/IconButton';
 import { SparkleIcon, ClockIcon, GearIcon, LibraryIcon } from '../design-system/icons';
 import { StopButton } from '../shared/ui/StopButton';
 import { Spinner } from '../shared/ui/Spinner';
@@ -50,7 +51,14 @@ export const WidgetHeader: React.FC<WidgetHeaderProps> = ({ isLive, isConnecting
         {/* Window hide button — sits to the left of the logo, like macOS traffic lights */}
         <WindowHideButton />
         <SparkleIcon className="w-5 h-5" />
-        <span className="text-[20px] font-bold" style={{ color: tokens.paper }}>
+        <span
+          style={{
+            color: tokens.paper,
+            fontSize: typeScale.title.fontSize,
+            fontWeight: typeScale.title.fontWeight,
+            letterSpacing: typeScale.title.letterSpacing,
+          }}
+        >
           Roxi
         </span>
       </div>
@@ -59,16 +67,26 @@ export const WidgetHeader: React.FC<WidgetHeaderProps> = ({ isLive, isConnecting
           <>
             {isConnecting ? (
               <div
-                className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium"
-                style={{ backgroundColor: tokens.riskBg, color: tokens.risk }}
+                className="flex items-center gap-1.5 rounded-full px-3 py-1"
+                style={{
+                  backgroundColor: tokens.riskBg,
+                  color: tokens.risk,
+                  fontSize: typeScale.label.fontSize,
+                  fontWeight: typeScale.label.fontWeight,
+                }}
               >
                 <Spinner size={12} color="orange" />
                 Connecting
               </div>
             ) : (
               <div
-                className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium"
-                style={{ backgroundColor: tokens.decisionBg, color: tokens.decision }}
+                className="flex items-center gap-1.5 rounded-full px-3 py-1"
+                style={{
+                  backgroundColor: tokens.decisionBg,
+                  color: tokens.decision,
+                  fontSize: typeScale.label.fontSize,
+                  fontWeight: typeScale.label.fontWeight,
+                }}
               >
                 <span className="w-[6px] h-[6px] rounded-full animate-pulse" style={{ backgroundColor: tokens.decision }} />
                 Live
@@ -77,16 +95,10 @@ export const WidgetHeader: React.FC<WidgetHeaderProps> = ({ isLive, isConnecting
             <StopButton onClick={onStop} disabled={isStopping} />
           </>
         )}
-        <button type="button" onClick={onHistory} className="transition-opacity ease-[cubic-bezier(.2,.8,.2,1)] hover:opacity-70 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-focus-ring)]" style={{ color: tokens.mute }} title="History">
-          <ClockIcon className="w-5 h-5" />
-        </button>
-        <button type="button" onClick={onLibrary} className="transition-opacity ease-[cubic-bezier(.2,.8,.2,1)] hover:opacity-70 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-focus-ring)]" style={{ color: tokens.mute }} title="Library">
-          <LibraryIcon className="w-5 h-5" />
-        </button>
+        <IconButton icon={<ClockIcon />} onClick={onHistory} label="History" />
+        <IconButton icon={<LibraryIcon />} onClick={onLibrary} label="Library" />
         <UsagePill sessionId={sessionId ?? null} isLive={isLive} />
-        <button type="button" className="transition-opacity ease-[cubic-bezier(.2,.8,.2,1)] hover:opacity-70 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-focus-ring)]" style={{ color: tokens.mute }} title="Settings">
-          <GearIcon className="w-5 h-5" />
-        </button>
+        <IconButton icon={<GearIcon />} label="Settings" />
       </div>
     </div>
   );

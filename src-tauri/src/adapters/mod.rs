@@ -9,3 +9,4 @@ pub mod sqlite_document_source;
 pub mod sqlite_projects;
 pub mod sqlite_schema;
 pub mod sqlite_usage;
+pub mod vector_client;

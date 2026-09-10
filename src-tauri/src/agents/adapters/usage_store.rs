@@ -7,7 +7,7 @@ const REQUEST_MESSAGES_MAX: usize = 16000;
 const RESPONSE_PREVIEW_MAX: usize = 2000;
 const ERROR_MESSAGE_MAX: usize = 500;
 
-const SCHEMA: &str = "
+const SCHEMA_TABLE: &str = "
 CREATE TABLE IF NOT EXISTS llm_requests (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts TEXT NOT NULL,
@@ -37,6 +37,9 @@ CREATE TABLE IF NOT EXISTS llm_requests (
   session_id INTEGER,
   meeting_id INTEGER
 );
+";
+
+const SCHEMA_INDEXES: &str = "
 CREATE INDEX IF NOT EXISTS idx_llm_requests_ts ON llm_requests (ts);
 CREATE INDEX IF NOT EXISTS idx_llm_requests_tag ON llm_requests (tag);
 CREATE INDEX IF NOT EXISTS idx_llm_requests_status ON llm_requests (status);
@@ -192,8 +195,9 @@ impl UsageStore {
             let conn = Connection::open(&db_path)?;
             let _ = conn.pragma_update(None, "journal_mode", "WAL");
             let _ = conn.busy_timeout(Duration::from_millis(3000));
-            conn.execute_batch(SCHEMA)?;
+            conn.execute_batch(SCHEMA_TABLE)?;
             Self::ensure_columns(&conn)?;
+            conn.execute_batch(SCHEMA_INDEXES)?;
 
             let ts = Utc::now().to_rfc3339();
             let source = "rust".to_string();
@@ -251,7 +255,7 @@ impl UsageStore {
                     prompt_tokens, completion_tokens, total_tokens, cost_usd,
                     request_messages, response_preview, pid,
                     cached_tokens, prefix_hash, brief_tokens, session_id, meeting_id
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)",
                 params![
                     ts,
                     source,
@@ -278,7 +282,7 @@ impl UsageStore {
                     entry.prefix_hash,
                     entry.brief_tokens,
                     entry.session_id,
-                    entry.meeting_id
+                    entry.meeting_id  // ?26 — was missing, causing "25 values for 26 columns"
                 ],
             )?;
 

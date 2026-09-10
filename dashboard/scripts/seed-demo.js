@@ -20,6 +20,8 @@ const { SCHEMA, costOf } = require('../lib/schema.js');
 const DB_PATH = process.env.LLM_USAGE_DB || path.join(__dirname, '..', '..', 'gateway', 'llm_usage.db');
 const MODEL = 'gpt-5.6-luna';
 const ENDPOINT = 'https://api.openai.com/v1/chat/completions';
+const EMBED_MODEL = 'text-embedding-3-small';
+const EMBED_ENDPOINT = 'https://api.openai.com/v1/embeddings';
 const RESET = process.argv.includes('--reset');
 const NO_PAYLOADS = process.argv.includes('--no-payloads');
 
@@ -111,6 +113,27 @@ function addRow({ tsAgoMs, source, tag, expectJson, maxTokens, timeoutMs, status
   );
 }
 
+/**
+ * Separate from addRow() on purpose: embedding calls have a different shape
+ * (input-only tokens, no completion_tokens, a different endpoint/model/price)
+ * that addRow's PROFILES/MODEL/ENDPOINT constants are not parameterized for.
+ * Mirrors OpenAiEmbeddingGateway's real usage-recording shape.
+ */
+function addEmbeddingRow({ tsAgoMs, tag, promptTokens, latencyMs, pid, inputCount }) {
+  const tokens = jitter(promptTokens, 0.15);
+  const latency = jitter(latencyMs, 0.25);
+  const preview = NO_PAYLOADS ? null : `${inputCount} vector(s) of 1536 dims (demo, not a real embedding)`;
+  const messages = NO_PAYLOADS ? null : JSON.stringify([
+    { role: 'user', content: `[${inputCount} embedding input(s)]` },
+  ]);
+  insert.run(
+    iso(tsAgoMs), 'chatbot', tag, 'openai', EMBED_ENDPOINT, EMBED_MODEL, 0,
+    null, null, 'ok', null, null, 1, latency,
+    tokens, 0, tokens, costOf(EMBED_MODEL, tokens, 0),
+    messages, preview, pid,
+  );
+}
+
 const MIN = 60 * 1000;
 const GATEWAY_PID = 40000 + Math.floor(Math.random() * 999);
 const CHATBOT_PID = 50000 + Math.floor(Math.random() * 999);
@@ -193,6 +216,23 @@ const seedAll = db.transaction(() => {
       addRow({ tsAgoMs: t, source: 'chatbot', tag: 'generate', expectJson: true,
         maxTokens: 1200, timeoutMs: 30000, pid: CHATBOT_PID, userText: `Question: ${q}` });
     }
+  });
+
+  // --- Simulated document upload: one spec PDF chunked and embedded in
+  // batches of 64 (OpenAiEmbeddingGateway.BATCH_SIZE), ~40 minutes ago ---
+  const chunkBatches = [64, 64, 42]; // 170-chunk document, matches real batching
+  let embedT = 42 * MIN;
+  for (const batchSize of chunkBatches) {
+    addEmbeddingRow({ tsAgoMs: embedT, tag: 'embed_document', promptTokens: batchSize * 190,
+      latencyMs: 900, pid: CHATBOT_PID, inputCount: batchSize });
+    embedT -= 3 * MIN;
+  }
+
+  // A query embedding per question asked above — DocumentEvidenceSource embeds
+  // the question before its cosine scan, once documents exist in the corpus.
+  questions.forEach((q, i) => {
+    addEmbeddingRow({ tsAgoMs: (20 - i * 4) * MIN + 200, tag: 'embed_query',
+      promptTokens: 12, latencyMs: 220, pid: CHATBOT_PID, inputCount: 1 });
   });
 });
 

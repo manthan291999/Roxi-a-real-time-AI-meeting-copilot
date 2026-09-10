@@ -9,16 +9,33 @@ const { toSources, sourceTypeOf } = require('../graph/evidence');
 const { HISTORY_TURNS, ROUTES } = require('../graph/constants');
 
 /**
- * @param {{llm: import('../../domain/ports/LlmGateway').LlmGateway, logger: import('../../domain/ports/ChatLogger').ChatLogger}} deps
+ * @param {{llm: import('../../domain/ports/LlmGateway').LlmGateway, logger: import('../../domain/ports/ChatLogger').ChatLogger, store?: Object}} deps
  */
-function createGenerateNode({ llm, logger }) {
+function createGenerateNode({ llm, logger, store }) {
   return async function generate(state) {
     const evidence = state.evidence || [];
 
     try {
+      // Gather unique roles from meetings cited in the evidence
+      const roles = new Set();
+      if (store && store.getMeetingRole) {
+        for (const e of evidence) {
+          if (e.meetingId) {
+            const role = store.getMeetingRole(e.meetingId);
+            if (role) roles.add(role);
+          }
+        }
+      }
+      
+      let systemPrompt = GENERATE_SYSTEM;
+      const roleStr = Array.from(roles).join(', ');
+      if (roleStr) {
+        systemPrompt += `\n\nThe person who ran this meeting was acting as: ${roleStr}. Match your answer's depth and framing to that audience — the same courtesy the live pipeline already extends during capture.`;
+      }
+
       const { data } = await llm.complete({
         messages: [
-          { role: 'system', content: GENERATE_SYSTEM },
+          { role: 'system', content: systemPrompt },
           {
             role: 'user',
             content:

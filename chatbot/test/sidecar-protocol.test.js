@@ -260,3 +260,141 @@ test('an unknown message type is still a protocol error', async () => {
   await h.settle();
   assert.strictEqual(h.of('Error')[0].code, 'PROTOCOL_ERROR');
 });
+
+/** Wait long enough for N real-timer ticks of a `ms`-interval to have fired. */
+function afterTicks(ms, n = 1) {
+  return new Promise((r) => setTimeout(r, ms * n + ms / 2));
+}
+
+function fakeSyncEpisodicMemory(result = { embedded: 0, highWaterMark: 0 }) {
+  const calls = [];
+  return {
+    calls,
+    execute: async (opts) => {
+      calls.push(opts);
+      return typeof result === 'function' ? result(calls.length) : result;
+    },
+  };
+}
+
+test('episodic memory sync', async (t) => {
+  await t.test('runs once at startup without blocking Ready', async () => {
+    const syncEpisodicMemory = fakeSyncEpisodicMemory({ embedded: 3, highWaterMark: 5 });
+    const h = harness({
+      config: { indexMaxAgeMs: 60000, episodicSyncMaxAgeMs: 10_000 },
+      syncEpisodicMemory,
+    });
+
+    // Ready is emitted synchronously; the sync call is async (fire-and-forget).
+    assert.strictEqual(h.of('Ready').length, 1);
+    await h.settle();
+    assert.strictEqual(syncEpisodicMemory.calls.length, 1);
+    assert.deepStrictEqual(syncEpisodicMemory.calls[0], undefined);
+  });
+
+  await t.test('re-runs on the configured interval for as long as the sidecar lives', async () => {
+    const syncEpisodicMemory = fakeSyncEpisodicMemory();
+    harness({
+      config: { indexMaxAgeMs: 60000, episodicSyncMaxAgeMs: 15 },
+      syncEpisodicMemory,
+    });
+
+    await afterTicks(15, 3);
+    // Startup call + at least 2 interval ticks.
+    assert.ok(syncEpisodicMemory.calls.length >= 3, `expected >=3 calls, got ${syncEpisodicMemory.calls.length}`);
+  });
+
+  await t.test('a background sync failure is logged, not surfaced as a protocol Error', async () => {
+    const syncEpisodicMemory = { execute: async () => { throw new Error('embed budget exhausted'); } };
+    const h = harness({
+      config: { indexMaxAgeMs: 60000, episodicSyncMaxAgeMs: 10_000 },
+      syncEpisodicMemory,
+    });
+
+    await h.settle();
+    assert.strictEqual(h.of('Error').length, 0);
+  });
+
+  await t.test('shutdown stops the interval — no further calls after Shutdown', async () => {
+    const syncEpisodicMemory = fakeSyncEpisodicMemory();
+    const h = harness({
+      config: { indexMaxAgeMs: 60000, episodicSyncMaxAgeMs: 15 },
+      syncEpisodicMemory,
+    });
+
+    await afterTicks(15, 1);
+    h.send({ type: 'Shutdown' });
+    await h.settle();
+    const countAtShutdown = syncEpisodicMemory.calls.length;
+
+    await afterTicks(15, 3);
+    assert.strictEqual(syncEpisodicMemory.calls.length, countAtShutdown, 'no calls should land after shutdown');
+  });
+
+  await t.test('SyncVectors runs a sync on demand and reports its stats', async () => {
+    const syncEpisodicMemory = fakeSyncEpisodicMemory({ embedded: 12, highWaterMark: 247 });
+    const h = harness({
+      config: { indexMaxAgeMs: 60000, episodicSyncMaxAgeMs: 10_000 },
+      syncEpisodicMemory,
+    });
+
+    // Let the startup call (fired automatically by harness construction)
+    // finish and release the busy guard before sending an explicit request,
+    // so this test exercises SyncVectors itself rather than racing it.
+    await h.settle();
+    syncEpisodicMemory.calls.length = 0;
+
+    h.send({ type: 'SyncVectors', force: true });
+    await h.settle();
+
+    const [synced] = h.of('VectorsSynced');
+    assert.deepStrictEqual(synced.stats, { episodic: { embedded: 12, highWaterMark: 247 } });
+    // The explicit request's force flag reaches execute(), unlike the
+    // fire-and-forget startup/interval calls which never pass force.
+    const explicitCall = syncEpisodicMemory.calls.find((c) => c && c.force === true);
+    assert.ok(explicitCall, 'expected one execute() call with force: true');
+  });
+
+  await t.test('a SyncVectors sent while a background sync is still in flight is rejected as BUSY, not run concurrently', async () => {
+    const gate = deferred();
+    let concurrentCalls = 0;
+    let maxConcurrent = 0;
+    const syncEpisodicMemory = {
+      execute: async () => {
+        concurrentCalls += 1;
+        maxConcurrent = Math.max(maxConcurrent, concurrentCalls);
+        await gate.promise;
+        concurrentCalls -= 1;
+        return { embedded: 135, highWaterMark: 135 };
+      },
+    };
+    const h = harness({
+      config: { indexMaxAgeMs: 60000, episodicSyncMaxAgeMs: 10_000 },
+      syncEpisodicMemory,
+    });
+
+    // The startup call is already in flight (holding the gate).
+    h.send({ type: 'SyncVectors', force: true });
+    await h.settle();
+
+    const [err] = h.of('Error');
+    assert.strictEqual(err.code, 'BUSY');
+    assert.strictEqual(h.of('VectorsSynced').length, 0);
+    assert.strictEqual(maxConcurrent, 1, 'execute() must never run twice at once');
+
+    gate.resolve();
+    await h.settle();
+  });
+
+  await t.test('SyncVectors with no episodic sync configured degrades cleanly', async () => {
+    const h = harness({
+      config: { indexMaxAgeMs: 60000 },
+      syncEpisodicMemory: null,
+    });
+
+    h.send({ type: 'SyncVectors' });
+    await h.settle();
+
+    assert.strictEqual(h.of('Error')[0].code, 'CONFIG_ERROR');
+  });
+});

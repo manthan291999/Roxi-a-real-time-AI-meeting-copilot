@@ -18,7 +18,7 @@ use crate::resample::Resampler;
 use anyhow::{anyhow, Context, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Host, SampleFormat};
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
@@ -196,6 +196,7 @@ fn capture_to_sink_internal(config: CaptureConfig, sink: Box<dyn PcmSink>, runni
             let tx = loopback_tx.clone();
             let resampler = resampler.clone();
             let total = total_samples.clone();
+            let running = running.clone();
             device.build_input_stream(
                 &stream_config,
                 move |data: &[f32], _info: &cpal::InputCallbackInfo| {
@@ -206,6 +207,7 @@ fn capture_to_sink_internal(config: CaptureConfig, sink: Box<dyn PcmSink>, runni
                         &total,
                         source_channels_usize,
                         target_channels,
+                        &running,
                     );
                 },
                 err_callback,
@@ -216,6 +218,7 @@ fn capture_to_sink_internal(config: CaptureConfig, sink: Box<dyn PcmSink>, runni
             let tx = loopback_tx.clone();
             let resampler = resampler.clone();
             let total = total_samples.clone();
+            let running = running.clone();
             device.build_input_stream(
                 &stream_config,
                 move |data: &[i16], _info: &cpal::InputCallbackInfo| {
@@ -228,6 +231,7 @@ fn capture_to_sink_internal(config: CaptureConfig, sink: Box<dyn PcmSink>, runni
                         &total,
                         source_channels_usize,
                         target_channels,
+                        &running,
                     );
                 },
                 err_callback,
@@ -238,6 +242,7 @@ fn capture_to_sink_internal(config: CaptureConfig, sink: Box<dyn PcmSink>, runni
             let tx = loopback_tx.clone();
             let resampler = resampler.clone();
             let total = total_samples.clone();
+            let running = running.clone();
             device.build_input_stream(
                 &stream_config,
                 move |data: &[u16], _info: &cpal::InputCallbackInfo| {
@@ -252,6 +257,7 @@ fn capture_to_sink_internal(config: CaptureConfig, sink: Box<dyn PcmSink>, runni
                         &total,
                         source_channels_usize,
                         target_channels,
+                        &running,
                     );
                 },
                 err_callback,
@@ -278,6 +284,7 @@ fn capture_to_sink_internal(config: CaptureConfig, sink: Box<dyn PcmSink>, runni
         config.target_sample_rate,
         config.target_channels,
         mic_tx,
+        running.clone(),
     );
     if mic_stream.is_none() {
         warn!("Failed to setup microphone capture. Continuing with loopback only.");
@@ -404,8 +411,16 @@ fn process_and_send(
     total_samples: &Arc<AtomicU64>,
     source_channels: usize,
     _target_channels: usize,
+    running: &Arc<AtomicBool>,
 ) {
     if data.is_empty() {
+        return;
+    }
+
+    // Shutdown is in progress: the mixer thread has already (or is about to)
+    // drop its receivers, so sending here would just log a spurious "channel
+    // closed" warning. Skip silently — this is expected, not an anomaly.
+    if !running.load(Ordering::Relaxed) {
         return;
     }
 
@@ -441,7 +456,7 @@ fn process_and_send(
 
     // Step 4: Send to mixer channel.
     if let Err(_) = tx.send(pcm16.clone()) {
-        warn!("Mixer channel closed");
+        trace!("Mixer channel closed (shutdown race — expected)");
     }
 
     total_samples.fetch_add(pcm16.len() as u64, Ordering::Relaxed);
@@ -453,6 +468,7 @@ fn setup_mic_stream(
     target_sample_rate: u32,
     target_channels: u16,
     tx: mpsc::Sender<Vec<i16>>,
+    running: Arc<AtomicBool>,
 ) -> Option<cpal::Stream> {
     let device = host.default_input_device()?;
     let name = device.name().unwrap_or_else(|_| "<mic>".into());
@@ -482,23 +498,29 @@ fn setup_mic_stream(
     let total = Arc::new(AtomicU64::new(0));
 
     let stream = match sample_format {
-        SampleFormat::F32 => device.build_input_stream(
-            &stream_config,
-            move |data: &[f32], _| {
-                process_and_send(data, &tx, &resampler, &total, source_channels as usize, target_channels as usize);
-            },
-            err_callback,
-            None,
-        ).ok()?,
-        SampleFormat::I16 => device.build_input_stream(
-            &stream_config,
-            move |data: &[i16], _| {
-                let float_data: Vec<f32> = data.iter().map(|&s| s as f32 / i16::MAX as f32).collect();
-                process_and_send(&float_data, &tx, &resampler, &total, source_channels as usize, target_channels as usize);
-            },
-            err_callback,
-            None,
-        ).ok()?,
+        SampleFormat::F32 => {
+            let running = running.clone();
+            device.build_input_stream(
+                &stream_config,
+                move |data: &[f32], _| {
+                    process_and_send(data, &tx, &resampler, &total, source_channels as usize, target_channels as usize, &running);
+                },
+                err_callback,
+                None,
+            ).ok()?
+        }
+        SampleFormat::I16 => {
+            let running = running.clone();
+            device.build_input_stream(
+                &stream_config,
+                move |data: &[i16], _| {
+                    let float_data: Vec<f32> = data.iter().map(|&s| s as f32 / i16::MAX as f32).collect();
+                    process_and_send(&float_data, &tx, &resampler, &total, source_channels as usize, target_channels as usize, &running);
+                },
+                err_callback,
+                None,
+            ).ok()?
+        }
         _ => {
             warn!("Unsupported mic sample format: {:?}", sample_format);
             return None;

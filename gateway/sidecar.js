@@ -25,6 +25,25 @@ const { CommandHandler } = require('./control/command-handler.js');
 const { TranscriptPipeline } = require('./stt/transcript-pipeline.js');
 const { createShutdown } = require('./lifecycle/shutdown.js');
 
+/**
+ * Exit only once stdout has actually flushed. stdout is a pipe here — the
+ * Rust host holds the other end — so calling process.exit() right after a
+ * synchronous protocol.emitError() write can truncate that very line before
+ * the host ever reads it: exactly how "both STT keys missing/invalid" used
+ * to fail silently — the UI would go live and just never transcribe, with
+ * no capture_error shown, because the error line never made it out before
+ * the pipe tore down. Same guard lifecycle/shutdown.js already uses for the
+ * same reason, applied here to every early-exit path in this file.
+ */
+function exitAfterDrain(code) {
+  if (process.stdout.writableLength > 0) {
+    process.stdout.once('drain', () => process.exit(code));
+    setTimeout(() => process.exit(code), 1000).unref();
+  } else {
+    process.exit(code);
+  }
+}
+
 async function main() {
   const cfg = config.load();
   logger.configure(cfg.logLevel);
@@ -32,25 +51,28 @@ async function main() {
   const check = config.validate(cfg);
   if (!check.ok) {
     protocol.emitError(`Missing required env vars: ${check.missing.join(', ')}`);
-    process.exit(1);
+    exitAfterDrain(1);
+    return;
   }
 
   const chain = buildChain(cfg.stt);
   if (chain.length === 0) {
     protocol.emitError('No STT providers configured');
-    process.exit(1);
+    exitAfterDrain(1);
+    return;
   }
 
   // --- Persistence ------------------------------------------------------------
   let session;
   try {
-    session = startSession(cfg.dbPath, cfg.meeting.context, { id: cfg.meeting.projectId });
+    session = startSession(cfg.dbPath, cfg.meeting.context, { id: cfg.meeting.projectId }, cfg.meeting.role);
   } catch (err) {
     protocol.emitError(`Database init failed: ${err.message}`);
     logger.log('error', 'sidecar', 'db_init_failed', {
       message: (err.message || '').slice(0, 300),
     });
-    process.exit(1);
+    exitAfterDrain(1);
+    return;
   }
 
   // Announced before any transcript can arrive, so the host has the meeting id
@@ -73,7 +95,7 @@ async function main() {
     transcripts: session.transcripts,
     protocol,
   });
-  const commands = new CommandHandler({ meetings: session.meetings, diarization });
+  const commands = new CommandHandler({ meetings: session.meetings, diarization, protocol });
   const deframer = new PcmDeframer(
     {
       // Audio fans out to both STT and diarization; the latter buffers it for
@@ -92,8 +114,30 @@ async function main() {
     protocol.emitProviderStatus(provider, state);
     logger.log('info', 'sidecar', 'provider_status', { provider, state });
   });
-  manager.on('partial', (event) => pipeline.onPartial(event));
-  manager.on('final', (event) => pipeline.onFinal(event));
+  // The pipeline can throw synchronously (e.g. a corrupt stored speaker
+  // embedding reaching diarization, or a DB write failure) — unguarded, that
+  // exception propagates back through the provider's own event emission and
+  // crashes the whole sidecar process. After that, stdout never emits another
+  // line, which reads to the UI as "the live transcript just stopped." Contain
+  // failures per-turn instead so one bad turn doesn't end the session.
+  manager.on('partial', (event) => {
+    try {
+      pipeline.onPartial(event);
+    } catch (err) {
+      logger.log('error', 'sidecar', 'pipeline_partial_failed', {
+        message: (err.message || '').slice(0, 300),
+      });
+    }
+  });
+  manager.on('final', (event) => {
+    try {
+      pipeline.onFinal(event);
+    } catch (err) {
+      logger.log('error', 'sidecar', 'pipeline_final_failed', {
+        message: (err.message || '').slice(0, 300),
+      });
+    }
+  });
   manager.on('speakerRevision', ({ revision }) => protocol.emitSpeakerRevision(revision));
   manager.on('providerError', ({ provider, message }) => {
     logger.log('warn', 'sidecar', 'stt_provider_error', {

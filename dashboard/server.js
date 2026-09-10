@@ -26,6 +26,7 @@ dotenv.config({ path: fs.existsSync(ROOT_ENV) ? ROOT_ENV : LOCAL_ENV });
 const express = require('express');
 const Database = require('better-sqlite3');
 const schema = require('./lib/schema.js');
+const embeddingStats = require('./lib/embeddingStats.js');
 const { MODEL_PRICES, costOf } = schema;
 
 const PORT = parseInt(process.env.DASHBOARD_PORT || '3300', 10);
@@ -127,7 +128,7 @@ app.get('/api/summary', (req, res) => {
 // --- Request list (filterable, paginated) ------------------------------------
 
 app.get('/api/requests', (req, res) => {
-  const { source, tag, model, status, from, to } = req.query;
+  const { source, tag, model, status, from, to, kind } = req.query;
   const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
   const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
 
@@ -139,6 +140,11 @@ app.get('/api/requests', (req, res) => {
   if (status) { where.push('status = @status'); params.status = status; }
   if (from) { where.push('ts >= @from'); params.from = from; }
   if (to) { where.push('ts <= @to'); params.to = to; }
+  // Optional, backward-compatible: omitted entirely, this behaves exactly as
+  // before. 'embedding' isolates OpenAiEmbeddingGateway calls (endpoint ends
+  // in /embeddings); 'completion' is everything else.
+  if (kind === 'embedding') where.push(embeddingStats.EMBEDDING_ENDPOINT_MATCH);
+  else if (kind === 'completion') where.push(`NOT (${embeddingStats.EMBEDDING_ENDPOINT_MATCH})`);
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
   const out = withDb({ dbAvailable: false, total: 0, rows: [] }, (d) => {
@@ -280,6 +286,47 @@ app.get('/api/prefix-stats', (req, res) => {
   const out = withDb({ dbAvailable: false, rows: [] }, (d) => ({
     dbAvailable: true,
     rows: schema.queryPrefixStats(d)
+  }));
+  res.json(out);
+});
+
+// --- Embeddings (every OpenAiEmbeddingGateway call, isolated from completions) ----
+//
+// Same source table as everything above (llm_requests) — no schema change, no
+// write-path change. Isolated purely by the `endpoint` column every embedding
+// call already carries. See lib/embeddingStats.js for the query logic.
+
+app.get('/api/embeddings/summary', (req, res) => {
+  const empty = {
+    dbAvailable: false, requests: 0, ok: 0, failed: 0, tokens_embedded: 0,
+    cost_usd: 0, avg_latency_ms: null, p95_latency_ms: null, model_count: 0,
+    first_ts: null, last_ts: null,
+  };
+  const out = withDb(empty, (d) => ({ dbAvailable: true, ...embeddingStats.querySummary(d, costOf) }));
+  res.json(out);
+});
+
+app.get('/api/embeddings/by-tag', (req, res) => {
+  const out = withDb({ dbAvailable: false, rows: [] }, (d) => ({
+    dbAvailable: true,
+    rows: embeddingStats.queryByTag(d),
+  }));
+  res.json(out);
+});
+
+app.get('/api/embeddings/timeline', (req, res) => {
+  const out = withDb({ dbAvailable: false, bucket: 'minute', rows: [] }, (d) => {
+    let bucket = req.query.bucket;
+    if (!bucket || bucket === 'auto') bucket = embeddingStats.pickBucket(d);
+    return { dbAvailable: true, bucket, rows: embeddingStats.queryTimeline(d, bucket) };
+  });
+  res.json(out);
+});
+
+app.get('/api/embeddings/sessions', (req, res) => {
+  const out = withDb({ dbAvailable: false, rows: [] }, (d) => ({
+    dbAvailable: true,
+    rows: embeddingStats.querySessions(d),
   }));
   res.json(out);
 });

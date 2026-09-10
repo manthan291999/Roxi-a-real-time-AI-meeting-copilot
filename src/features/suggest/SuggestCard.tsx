@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { SuggestCardType } from '../../shared/types';
-import { tokens } from '../../design-system/tokens';
+import { tokens, typeScale, signatureSerif } from '../../design-system/tokens';
 import { GlassCard } from '../../design-system/components/GlassCard';
 import { ThumbUpIcon, ThumbDownIcon, ArrowRightIcon } from '../../design-system/icons';
 import { formatTime } from '../../utils';
@@ -19,11 +19,15 @@ export const SuggestCard: React.FC<SuggestCardProps> = memo(({ card, onThumbUp, 
     <GlassCard className="group" animateEnter>
       <div className="flex justify-between items-start">
         <span
-          className="inline-flex items-center gap-1 font-semibold px-2 py-0.5 rounded-md border text-[10px] uppercase tracking-wider"
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border uppercase"
           style={{
             color: tokens.signal,
             backgroundColor: tokens.signalDim,
             borderColor: tokens.signalLine,
+            fontSize: typeScale.micro.fontSize,
+            lineHeight: typeScale.micro.lineHeight,
+            fontWeight: typeScale.micro.fontWeight,
+            letterSpacing: typeScale.micro.letterSpacing,
           }}
         >
           Ready to say <ArrowRightIcon className="w-3 h-3" />
@@ -36,13 +40,17 @@ export const SuggestCard: React.FC<SuggestCardProps> = memo(({ card, onThumbUp, 
           {card.bullets.map((bullet, i) => (
             <li
               key={`bullet-${i}`}
-              className="flex items-start gap-2.5 text-[14px] leading-relaxed rounded-lg px-2.5 py-1.5 transition-colors"
+              className="flex items-start gap-2.5 rounded-lg px-2.5 py-1.5 transition-colors"
               style={bullet.isBest ? {
                 backgroundColor: tokens.bulletBestBg,
-                fontFamily: '"New York", "Georgia", ui-serif, serif',
+                fontFamily: signatureSerif,
                 color: tokens.paper,
+                fontSize: typeScale.body.fontSize,
+                lineHeight: typeScale.body.lineHeight,
               } : {
                 color: tokens.paper,
+                fontSize: typeScale.body.fontSize,
+                lineHeight: typeScale.body.lineHeight,
               }}
             >
               {/* Bullet marker: star for best, dot for others */}
@@ -66,7 +74,7 @@ export const SuggestCard: React.FC<SuggestCardProps> = memo(({ card, onThumbUp, 
         </ul>
       ) : (
         /* Prose fallback — old cache, parse miss, or raw gateway path */
-        <p className="text-[14px] leading-relaxed" style={{ color: tokens.paper }}>
+        <p style={{ color: tokens.paper, fontSize: typeScale.body.fontSize, lineHeight: typeScale.body.lineHeight }}>
           {card.text}
         </p>
       )}
@@ -76,7 +84,7 @@ export const SuggestCard: React.FC<SuggestCardProps> = memo(({ card, onThumbUp, 
           <button
             type="button"
             aria-label="Thumbs up"
-            className="transition-colors hover:text-[var(--t-paper)] cursor-pointer"
+            className="transition-all duration-200 ease-[cubic-bezier(.2,.8,.2,1)] hover:text-[var(--t-paper)] hover:scale-110 active:scale-95 cursor-pointer"
             style={{ color: tokens.mute }}
             onClick={onThumbUp}
           >
@@ -85,14 +93,17 @@ export const SuggestCard: React.FC<SuggestCardProps> = memo(({ card, onThumbUp, 
           <button
             type="button"
             aria-label="Thumbs down"
-            className="transition-colors hover:text-[var(--t-paper)] cursor-pointer"
+            className="transition-all duration-200 ease-[cubic-bezier(.2,.8,.2,1)] hover:text-[var(--t-paper)] hover:scale-110 active:scale-95 cursor-pointer"
             style={{ color: tokens.mute }}
             onClick={onThumbDown}
           >
             <ThumbDownIcon className="w-[18px] h-[18px]" />
           </button>
         </div>
-        <span className="text-[13px] font-medium font-mono" style={{ color: tokens.muteDim }}>
+        <span
+          className="font-mono"
+          style={{ color: tokens.muteDim, fontSize: typeScale.caption.fontSize, fontWeight: typeScale.caption.fontWeight }}
+        >
           {formatTime(card.timestamp)}
         </span>
       </div>

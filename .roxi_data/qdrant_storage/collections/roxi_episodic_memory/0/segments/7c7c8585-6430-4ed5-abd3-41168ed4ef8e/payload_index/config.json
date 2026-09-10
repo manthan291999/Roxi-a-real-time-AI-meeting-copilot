@@ -1,0 +1,1 @@
+{"indexed_fields":{"project_id":"integer","meeting_id":"integer","speaker":"keyword","significance":"keyword"}}

@@ -119,3 +119,52 @@ export const spacing = {
 export const easing = {
   calm: 'cubic-bezier(.2,.8,.2,1)',
 } as const;
+
+/**
+ * Type scale — every text size in the app should resolve to one of these
+ * steps instead of a one-off `text-[Npx]`. Each step is derived from a size
+ * already in use (26-28px -> display, 20px -> title, 13-15px -> body/label,
+ * 9-12px -> caption/micro) so adopting it is a rename, not a redesign — the
+ * new part is pairing every size with a considered line-height and tracking
+ * instead of leaving those to the browser default.
+ */
+export const typeScale = {
+  display:    { fontSize: 28, lineHeight: 1.15, fontWeight: 700, letterSpacing: '-0.02em' },
+  title:      { fontSize: 20, lineHeight: 1.25, fontWeight: 700, letterSpacing: '-0.01em' },
+  headline:   { fontSize: 16, lineHeight: 1.4,  fontWeight: 600, letterSpacing: '-0.005em' },
+  body:       { fontSize: 14, lineHeight: 1.55, fontWeight: 400, letterSpacing: '0em' },
+  bodyStrong: { fontSize: 14, lineHeight: 1.55, fontWeight: 600, letterSpacing: '0em' },
+  label:      { fontSize: 13, lineHeight: 1.4,  fontWeight: 600, letterSpacing: '0em' },
+  caption:    { fontSize: 12, lineHeight: 1.4,  fontWeight: 500, letterSpacing: '0.01em' },
+  micro:      { fontSize: 11, lineHeight: 1.35, fontWeight: 600, letterSpacing: '0.04em' },
+} as const;
+
+/**
+ * The one deliberate departure from the system sans — reserved for a single
+ * "this is the best one" accent (SuggestCard's best-pick bullet). Never used
+ * for a structural heading; that would dilute it into a second body face.
+ */
+export const signatureSerif = '"New York", "Georgia", ui-serif, serif';
+
+/**
+ * Elevation ladder. A raised surface picks one of these instead of writing
+ * its own one-off `boxShadow`. Built from the shadow tokens already measured
+ * for contrast in styles.css — this adds no new colour, just a shared vocabulary
+ * for "how raised is this" and a hover step so interactive surfaces can lift.
+ */
+export const elevation = {
+  flat: 'none',
+  raised: tokens.cardInset,
+  raisedHover: `${tokens.cardInset}, 0 12px 28px rgba(0,0,0,0.12)`,
+  sheet: tokens.sheetShadow,
+} as const;
+
+/**
+ * Motion durations, always paired with `easing.calm`. Replaces the ad hoc
+ * 120/150/200/300ms mix that had accumulated one-off per component.
+ */
+export const durations = {
+  fast: 120,
+  base: 200,
+  slow: 320,
+} as const;

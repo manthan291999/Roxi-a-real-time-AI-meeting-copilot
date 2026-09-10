@@ -94,11 +94,35 @@
   animation: shimmer 1.6s linear infinite;
 }
 
+/* LiveOrb's core sphere — a slow organic wobble (scale + morphing corner
+   radii) that reads as gentle 3D motion rather than a flat pulsing circle. */
+@keyframes orb-breathe {
+  0%, 100% { transform: scale(0.96); border-radius: 46% 54% 60% 40% / 50% 45% 55% 50%; }
+  50% { transform: scale(1.04); border-radius: 54% 46% 40% 60% / 45% 55% 45% 55%; }
+}
+
+.live-orb-breathe {
+  animation: orb-breathe 5.5s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+
+/* Swapped in over live-orb-breathe while a partial transcript is in flight —
+   the closest proxy to "reacting to audio" without a real amplitude signal. */
+@keyframes orb-speak {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.14); filter: brightness(1.15); }
+}
+
+.live-orb-speak {
+  animation: orb-speak 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .signal-ring-animate,
   .signal-ring-idle,
   .animate-fade-in,
-  .animate-shimmer {
+  .animate-shimmer,
+  .live-orb-breathe,
+  .live-orb-speak {
     animation: none;
   }
 }

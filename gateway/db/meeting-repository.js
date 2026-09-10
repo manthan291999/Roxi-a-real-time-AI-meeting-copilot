@@ -85,8 +85,9 @@ class MeetingRepository {
    * @param {{id?: number|null}} [projectSelection] from the Rust host's argv
    * @returns {MeetingRepository}
    */
-  static start(db, meetingContext = '', projectSelection = {}) {
+  static start(db, meetingContext = '', projectSelection = {}, meetingRole = null) {
     const context = sanitizeText(meetingContext, 2000);
+    const role = sanitizeText(meetingRole, 100);
     const projects = new ProjectRepository(db);
     const project = projects.resolve(projectSelection);
 
@@ -96,7 +97,7 @@ class MeetingRepository {
         // un-migrated schema. Insert unscoped rather than fail the meeting:
         // the user is about to be in a meeting, and taxonomy is never worth
         // blocking capture on.
-        const info = db.prepare('INSERT INTO meetings (context) VALUES (?)').run(context || null);
+        const info = db.prepare('INSERT INTO meetings (context, role) VALUES (?, ?)').run(context || null, role || null);
         return { meetingId: info.lastInsertRowid, displayId: null };
       }
 
@@ -104,9 +105,9 @@ class MeetingRepository {
       const displayId = formatDisplayId(project.code, seq);
       const info = db
         .prepare(
-          'INSERT INTO meetings (context, project_id, project_seq, display_id) VALUES (?, ?, ?, ?)'
+          'INSERT INTO meetings (context, project_id, project_seq, display_id, role) VALUES (?, ?, ?, ?, ?)'
         )
-        .run(context || null, project.projectId, seq, displayId);
+        .run(context || null, project.projectId, seq, displayId, role || null);
       return { meetingId: info.lastInsertRowid, displayId };
     });
 

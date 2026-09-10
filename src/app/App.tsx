@@ -1,15 +1,12 @@
 import React, { useState } from 'react';
 import { AppShell } from '../shell/AppShell';
 import { WidgetHeader } from '../shell/WidgetHeader';
-import { NavigationTabs } from '../shell/NavigationTabs';
-import { InputBar } from '../shared/ui/InputBar';
 import { IdleScreen, MeetingContextModal, useCaptureFlow } from '../features/capture';
-import { SuggestAnswersPane } from '../features/suggest';
-import { TranscriptPane } from '../features/transcript';
-import { ChatPane, ChatThreadProvider, useChatThreadContext, useLiveTranscriptContext } from '../features/chat';
+import { LiveSessionDashboard } from '../features/session';
+import { ChatThreadProvider, useChatThreadContext, useLiveTranscriptContext } from '../features/chat';
 import { HistoryPane } from '../features/history';
 import { ProjectLibrary } from '../features/library/ProjectLibrary';
-import { WidgetTab } from '../shared/types/ui';
+import { AppView } from '../shared/types/ui';
 
 /**
  * Composition root: picks the screen for the current step and wires panes to
@@ -18,12 +15,11 @@ import { WidgetTab } from '../shared/types/ui';
 const AppContent: React.FC = () => {
   const { status, blackholeMissing, isCollectingContext, isStopping, sessionId, requestContext, cancelContext, confirmContext, stopCapture } =
     useCaptureFlow();
-  const [activeTab, setActiveTab] = useState<WidgetTab>('suggest');
+  const [activeView, setActiveView] = useState<AppView>('session');
   const { askQuestion } = useChatThreadContext('ask');
   const getLiveContext = useLiveTranscriptContext();
 
   const askAndFocusChat = (question: string) => {
-    setActiveTab('ask');
     if (question.trim()) askQuestion(question, getLiveContext());
   };
 
@@ -39,37 +35,36 @@ const AppContent: React.FC = () => {
         isStopping={isStopping}
         sessionId={sessionId}
         onStop={handleStop}
-        onHistory={() => setActiveTab(activeTab === 'history' ? 'suggest' : 'history')}
-        onLibrary={() => setActiveTab(activeTab === 'library' ? 'suggest' : 'library')}
+        onHistory={() => setActiveView(activeView === 'history' ? 'session' : 'history')}
+        onLibrary={() => setActiveView(activeView === 'library' ? 'session' : 'library')}
       />
 
-      {status === 'idle' && activeTab !== 'history' && activeTab !== 'library' ? (
+      {status === 'idle' && activeView !== 'history' && activeView !== 'library' ? (
         <>
-          <IdleScreen 
-            onStart={requestContext} 
-            onHistory={() => setActiveTab('history')}
-            onLibrary={() => setActiveTab('library')}
-            blackholeMissing={blackholeMissing} 
+          <IdleScreen
+            onStart={requestContext}
+            onHistory={() => setActiveView('history')}
+            onLibrary={() => setActiveView('library')}
+            blackholeMissing={blackholeMissing}
           />
           {isCollectingContext && (
             <MeetingContextModal onConfirm={confirmContext} onCancel={cancelContext} />
           )}
         </>
-      ) : activeTab === 'library' ? (
-        <ProjectLibrary />
+      ) : activeView === 'library' ? (
+        <div className="flex-1 overflow-hidden animate-fade-in">
+          <ProjectLibrary />
+        </div>
+      ) : activeView === 'history' ? (
+        <div className="flex-1 overflow-y-auto px-5 pt-4 relative custom-scrollbar flex flex-col gap-4 animate-fade-in">
+          <HistoryPane />
+        </div>
       ) : (
-        <>
-          {activeTab !== 'history' && <NavigationTabs activeTab={activeTab} onChange={setActiveTab} />}
-          <div className="flex-1 overflow-y-auto px-5 pt-4 relative custom-scrollbar flex flex-col gap-4">
-            {activeTab === 'suggest' && <SuggestAnswersPane onAskChat={askAndFocusChat} />}
-            {activeTab === 'ask' && <ChatPane threadId="ask" getLiveContext={getLiveContext} />}
-            {activeTab === 'listen' && <TranscriptPane isLive={status === 'live'} />}
-            {activeTab === 'history' && <HistoryPane />}
-          </div>
-          {activeTab !== 'history' && activeTab !== 'ask' && (
-            <InputBar onSend={askAndFocusChat} />
-          )}
-        </>
+        <LiveSessionDashboard
+          isLive={status === 'live'}
+          onAskChat={askAndFocusChat}
+          getLiveContext={getLiveContext}
+        />
       )}
     </AppShell>
   );

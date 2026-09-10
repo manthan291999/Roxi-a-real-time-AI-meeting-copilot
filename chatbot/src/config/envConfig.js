@@ -36,6 +36,11 @@ function envInt(name, fallback) {
   return Number.isFinite(v) && v > 0 ? v : fallback;
 }
 
+function envFloat(name, fallback) {
+  const v = parseFloat(process.env[name]);
+  return Number.isFinite(v) && v >= 0 ? v : fallback;
+}
+
 /**
  * @returns {Readonly<Object>} frozen config object
  */
@@ -89,6 +94,46 @@ function loadConfig() {
     maxDocumentBytes: envInt('CHATBOT_MAX_DOCUMENT_BYTES', 20 * 1024 * 1024),
     maxLibraryBytes: envInt('CHATBOT_MAX_LIBRARY_BYTES', 200 * 1024 * 1024),
     maxDocuments: envInt('CHATBOT_MAX_DOCUMENTS', 50),
+    /**
+     * Local-only Qdrant sidecar, spawned by the Rust core (see
+     * adapters/vector_client.rs). Never exposed off-loopback.
+     */
+    qdrantUrl: envStr('QDRANT_URL', 'http://127.0.0.1:6333'),
+    /** Meeting Semantic Memory, episodic layer (Ask Roxi over chunks). */
+    qdrantEpisodicCollection: envStr('QDRANT_EPISODIC_COLLECTION', 'roxi_episodic_memory'),
+    /** Meeting Semantic Memory, semantic layer (glossary + speaker topics). */
+    qdrantSemanticCollection: envStr('QDRANT_SEMANTIC_COLLECTION', 'roxi_semantic_memory'),
+    /**
+     * compositeScore() re-rank (plan §05). Relevance dominates on purpose —
+     * this re-ranks an already similarity-filtered set, not a replacement
+     * for semantic match. Principled defaults, not yet measured against real
+     * questions (the plan's own §18 flags this as an open question).
+     */
+    episodicRecencyHalflifeDays: envInt('EPISODIC_RECENCY_HALFLIFE_DAYS', 14),
+    episodicWeightRelevance: envFloat('EPISODIC_W_RELEVANCE', 0.6),
+    episodicWeightImportance: envFloat('EPISODIC_W_IMPORTANCE', 0.25),
+    episodicWeightRecency: envFloat('EPISODIC_W_RECENCY', 0.15),
+    /**
+     * Incremental episodic sync interval. 1 minute is the practical floor for
+     * a polling design, not a cost tradeoff: analyzed chunks rarely arrive
+     * faster than STT-finalize + ChunkGraph analysis allows anyway, so
+     * polling tighter than this mostly finds nothing (plan §09/§13).
+     */
+    episodicSyncMaxAgeMs: envInt('CHATBOT_EPISODIC_SYNC_MAX_AGE_MS', 60 * 1000),
+    /**
+     * Semantic sync (glossary terms) rebuild interval. Glossary terms change
+     * slowly relative to chunks, so this runs on its own, much slower cadence
+     * rather than piggybacking on the episodic timer (plan §08/§13).
+     */
+    semanticSyncMaxAgeMs: envInt('CHATBOT_SEMANTIC_SYNC_MAX_AGE_MS', 30 * 60 * 1000),
+    /**
+     * Episodic retention (plan §01/§05a). A Qdrant point and its payload are
+     * purged this many days after `created_at` — the vector copy, never the
+     * `chunks` row in meeting_history.db. Semantic memory is exempt (§06).
+     */
+    episodicRetentionDays: envInt('EPISODIC_RETENTION_DAYS', 90),
+    /** How often PurgeEpisodicMemoryUseCase runs. Daily is plenty for a 90-day window. */
+    episodicPurgeIntervalMs: envInt('EPISODIC_PURGE_INTERVAL_MS', 24 * 60 * 60 * 1000),
     /** Log level: debug|info|warn|error. */
     logLevel: envStr('CHATBOT_LOG_LEVEL', 'info'),
   });

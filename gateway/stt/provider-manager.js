@@ -22,7 +22,13 @@ const EventEmitter = require('events');
 // 20 chunks x 250ms = 5s of audio retained for replay on switchover.
 const RING_CHUNKS = 20;
 
-
+// If audio has been flowing to the active provider for this long with zero
+// partial/final activity back, treat the connection as dead even though
+// neither an 'error' nor a 'closed' event ever arrived — e.g. a websocket
+// dropped silently behind a NAT/firewall idle timeout. Comfortably above a
+// normal in-meeting pause so a quiet room doesn't trigger a false failover.
+const WATCHDOG_TIMEOUT_MS = 45_000;
+const WATCHDOG_CHECK_INTERVAL_MS = 10_000;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -49,6 +55,9 @@ class ProviderManager extends EventEmitter {
     this.closing = false;
     this.failoverInFlight = false;
     this.ring = [];
+    this.lastEventAt = null;
+    this.lastAudioAt = null;
+    this.watchdogTimer = null;
   }
 
   /** Connect to the first provider in the chain, falling through on failure. */
@@ -72,13 +81,17 @@ class ProviderManager extends EventEmitter {
     this.ring.push(chunk);
     if (this.ring.length > RING_CHUNKS) this.ring.shift();
 
-    if (this.active) this.active.sendAudio(chunk);
+    if (this.active) {
+      this.lastAudioAt = Date.now();
+      this.active.sendAudio(chunk);
+    }
   }
 
   /** Graceful shutdown: close the active provider, suppress further events. */
   async close() {
     this.closing = true;
     this.state = 'dead';
+    this.stopWatchdog();
     const provider = this.active;
     this.active = null;
     if (provider) {
@@ -156,14 +169,19 @@ class ProviderManager extends EventEmitter {
   /** Wire up a connected provider as the active one and replay buffered audio. */
   setActive(provider) {
     this.active = provider;
+    this.lastEventAt = Date.now();
     this.setState('active', provider.name);
+    this.startWatchdog();
 
     provider.on('partial', (event) => {
-      if (this.active === provider) this.emit('partial', event);
+      if (this.active !== provider) return;
+      this.lastEventAt = Date.now();
+      this.emit('partial', event);
     });
 
     provider.on('final', (event) => {
       if (this.active !== provider) return;
+      this.lastEventAt = Date.now();
       // Everything up to this final has been transcribed — drop the replay
       // buffer so a later switchover doesn't duplicate it.
       this.ring = [];
@@ -193,10 +211,39 @@ class ProviderManager extends EventEmitter {
     }
   }
 
+  /** Poll for a live provider that has gone silent without telling us. */
+  startWatchdog() {
+    this.stopWatchdog();
+    this.watchdogTimer = setInterval(() => {
+      if (this.closing || this.state !== 'active' || !this.active) return;
+
+      const now = Date.now();
+      const silentForMs = now - (this.lastEventAt || now);
+      const audioRecentlyFlowing = this.lastAudioAt && now - this.lastAudioAt < WATCHDOG_TIMEOUT_MS;
+
+      if (silentForMs > WATCHDOG_TIMEOUT_MS && audioRecentlyFlowing) {
+        const provider = this.active;
+        this.emit('providerError', {
+          provider: provider.name,
+          message: `no transcript activity for ${Math.round(silentForMs / 1000)}s while audio is flowing — assuming the connection died silently`,
+        });
+        this.handleActiveFailure();
+      }
+    }, WATCHDOG_CHECK_INTERVAL_MS);
+  }
+
+  stopWatchdog() {
+    if (this.watchdogTimer) {
+      clearInterval(this.watchdogTimer);
+      this.watchdogTimer = null;
+    }
+  }
+
   /** The active provider died: switch to the next in chain, or reconnect. */
   async handleActiveFailure() {
     if (this.closing || this.failoverInFlight) return;
     this.failoverInFlight = true;
+    this.stopWatchdog();
 
     try {
       this.active = null; // detach: further events from it are ignored

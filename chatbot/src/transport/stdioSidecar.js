@@ -10,6 +10,7 @@
  *             {"type":"ListDocuments"}
  *             {"type":"DeleteDocument","docId":"uuid"}
  *             {"type":"RebuildIndex","force":false}
+ *             {"type":"SyncVectors","force":false}
  *             {"type":"Shutdown"}
  *   stdout <- {"type":"Ready"}
  *             {"type":"ChatThinking","threadId":"ask","node":"retrieve"}
@@ -19,8 +20,27 @@
  *             {"type":"DocumentList","docs":[{…}]}
  *             {"type":"DocumentDeleted","docId":"…"}
  *             {"type":"IndexRebuilt","stats":{...}}
+ *             {"type":"VectorsSynced","stats":{"embedded":12,"highWaterMark":247}}
  *             {"type":"Error","threadId":"ask","message":"...","code":"..."}
  *             {"type":"Bye"}
+ *
+ * Episodic memory sync (Meeting Semantic Memory §09) runs automatically —
+ * once at startup and then every config.episodicSyncMaxAgeMs — as well as on
+ * explicit SyncVectors. Semantic memory sync (glossary terms, §06/§08) runs
+ * on its own, much slower cadence (config.semanticSyncMaxAgeMs) since
+ * glossary terms change far more slowly than chunks arrive — it is NOT tied
+ * to the episodic timer. The automatic runs are fire-and-forget: unlike the
+ * FTS rebuild above, embedding is a network call, so blocking Ready on it (or
+ * surfacing its failures as protocol Errors nobody asked for) would be wrong.
+ * SyncVectors exists for the same reason RebuildIndex does: an explicit,
+ * correlatable way to ask for the same work on demand — it runs whichever of
+ * the two syncs are configured, together, on request.
+ *
+ * Episodic retention (plan §05a) runs as a third, independent background job:
+ * PurgeEpisodicMemoryUseCase on config.episodicPurgeIntervalMs (default
+ * daily). It only ever removes Qdrant points past the retention window —
+ * meeting_history.db is never touched — so it has no busy-lane interaction
+ * with the two syncs above and no SyncVectors-style on-demand trigger.
  *
  * Every response to an Ask echoes its threadId. The host fans these out as
  * global Tauri events, so without it a UI with more than one thread appends
@@ -43,7 +63,7 @@ const { ChatbotError } = require('../domain/errors');
 
 /** Friendly labels for ChatThinking events (UI-side mapping lives in React). */
 function startStdioSidecar(container, io = {}) {
-  const { useCase, indexBuilder, store, logger, indexDocument, manageDocuments } = container;
+  const { useCase, indexBuilder, store, logger, indexDocument, manageDocuments, syncEpisodicMemory, syncSemanticMemory, purgeEpisodicMemory } = container;
 
   // Streams are injectable so the protocol can be driven by a test without
   // touching the real stdio or calling process.exit. Production passes
@@ -64,6 +84,95 @@ function startStdioSidecar(container, io = {}) {
   }
 
   emit({ type: 'Ready' });
+
+  // Episodic memory: fire-and-forget at startup, then on the configured
+  // interval for as long as this sidecar process lives (see class doc).
+  // Deliberately after Ready, unlike the FTS rebuild above: embedding is a
+  // network call and must not delay the sidecar becoming usable.
+  //
+  // episodicSyncBusy guards the startup call, every interval tick, AND an
+  // explicit SyncVectors against each other. Without it, a slow startup
+  // backfill still in flight when the first interval tick (or a manual
+  // SyncVectors) lands re-embeds the exact same pending chunks concurrently —
+  // confirmed the hard way in this feature's own verification: a 135-chunk
+  // backfill overlapped with a SyncVectors sent one second later duplicated
+  // all 135 embeddings before either had saved a high-water mark for the
+  // other to see. semanticSyncBusy guards the (separate, slower) semantic
+  // sync the same way, independently.
+  let episodicSyncTimer = null;
+  let semanticSyncTimer = null;
+  let purgeTimer = null;
+  let episodicSyncBusy = false;
+  let semanticSyncBusy = false;
+
+  const runEpisodicSync = async (opts) => {
+    if (!syncEpisodicMemory || episodicSyncBusy) return null;
+    episodicSyncBusy = true;
+    try {
+      return await syncEpisodicMemory.execute(opts);
+    } finally {
+      episodicSyncBusy = false;
+    }
+  };
+  const runSemanticSync = async () => {
+    if (!syncSemanticMemory || semanticSyncBusy) return null;
+    semanticSyncBusy = true;
+    try {
+      return await syncSemanticMemory.execute();
+    } finally {
+      semanticSyncBusy = false;
+    }
+  };
+
+  // In production these timers coexist with the stdin/readline listener
+  // below, which is what actually keeps the sidecar process alive — a
+  // background job must never be the ONLY thing pinning the event loop open,
+  // or a process that should otherwise be able to exit (streams closed, no
+  // pending work) would be stuck alive by a timer nobody is listening to the
+  // results of. Hence `.unref()` on every one of them.
+  if (syncEpisodicMemory) {
+    const runBackground = () => {
+      runEpisodicSync().then((stats) => {
+        if (stats && stats.embedded > 0) logger.info('sidecar', 'episodic_sync_done', stats);
+      }).catch((err) => {
+        // Background work — log, do not surface a protocol Error nobody
+        // asked for. SyncVectors below is the path for an explicit request.
+        logger.warn('sidecar', 'episodic_sync_failed', { message: err.message });
+      });
+    };
+    runBackground();
+    episodicSyncTimer = setInterval(runBackground, container.config.episodicSyncMaxAgeMs);
+    episodicSyncTimer.unref();
+  }
+
+  if (syncSemanticMemory) {
+    const runBackground = () => {
+      runSemanticSync().then((stats) => {
+        if (stats && stats.embedded > 0) logger.info('sidecar', 'semantic_sync_done', stats);
+      }).catch((err) => {
+        logger.warn('sidecar', 'semantic_sync_failed', { message: err.message });
+      });
+    };
+    runBackground();
+    semanticSyncTimer = setInterval(runBackground, container.config.semanticSyncMaxAgeMs);
+    semanticSyncTimer.unref();
+  }
+
+  // Retention (plan §05a): independent of both syncs above — it only ever
+  // deletes points past the retention window, never embeds anything, so it
+  // shares no busy lane with them.
+  if (purgeEpisodicMemory) {
+    const runPurge = () => {
+      purgeEpisodicMemory.execute().then((res) => {
+        if (res && res.deleted > 0) logger.info('sidecar', 'episodic_purge_done', res);
+      }).catch((err) => {
+        logger.warn('sidecar', 'episodic_purge_failed', { message: err.message });
+      });
+    };
+    runPurge();
+    purgeTimer = setInterval(runPurge, container.config.episodicPurgeIntervalMs);
+    purgeTimer.unref();
+  }
 
   const rl = readline.createInterface({ input, terminal: false });
 
@@ -204,6 +313,23 @@ function startStdioSidecar(container, io = {}) {
         emit({ type: 'IndexRebuilt', stats });
         return;
       }
+      case 'SyncVectors': {
+        if (!syncEpisodicMemory && !syncSemanticMemory) {
+          emit({ type: 'Error', message: 'Memory sync unavailable (no API key)', code: 'CONFIG_ERROR' });
+          return;
+        }
+        if (episodicSyncBusy || semanticSyncBusy) {
+          emit({ type: 'Error', message: 'Memory sync already running', code: 'BUSY' });
+          return;
+        }
+        // An explicit request runs whichever of the two syncs are
+        // configured, together — unlike the independent background timers.
+        const stats = {};
+        if (syncEpisodicMemory) stats.episodic = await runEpisodicSync({ force: Boolean(msg.force) });
+        if (syncSemanticMemory) stats.semantic = await runSemanticSync();
+        emit({ type: 'VectorsSynced', stats });
+        return;
+      }
       case 'Shutdown': {
         emit({ type: 'Bye' });
         shutdown(0);
@@ -215,6 +341,9 @@ function startStdioSidecar(container, io = {}) {
   }
 
   function shutdown(code) {
+    if (episodicSyncTimer) clearInterval(episodicSyncTimer);
+    if (semanticSyncTimer) clearInterval(semanticSyncTimer);
+    if (purgeTimer) clearInterval(purgeTimer);
     try { container.shutdown(); } catch (_) { /* best effort */ }
     exit(code);
   }

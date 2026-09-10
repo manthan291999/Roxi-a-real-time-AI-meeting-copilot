@@ -37,6 +37,10 @@ pub struct SidecarEvent {
     pub display_id: Option<String>,
     #[serde(rename = "projectId")]
     pub project_id: Option<i64>,
+
+    // --- ChunkPersisted ---
+    #[serde(rename = "chunkId")]
+    pub chunk_id: Option<i64>,
 }
 
 #[derive(serde::Serialize, Clone)]

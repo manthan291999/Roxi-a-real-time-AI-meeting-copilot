@@ -1,1 +1,1 @@
-export type WidgetTab = 'ask' | 'listen' | 'suggest' | 'history' | 'library';
+export type AppView = 'session' | 'history' | 'library';

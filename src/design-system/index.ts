@@ -7,6 +7,7 @@ export * from './components/TagChip';
 export * from './components/SelectableChip';
 export * from './components/GlassCard';
 export * from './components/SignalRing';
+export * from './components/LiveOrb';
 export * from './components/StatusDot';
 export * from './components/Waveform';
 export * from './components/IconButton';

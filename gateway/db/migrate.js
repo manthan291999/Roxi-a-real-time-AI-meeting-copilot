@@ -147,6 +147,11 @@ const MIGRATIONS = [
       "UPDATE meetings SET project_id = (SELECT project_id FROM projects WHERE code = 'GEN') WHERE project_id IS NULL",
     ],
   },
+  {
+    version: 9,
+    description: 'M009 persist meeting role for post-hoc persona framing',
+    statements: ['ALTER TABLE meetings ADD COLUMN role TEXT'],
+  },
 ];
 
 /**

@@ -158,9 +158,17 @@ function extractMFCC(pcm16) {
 
 /**
  * Cosine similarity between two Float32Arrays of equal length.
+ *
+ * A length mismatch (e.g. a speaker_embeddings row persisted under a
+ * previous NUM_COEFFS) silently produced NaN/garbage comparisons rather than
+ * a clean "no match" — NaN losing every `>` comparison happened to make this
+ * safe today, but only by accident. Guard it explicitly so schema drift can
+ * never turn into wrong voice matches or a thrown exception.
  * @returns {number} value in [-1, 1]; higher = more similar
  */
 function cosineSimilarity(a, b) {
+  if (!a || !b || a.length !== b.length) return 0;
+
   let dot = 0, magA = 0, magB = 0;
   for (let i = 0; i < a.length; i++) {
     dot  += a[i] * b[i];

@@ -15,7 +15,7 @@ export const IconButton: React.FC<IconButtonProps> = ({ icon, onClick, className
       onClick={onClick}
       aria-label={label}
       title={label}
-      className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-all duration-[120ms] ease-[cubic-bezier(.2,.8,.2,1)]
+      className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-all duration-[120ms] ease-[cubic-bezier(.2,.8,.2,1)] active:scale-90
         ${active
           ? 'text-[var(--t-signal)] bg-[var(--t-signal-dim)] border border-[var(--t-signal-line)]'
           : 'text-[var(--t-mute)] bg-[var(--t-panel-raised)] border border-[var(--t-hairline-soft)] hover:text-[var(--t-paper)] hover:bg-[var(--t-signal-dim)] hover:border-[var(--t-signal-line)]'}

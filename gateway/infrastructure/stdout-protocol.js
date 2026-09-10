@@ -30,6 +30,7 @@ const EventType = Object.freeze({
   SPEAKER_REVISION: 'SpeakerRevision',
   MEETING_SUMMARY: 'MeetingSummary',
   ERROR: 'Error',
+  CHUNK_PERSISTED: 'ChunkPersisted',
 });
 
 /**
@@ -86,6 +87,8 @@ const emitSpeakerRevision = (revision) =>
 
 const emitMeetingSummary = (text) => emit(EventType.MEETING_SUMMARY, { text });
 
+const emitChunkPersisted = (chunkId) => emit(EventType.CHUNK_PERSISTED, { chunkId });
+
 const emitError = (message) => emit(EventType.ERROR, { message });
 
 module.exports = {
@@ -97,5 +100,6 @@ module.exports = {
   emitProviderStatus,
   emitSpeakerRevision,
   emitMeetingSummary,
+  emitChunkPersisted,
   emitError,
 };
