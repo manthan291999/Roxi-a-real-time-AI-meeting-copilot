@@ -201,6 +201,11 @@ Put them in a **root `.env`** (not `gateway/.env`) — both Rust (`dotenvy::dote
 | `ASSEMBLYAI_API_KEY` | One of these two | Primary streaming STT |
 | `SPEECHMATICS_API_KEY` | " | Fallback STT |
 | `STT_PROVIDER` | No | Force `speechmatics` or `assemblyai` |
+| `STT_LANGUAGES` | No | Comma-separated codes sent as `language_codes` (default: 11 languages). AssemblyAI recommends committing to one (`STT_LANGUAGES=en`) when the meeting language is known — broad steering costs accuracy. |
+| `STT_MIN_TURN_SILENCE` / `STT_MAX_TURN_SILENCE` | No | Turn-detection silence in ms (default 400 / 1500, range 50–10000 / 400–10000). Deliberately above AssemblyAI's voice-agent defaults: meeting speakers pause mid-thought, and an early cut splits one idea into two chunks for the agent pipeline. Lower both to cut latency. |
+| `STT_MAX_SPEAKERS` | No | Diarization cap, 1–10 (default 10) |
+| `STT_MODE` | No | `balanced` (default), `max_accuracy`, or `min_latency` |
+| `STT_VOICE_FOCUS` | No | `near-field` or `far-field` noise suppression; off by default (BlackHole loopback is already clean, and it bills extra per hour) |
 | `LLM_BUDGET_SOFT` / `LLM_BUDGET_HARD` | No | Circuit breaker call caps (default 60/80) |
 | `ANOMALY_COST_PER_CHUNK_USD` / `ANOMALY_COST_PER_MIN_USD` / `ANOMALY_SESSION_BUDGET_USD` | No | Cost anomaly thresholds (default 0.05 / 0.10 / 2.00) |
 | `CHATBOT_LLM_BUDGET_SOFT` / `CHATBOT_LLM_BUDGET_HARD` | No | Chatbot's own budget guard |
@@ -227,7 +232,9 @@ npm test                 # chatbot tests only (npm --prefix chatbot test)
 npm run test:all          # chatbot + gateway
 cd chatbot && node --test test/routing.test.js     # single chatbot test file
 cd chatbot && node --test --reporter=tap "test/*.test.js"   # CI-style
-cd gateway && npm test    # currently a stub (TEST-001 in audit/CODE-AUDIT-REPORT.md) — no real gateway tests exist yet
+cd gateway && npm test    # 83 tests: db, deframer, diarization/pipeline, protocol,
+                          # provider-manager, STT provider contract, AssemblyAI context hints
+                          # (TEST-001 in audit/CODE-AUDIT-REPORT.md is stale — these now exist)
 
 # Rust — cargo is at ~/.cargo/bin/cargo, not always on PATH
 cd src-tauri && cargo build

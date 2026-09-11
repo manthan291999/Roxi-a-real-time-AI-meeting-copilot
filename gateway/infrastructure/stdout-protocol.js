@@ -76,14 +76,23 @@ const emitMeetingStarted = (meetingId, displayId, projectId) =>
 const emitPartial = (text, speaker, sttLabel) =>
   emit(EventType.PARTIAL, { text, speaker, sttLabel });
 
-const emitFinal = (text, speaker, sttLabel, start, end) =>
-  emit(EventType.FINAL, { text, speaker, sttLabel, start, end });
+/**
+ * `turnOrder` is the provider's index for this turn. It is the only handle a
+ * later SpeakerRevision has on the turns it corrects, so it has to travel with
+ * the transcript. Undefined for providers that do not number their turns.
+ */
+const emitFinal = (text, speaker, sttLabel, start, end, turnOrder) =>
+  emit(EventType.FINAL, { text, speaker, sttLabel, start, end, turnOrder });
 
 const emitProviderStatus = (provider, state) =>
   emit(EventType.PROVIDER_STATUS, { provider, state });
 
-const emitSpeakerRevision = (revision) =>
-  emit(EventType.SPEAKER_REVISION, { revision });
+/**
+ * Retroactive speaker corrections. Plural: the provider revises a batch of
+ * earlier turns at once, not one at a time.
+ */
+const emitSpeakerRevision = (revisions) =>
+  emit(EventType.SPEAKER_REVISION, { revisions });
 
 const emitMeetingSummary = (text) => emit(EventType.MEETING_SUMMARY, { text });
 

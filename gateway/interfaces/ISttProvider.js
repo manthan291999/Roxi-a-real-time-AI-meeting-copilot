@@ -27,7 +27,8 @@
  *   'closed'           { code, reason }
  *
  * Optional events:
- *   'speakerRevision'  { revision }   only providers that revise labels
+ *   'speakerRevision'  { revisions }  only providers that revise labels;
+ *                      an array of corrections, not a single one
  */
 
 'use strict';

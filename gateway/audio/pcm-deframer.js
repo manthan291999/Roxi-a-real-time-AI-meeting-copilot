@@ -9,7 +9,7 @@
  *
  * Both use an 8-byte header, so a single scan handles both and an unrecognized
  * or corrupt header resyncs by scanning forward for either magic. Control
- * frames are rare and small; audio frames are ~8KB every 250ms.
+ * frames are rare and small; audio frames are ~3.2KB every 100ms.
  *
  * The audio path must never be blocked by a malformed control frame, so JSON
  * parse failures are reported and skipped rather than thrown.
