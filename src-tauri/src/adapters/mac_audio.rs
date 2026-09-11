@@ -39,11 +39,16 @@ impl MacAudioCapture {
 }
 
 impl AudioCapture for MacAudioCapture {
-    fn start_capture(&self, sink: Box<dyn PcmSink>) -> Result<()> {
+    fn start_capture(
+        &self,
+        sink: Box<dyn PcmSink>,
+        on_failure: Box<dyn Fn(String) + Send + Sync + 'static>,
+    ) -> Result<()> {
         // Pre-flight on the calling thread. Everything below runs on a spawned
-        // thread whose only error path is a log line, and this function returns
-        // before it runs — so a device failure used to surface as a successful
-        // start_capture followed by "Waiting for speech..." forever.
+        // thread whose only error path used to be a log line, with this function
+        // already having returned — so a device failure surfaced as a successful
+        // start_capture followed by "Waiting for speech..." forever. on_failure
+        // closes that gap for failures that only manifest after this point.
         {
             let host = cpal::default_host();
             let device = find_loopback_device(&host, &None)
@@ -55,7 +60,7 @@ impl AudioCapture for MacAudioCapture {
 
         self.running.store(true, Ordering::SeqCst);
         let running_flag = self.running.clone();
-        
+
         std::thread::spawn(move || {
             let config = CaptureConfig {
                 duration_secs: 0,
@@ -63,12 +68,15 @@ impl AudioCapture for MacAudioCapture {
                 target_sample_rate: 16_000,
                 target_channels: 1,
             };
-            
-            if let Err(e) = capture_to_sink_internal(config, sink, running_flag) {
+
+            let on_failure = Arc::new(on_failure);
+            let outer_on_failure = on_failure.clone();
+            if let Err(e) = capture_to_sink_internal(config, sink, running_flag, on_failure) {
                 error!("Capture error: {}", e);
+                outer_on_failure(format!("Audio capture failed: {}", e));
             }
         });
-        
+
         Ok(())
     }
 
@@ -127,7 +135,12 @@ fn find_loopback_device(host: &Host, name_filter: &Option<String>) -> Result<Dev
 
 /// Generic capture function: opens the loopback device, resamples to 16kHz mono,
 /// and feeds PCM16 samples into the provided sink.
-fn capture_to_sink_internal(config: CaptureConfig, sink: Box<dyn PcmSink>, running: Arc<AtomicBool>) -> Result<()> {
+fn capture_to_sink_internal(
+    config: CaptureConfig,
+    sink: Box<dyn PcmSink>,
+    running: Arc<AtomicBool>,
+    on_failure: Arc<Box<dyn Fn(String) + Send + Sync + 'static>>,
+) -> Result<()> {
     let host = cpal::default_host();
     let device = find_loopback_device(&host, &config.device_name)?;
     let device_name = device.name().unwrap_or_else(|_| "<unknown>".into());
@@ -293,6 +306,7 @@ fn capture_to_sink_internal(config: CaptureConfig, sink: Box<dyn PcmSink>, runni
     // --- Start Mixer Thread ---
     let mixer_running = running.clone();
     let mixer_sink = sink.clone();
+    let mixer_on_failure = on_failure.clone();
     let mixer_handle = std::thread::spawn(move || {
         let mut loopback_buf = VecDeque::new();
         let mut mic_buf = VecDeque::new();
@@ -334,6 +348,7 @@ fn capture_to_sink_internal(config: CaptureConfig, sink: Box<dyn PcmSink>, runni
                     if let Err(e) = s.write_samples(&mixed) {
                         warn!("Sink write error: {}", e);
                         mixer_running.store(false, Ordering::SeqCst);
+                        mixer_on_failure(format!("Audio pipeline stopped: {}", e));
                     }
                 }
             }

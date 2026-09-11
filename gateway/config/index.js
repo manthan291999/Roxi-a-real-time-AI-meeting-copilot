@@ -72,6 +72,9 @@ function load({ env = process.env, argv = process.argv } = {}) {
     }),
 
     meeting: Object.freeze({
+      /** The human-chosen title asked for by the intake modal. */
+      name: readArg(argv, '--meeting-name') || '',
+
       context: readArg(argv, '--context') || '',
       /**
        * Accepted because the Rust host sends it (gateway_client.rs), but not

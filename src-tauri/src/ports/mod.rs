@@ -1,4 +1,5 @@
 pub mod audio_capture;
+pub mod audio_meter;
 pub mod brief_source;
 pub mod chat_gateway;
 pub mod control;

@@ -140,6 +140,55 @@ test('semantic memory sync runs on its own cadence, independent of episodic', as
   });
 });
 
+test('SyncVectors threadId echo — background pushes cannot hijack a chat thread', async (t) => {
+  await t.test('a tagged SyncVectors gets the same threadId back on success', async () => {
+    const syncEpisodicMemory = fakeUseCase({ embedded: 1, highWaterMark: 9 });
+    const h = harness({
+      config: { indexMaxAgeMs: 60000, episodicSyncMaxAgeMs: 100_000 },
+      syncEpisodicMemory,
+    });
+    await h.settle();
+
+    h.send({ type: 'SyncVectors', force: false, threadId: '__background_sync__' });
+    await h.settle();
+
+    const [synced] = h.of('VectorsSynced');
+    assert.strictEqual(synced.threadId, '__background_sync__');
+  });
+
+  await t.test('a tagged SyncVectors gets the same threadId back on a BUSY error, not untagged', async () => {
+    const gate = new Promise(() => {});
+    const syncEpisodicMemory = { execute: () => gate };
+    const h = harness({
+      config: { indexMaxAgeMs: 60000, episodicSyncMaxAgeMs: 100_000 },
+      syncEpisodicMemory,
+    });
+
+    // Startup call is already in flight holding episodicSyncBusy.
+    h.send({ type: 'SyncVectors', threadId: '__background_sync__' });
+    await h.settle();
+
+    const [err] = h.of('Error');
+    assert.strictEqual(err.code, 'BUSY');
+    assert.strictEqual(err.threadId, '__background_sync__');
+  });
+
+  await t.test('an untagged SyncVectors (manual/CLI use) still gets an untagged reply', async () => {
+    const syncEpisodicMemory = fakeUseCase({ embedded: 1, highWaterMark: 9 });
+    const h = harness({
+      config: { indexMaxAgeMs: 60000, episodicSyncMaxAgeMs: 100_000 },
+      syncEpisodicMemory,
+    });
+    await h.settle();
+
+    h.send({ type: 'SyncVectors' });
+    await h.settle();
+
+    const [synced] = h.of('VectorsSynced');
+    assert.strictEqual('threadId' in synced, false);
+  });
+});
+
 test('episodic memory purge', async (t) => {
   await t.test('runs once at startup, independent of the sync timers', async () => {
     const purgeEpisodicMemory = fakeUseCase({ deleted: 2 });

@@ -1,6 +1,8 @@
+use crate::adapters::audio_meter::MeterSink;
 use crate::adapters::control_channel::{PipeControlChannel, SharedWriter};
 use crate::application::brief_usecase::{BriefUseCase, CaptureContext};
 use crate::application::session_registry::SessionRegistry;
+use crate::domain::audio_level::AudioLevel;
 use crate::domain::project::{ProjectRef, ProjectSelection};
 use crate::domain::session::SessionId;
 use crate::ports::audio_capture::AudioCapture;
@@ -57,10 +59,11 @@ impl CaptureUseCase {
     pub async fn start(
         &self,
         selection: ProjectSelection,
+        name: Option<String>,
         context: Option<String>,
         role: Option<String>,
         doc_ids: Option<Vec<String>>,
-        on_event: Box<dyn Fn(String) + Send + 'static>,
+        on_event: Arc<dyn Fn(String) + Send + Sync + 'static>,
     ) -> Result<SessionId> {
         if self.gateway_client.is_running() {
             return Err(anyhow!("Capture session is already running"));
@@ -98,14 +101,18 @@ impl CaptureUseCase {
             )
             .await;
 
-        // 3. Start the node sidecar.
+        // 3. Start the node sidecar. GatewayClient still takes a plain Box —
+        //    only CaptureUseCase's own signature needed to become Arc, so the
+        //    same callback can also be handed to audio_capture below.
+        let gateway_event = on_event.clone();
         let writer = match self.gateway_client.start_session(
             SessionRequest {
+                name,
                 context,
                 role,
                 project,
             },
-            on_event,
+            Box::new(move |text| gateway_event(text)),
         ) {
             Ok(writer) => writer,
             Err(e) => {
@@ -124,11 +131,48 @@ impl CaptureUseCase {
             .lock()
             .map_err(|_| anyhow!("Control channel mutex poisoned"))? = Some(control);
 
-        // 5. Wrap it in a StreamingSink
-        let sink = StreamingSink::new(shared);
+        // 5. Wrap it in a StreamingSink, then in a MeterSink.
+        //
+        //    The meter is a decorator, not a branch: StreamingSink still sees
+        //    every sample first and unchanged, so the STT path behaves the
+        //    same whether or not anything is listening to the readings.
+        //
+        //    Readings travel the same `on_event` channel the audio-failure
+        //    path already uses, shaped like a sidecar line so `event_router`
+        //    routes them with the machinery that exists. That is what keeps
+        //    the meter itself free of any dependency on Tauri.
+        let level_events = on_event.clone();
+        let sink = MeterSink::new(
+            Box::new(StreamingSink::new(shared)),
+            Arc::new(move |level: AudioLevel| {
+                let line = serde_json::json!({
+                    "type": "AudioLevel",
+                    "rms": level.rms,
+                    "low": level.low,
+                    "mid": level.mid,
+                    "high": level.high,
+                })
+                .to_string();
+                level_events(line);
+            }),
+        );
 
-        // 6. Start audio capture, pushing samples to sink
-        if let Err(e) = self.audio_capture.start_capture(Box::new(sink)) {
+        // 6. Start audio capture, pushing samples to sink. on_failure reuses
+        //    the same sidecar-event channel, synthesizing a line shaped like
+        //    the gateway's own Error event so event_router's existing
+        //    "Error" -> capture_error handling picks it up unchanged.
+        let audio_on_failure = on_event.clone();
+        if let Err(e) = self.audio_capture.start_capture(
+            Box::new(sink),
+            Box::new(move |message| {
+                let synthetic = serde_json::json!({
+                    "type": "Error",
+                    "message": message,
+                })
+                .to_string();
+                audio_on_failure(synthetic);
+            }),
+        ) {
             // Audio is the last thing to start and the most likely to fail (no
             // BlackHole, device in use). Unwind the sidecar and the session so a
             // failed start leaves nothing running.

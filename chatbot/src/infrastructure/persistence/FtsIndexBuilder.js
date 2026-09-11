@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS meetings_ref (
   id         INTEGER PRIMARY KEY,
   start_time TEXT,
   status     TEXT,
-  context    TEXT
+  context    TEXT,
+  name       TEXT
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS chat_fts USING fts5(
   source_table UNINDEXED,
@@ -52,6 +53,15 @@ class FtsIndexBuilder {
       this.db = new Database(this.indexDbPath);
       this.db.pragma('journal_mode = WAL');
       this.db.exec(SCHEMA);
+      // `CREATE TABLE IF NOT EXISTS` above only shapes a fresh index — an
+      // already-existing chat_index.db on disk keeps its old `meetings_ref`
+      // columns, so `name` needs its own local, idempotent migration here.
+      const hasName = this.db
+        .prepare("SELECT 1 FROM pragma_table_info('meetings_ref') WHERE name = 'name'")
+        .get();
+      if (!hasName) {
+        this.db.exec('ALTER TABLE meetings_ref ADD COLUMN name TEXT');
+      }
     } catch (err) {
       throw new StoreError(`Cannot open index database at ${this.indexDbPath}: ${err.message}`);
     }
@@ -85,7 +95,7 @@ class FtsIndexBuilder {
       'INSERT INTO chat_fts (source_table, source_id, meeting_id, speaker, text) VALUES (?, ?, ?, ?, ?)'
     );
     const insertMeeting = db.prepare(
-      'INSERT OR REPLACE INTO meetings_ref (id, start_time, status, context) VALUES (?, ?, ?, ?)'
+      'INSERT OR REPLACE INTO meetings_ref (id, start_time, status, context, name) VALUES (?, ?, ?, ?, ?)'
     );
     const setMeta = db.prepare(
       'INSERT INTO index_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
@@ -94,7 +104,7 @@ class FtsIndexBuilder {
     const txn = db.transaction(() => {
       db.exec('DELETE FROM chat_fts; DELETE FROM meetings_ref;');
       for (const m of meetings) {
-        insertMeeting.run(m.id, m.start_time || '', m.status || '', m.context || '');
+        insertMeeting.run(m.id, m.start_time || '', m.status || '', m.context || '', m.name || '');
       }
       for (const r of rows) {
         insertFts.run(r.sourceTable, r.sourceId, r.meetingId, r.speaker || '', r.text);

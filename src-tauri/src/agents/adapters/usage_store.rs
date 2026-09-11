@@ -290,7 +290,7 @@ impl UsageStore {
         })();
 
         if let Err(e) = res {
-            tracing::error!("[UsageStore] Failed to write LLM usage record: {:?}", e);
+            tracing::error!("[UsageStore] Failed to write LLM usage record: {}", e);
         }
     }
 }

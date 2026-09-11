@@ -1,5 +1,5 @@
 use tauri::{AppHandle, Emitter, Manager};
-use super::events::{SidecarEvent, TranscriptPayload, ExplanationPayload, ResponsePayload};
+use super::events::{AudioLevelPayload, SidecarEvent, TranscriptPayload, ExplanationPayload, ResponsePayload};
 use super::persistence;
 use crate::agents::orchestrator::chunk_graph::ChunkGraph;
 use crate::application::capture_usecase::CaptureUseCase;
@@ -57,6 +57,22 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                     let s = event.speaker.unwrap_or_else(|| "Speaker A".to_string());
                     let _ = app.emit("transcript_partial", TranscriptPayload { text: t, speaker: s, stt_label: event.stt_label });
                 }
+            }
+            // Not a gateway message: capture_usecase.rs synthesises this from
+            // the audio meter. Deliberately the cheapest arm in the match — it
+            // runs on the mixer thread, ~31 times a second, for the whole
+            // meeting, so it must never do work beyond handing the numbers to
+            // the webview.
+            "AudioLevel" => {
+                let _ = app.emit(
+                    "audio_level",
+                    AudioLevelPayload {
+                        rms: event.rms.unwrap_or(0.0),
+                        low: event.low.unwrap_or(0.0),
+                        mid: event.mid.unwrap_or(0.0),
+                        high: event.high.unwrap_or(0.0),
+                    },
+                );
             }
             "MeetingStarted" => {
                 // The gateway is the writer of `meetings`, so its row id only
@@ -300,11 +316,50 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                 }
             }
             "ChunkPersisted" => {
-                if let Some(chat_client) = app.try_state::<Arc<dyn crate::ports::chat_gateway::ChatGatewayClient + Send + Sync>>() {
-                    let _ = chat_client.send(serde_json::json!({
-                        "type": "SyncVectors",
-                        "force": false
-                    }).to_string());
+                // Correctness note (kept even though the branch below is
+                // disabled — see PUSH_SYNC_ENABLED): the state type here must
+                // match EXACTLY what lib.rs's `.manage(chat_client.clone())`
+                // registered — `Arc<dyn ChatGatewayClient>` (no extra `+ Send
+                // + Sync`). That extra bound looks redundant since the trait
+                // already requires Send + Sync as supertraits, but it is NOT
+                // a no-op: verified empirically that `TypeId::of::<Arc<dyn
+                // Trait>>()` and `TypeId::of::<Arc<dyn Trait + Send +
+                // Sync>>()` are different TypeIds even when `Trait: Send +
+                // Sync`. Tauri's `state()`/`try_state()` key on the exact
+                // registered type, so the previous mismatched spelling here
+                // meant `try_state` always returned `None` — this whole
+                // push-sync branch was silently dead code, masked completely
+                // by the 60s polling fallback in stdioSidecar.js (episodic
+                // memory just updated on the timer instead of "instantly,"
+                // with no visible error anywhere).
+                //
+                // INTENTIONALLY DISABLED for now: this near-real-time push is
+                // new, has never actually run end-to-end (the bug above means
+                // it silently never fired), and the already-proven 60s
+                // polling sync already keeps episodic memory fresh. Rather
+                // than newly activate never-exercised runtime behavior right
+                // before a live demo, it stays off here — flip
+                // PUSH_SYNC_ENABLED to true once it's been verified live.
+                const PUSH_SYNC_ENABLED: bool = false;
+                if PUSH_SYNC_ENABLED {
+                    if let Some(chat_client) = app.try_state::<Arc<dyn crate::ports::chat_gateway::ChatGatewayClient>>() {
+                        // threadId is a sentinel no real chat thread is ever
+                        // named — it exists so the chatbot echoes it back on
+                        // whatever it replies (VectorsSynced, or an Error if
+                        // a sync is already busy). Without it, an untagged
+                        // reply to this automatic per-chunk nudge could land
+                        // on whichever chat thread the frontend's
+                        // useChatThread happens to have pending at that exact
+                        // moment (its accepts() heuristic routes any untagged
+                        // event to "whichever thread is waiting"), silently
+                        // replacing a real in-flight Ask Roxi answer with an
+                        // internal "sync already running" error.
+                        let _ = chat_client.send(serde_json::json!({
+                            "type": "SyncVectors",
+                            "force": false,
+                            "threadId": "__background_sync__"
+                        }).to_string());
+                    }
                 }
             }
             "ProviderStatus" => {

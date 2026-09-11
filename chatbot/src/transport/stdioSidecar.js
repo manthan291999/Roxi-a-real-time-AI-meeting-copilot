@@ -314,12 +314,22 @@ function startStdioSidecar(container, io = {}) {
         return;
       }
       case 'SyncVectors': {
+        // threadId is echoed straight through when the sender supplied one —
+        // it never means "belongs to a chat conversation" here (no chat UI
+        // sends this message; only Rust's ChunkPersisted handler and the
+        // manual test/CLI paths do). It exists so a caller that DOES tag its
+        // request (e.g. a background nudge with a sentinel id no real chat
+        // thread will ever use) gets that same tag back, rather than an
+        // untagged reply — which useChatThread's accepts() would otherwise
+        // route to whichever chat thread happens to be waiting on an answer
+        // at that exact moment, silently overwriting it with a sync error.
+        const threadId = msg.threadId;
         if (!syncEpisodicMemory && !syncSemanticMemory) {
-          emit({ type: 'Error', message: 'Memory sync unavailable (no API key)', code: 'CONFIG_ERROR' });
+          emit({ type: 'Error', threadId, message: 'Memory sync unavailable (no API key)', code: 'CONFIG_ERROR' });
           return;
         }
         if (episodicSyncBusy || semanticSyncBusy) {
-          emit({ type: 'Error', message: 'Memory sync already running', code: 'BUSY' });
+          emit({ type: 'Error', threadId, message: 'Memory sync already running', code: 'BUSY' });
           return;
         }
         // An explicit request runs whichever of the two syncs are
@@ -327,7 +337,7 @@ function startStdioSidecar(container, io = {}) {
         const stats = {};
         if (syncEpisodicMemory) stats.episodic = await runEpisodicSync({ force: Boolean(msg.force) });
         if (syncSemanticMemory) stats.semantic = await runSemanticSync();
-        emit({ type: 'VectorsSynced', stats });
+        emit({ type: 'VectorsSynced', threadId, stats });
         return;
       }
       case 'Shutdown': {

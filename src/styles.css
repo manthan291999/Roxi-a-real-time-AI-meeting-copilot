@@ -190,6 +190,121 @@
   }
 }
 
+/* ---- Adaptive layout system -------------------------------------------
+   The window has no fixed design width (tauri.conf.json only sets a floor:
+   480x520). Two mechanisms make the shell respond to its OWN box instead of
+   the viewport or a device breakpoint list:
+
+   1. Fluid spacing via `cqw` (1% of the query container's inline size).
+      AppShell declares `container-type: inline-size` and names itself
+      `roxi-shell` (see AppShell.tsx); every clamp() below reads against
+      THAT box. This gives continuous, breakpoint-free tightening as the
+      window narrows — satisfies "reduce spacing" (section 6/10) without a
+      single arbitrary media-query step.
+
+   2. Structural composition changes via `@container roxi-shell (...)`,
+      used ONLY at the point a rule of content stops being viable (section
+      15) — never at generic device widths like 768px. Today there is
+      exactly one such rule: the live session's two-column split
+      (ChatPane | SuggestAnswersPane) collapses to a stacked column once
+      neither panel can hold its ~300px minimum content width any more.
+
+   Both are additive to the existing Tailwind utility classes already on
+   these elements — nothing here duplicates a component for a size. */
+
+.roxi-header {
+  padding-left: clamp(16px, 5cqw, 24px);
+  padding-right: clamp(16px, 5cqw, 24px);
+  padding-top: clamp(12px, 4cqw, 24px);
+  padding-bottom: clamp(6px, 1.5cqw, 8px);
+  column-gap: clamp(6px, 2cqw, 14px);
+}
+
+.roxi-header-controls {
+  column-gap: clamp(6px, 2cqw, 14px);
+}
+
+/* Below ~460px of shell width the header can no longer afford the wordmark
+   AND the full Live/Connecting pill text AND four icon buttons without
+   crowding hit targets — so the least-important label (the wordmark repeats
+   information already carried by the sparkle icon) yields first. */
+@container roxi-shell (max-width: 460px) {
+  .roxi-header-title-text {
+    display: none;
+  }
+  .roxi-status-pill-label {
+    display: none;
+  }
+  .roxi-status-pill {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+}
+
+.live-stage {
+  padding-left: clamp(16px, 5cqw, 24px);
+  padding-right: clamp(16px, 5cqw, 24px);
+  column-gap: clamp(10px, 3cqw, 16px);
+}
+
+/* The live workspace: SuggestAnswersPane ("Suggest Answers") and ChatPane
+   ("Ask Roxi") side by side. Each needs roughly 280-300px of
+   min-content width (message bubbles, context rows, the composer row with its
+   attach/send buttons) before wrapping/clipping starts. Two of those plus
+   the divider stop fitting comfortably under ~720px of shell width, which
+   is the ONE point this layout reorganizes rather than keeps compressing.
+
+   DOM order is Suggest then Chat (LiveSessionDashboard.tsx), chosen so the
+   STACKED layout — the narrow one, where this matters — reads top-to-bottom
+   in source order with no reordering at all. The row layout below is the one
+   that reorders, holding the desktop split at Chat | Suggest.
+
+   The divider therefore hangs off the two named columns rather than
+   :last-child, which no longer identifies the visually-last column. */
+.session-columns {
+  flex-direction: row;
+}
+
+.session-col {
+  border-bottom: none;
+}
+
+.session-col--chat {
+  order: 1;
+  border-right: 1px solid var(--t-hairline);
+}
+
+.session-col--suggest {
+  order: 2;
+  border-right: none;
+}
+
+@container roxi-shell (max-width: 720px) {
+  .session-columns {
+    flex-direction: column;
+  }
+
+  .session-col {
+    border-right: none;
+    /* Independently scrollable stacked panes instead of one competing for
+       height — each keeps its own conversation/suggestion scroll position. */
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  /* Back to source order: suggestions on top, the composer at the bottom
+     edge where the thumb is. */
+  .session-col--suggest {
+    order: 1;
+    border-bottom: 1px solid var(--t-hairline);
+  }
+
+  .session-col--chat {
+    order: 2;
+    border-bottom: none;
+  }
+}
+
 body {
   background-color: transparent; /* Needed for Tauri transparent windows */
   color: var(--t-paper);

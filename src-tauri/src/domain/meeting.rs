@@ -7,6 +7,7 @@ pub struct Meeting {
     pub end_time: Option<String>,
     pub context: Option<String>,
     pub summary: Option<String>,
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

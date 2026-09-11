@@ -2,19 +2,17 @@ import React, { memo } from 'react';
 import { SuggestCardType } from '../../shared/types';
 import { tokens, typeScale, signatureSerif } from '../../design-system/tokens';
 import { GlassCard } from '../../design-system/components/GlassCard';
-import { ThumbUpIcon, ThumbDownIcon, ArrowRightIcon } from '../../design-system/icons';
+import { ArrowRightIcon } from '../../design-system/icons';
 import { formatTime } from '../../utils';
 
 interface SuggestCardProps {
   card: SuggestCardType;
-  onThumbUp?: () => void;
-  onThumbDown?: () => void;
 }
 
 // PERF FIX #9a: Wrap in memo so unchanged cards don't re-render when a new
 // card is appended to the list. Without memo, every card re-renders whenever
 // any card is added — O(n) DOM updates when only 1 card changed.
-export const SuggestCard: React.FC<SuggestCardProps> = memo(({ card, onThumbUp, onThumbDown }) => {
+export const SuggestCard: React.FC<SuggestCardProps> = memo(({ card }) => {
   return (
     <GlassCard className="group" animateEnter>
       <div className="flex justify-between items-start">
@@ -79,27 +77,8 @@ export const SuggestCard: React.FC<SuggestCardProps> = memo(({ card, onThumbUp, 
         </p>
       )}
 
-      <div className="flex justify-between items-center pt-2.5 border-t" style={{ borderColor: tokens.hairlineSoft }}>
-        <div className="flex gap-3">
-          <button
-            type="button"
-            aria-label="Thumbs up"
-            className="transition-all duration-200 ease-[cubic-bezier(.2,.8,.2,1)] hover:text-[var(--t-paper)] hover:scale-110 active:scale-95 cursor-pointer"
-            style={{ color: tokens.mute }}
-            onClick={onThumbUp}
-          >
-            <ThumbUpIcon className="w-[18px] h-[18px]" />
-          </button>
-          <button
-            type="button"
-            aria-label="Thumbs down"
-            className="transition-all duration-200 ease-[cubic-bezier(.2,.8,.2,1)] hover:text-[var(--t-paper)] hover:scale-110 active:scale-95 cursor-pointer"
-            style={{ color: tokens.mute }}
-            onClick={onThumbDown}
-          >
-            <ThumbDownIcon className="w-[18px] h-[18px]" />
-          </button>
-        </div>
+      {/* Timestamp only — the card carries no feedback control. */}
+      <div className="flex justify-end items-center pt-2.5 border-t" style={{ borderColor: tokens.hairlineSoft }}>
         <span
           className="font-mono"
           style={{ color: tokens.muteDim, fontSize: typeScale.caption.fontSize, fontWeight: typeScale.caption.fontWeight }}

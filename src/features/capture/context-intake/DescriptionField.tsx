@@ -11,7 +11,6 @@ export const DescriptionField: React.FC<DescriptionFieldProps> = ({ value, onCha
     value={value}
     onChange={(event) => onChange(event.target.value)}
     rows={4}
-    autoFocus
     placeholder="e.g. Sprint planning for Q3 backend migration..."
     /* shrink-0: the modal is a flex column that can overflow the short window,
        and without this the textarea is the item that gets squashed to one line. */

@@ -28,6 +28,8 @@ export function useCaptureSession() {
   const [blackholeMissing, setBlackholeMissing] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [sessionId, setSessionId] = useState<number | null>(null);
+  /** Set when the previous session ended on its own rather than via Stop. */
+  const [lastError, setLastError] = useState<string | null>(null);
 
   useEffect(() => {
     captureService.checkBlackholeInstalled().then((installed) => {
@@ -40,8 +42,16 @@ export function useCaptureSession() {
     });
 
     const unlistenError = eventBus.onCaptureError((err) => {
-      setStatus('error');
       console.error('Capture error:', err);
+      // Land back on the idle screen with the reason visible, rather than
+      // leaving the live view frozen with no Stop button (status !== 'live'
+      // hides it — see WidgetHeader). Best-effort teardown: the backend
+      // process is already gone or dying, so failures here are expected and
+      // ignorable — the session is over either way.
+      captureService.stopCapture().catch(() => {});
+      setLastError(err);
+      setStatus('idle');
+      setSessionId(null);
     });
 
     return () => {
@@ -52,6 +62,7 @@ export function useCaptureSession() {
 
   const startCapture = useCallback(async (context?: MeetingContext) => {
     if (blackholeMissing) return;
+    setLastError(null);
     setStatus('connecting');
     try {
       const id = await captureService.startCapture(context);
@@ -60,7 +71,11 @@ export function useCaptureSession() {
       // would claim a connection the gateway has not reported yet.
     } catch (err) {
       console.error('Failed to start capture:', err);
-      setStatus('error');
+      // Back to idle with the reason visible, not a dangling 'error' status
+      // the render layer has no screen for (see onCaptureError above).
+      setLastError(err instanceof Error ? err.message : String(err));
+      setStatus('idle');
+      setSessionId(null);
     }
   }, [captureService, blackholeMissing]);
 
@@ -85,6 +100,7 @@ export function useCaptureSession() {
     blackholeMissing,
     isStopping,
     sessionId,
+    lastError,
     startCapture,
     stopCapture
   };

@@ -65,7 +65,13 @@ async function main() {
   // --- Persistence ------------------------------------------------------------
   let session;
   try {
-    session = startSession(cfg.dbPath, cfg.meeting.context, { id: cfg.meeting.projectId }, cfg.meeting.role);
+    session = startSession(
+      cfg.dbPath,
+      cfg.meeting.context,
+      { id: cfg.meeting.projectId },
+      cfg.meeting.role,
+      cfg.meeting.name
+    );
   } catch (err) {
     protocol.emitError(`Database init failed: ${err.message}`);
     logger.log('error', 'sidecar', 'db_init_failed', {

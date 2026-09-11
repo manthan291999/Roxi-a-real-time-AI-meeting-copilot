@@ -1,3 +1,4 @@
+pub mod audio_meter;
 pub mod chat_client;
 pub mod control_channel;
 pub mod db_paths;

@@ -1,7 +1,8 @@
 import React from 'react';
-import { tokens, typeScale, SignalRing } from '../../design-system';
+import { tokens, typeScale, VoiceWave } from '../../design-system';
 import { StartCaptureButton } from './StartCaptureButton';
 import { BlackholeNotice } from './BlackholeNotice';
+import { CaptureErrorNotice } from './CaptureErrorNotice';
 
 interface IdleScreenProps {
   /** Opens the context intake — this screen does not start capture itself. */
@@ -9,10 +10,12 @@ interface IdleScreenProps {
   onHistory: () => void;
   onLibrary: () => void;
   blackholeMissing: boolean;
+  /** Set when the previous session ended on its own rather than via Stop. */
+  lastError?: string | null;
 }
 
 /** The ready screen shown on launch. Presentational: no services, no session state. */
-export const IdleScreen: React.FC<IdleScreenProps> = ({ onStart, onHistory, onLibrary, blackholeMissing }) => (
+export const IdleScreen: React.FC<IdleScreenProps> = ({ onStart, onHistory, onLibrary, blackholeMissing, lastError }) => (
   <div
     className="h-full w-full flex flex-col items-center justify-center gap-8 px-10 text-center relative"
     // Transparent so the shell's glass shows through; this used to paint an
@@ -29,7 +32,11 @@ export const IdleScreen: React.FC<IdleScreenProps> = ({ onStart, onHistory, onLi
       }}
     />
 
-    <SignalRing scale="macro" isReady />
+    {/* Idle: no capture is running, so there is no meter to sample — the wave
+        renders its own slow "ready" travel until a session starts. */}
+    <div className="w-[280px] max-w-full">
+      <VoiceWave isLive variant="idle" height={72} />
+    </div>
 
     <div className="flex flex-col gap-3">
       <h2
@@ -59,7 +66,10 @@ export const IdleScreen: React.FC<IdleScreenProps> = ({ onStart, onHistory, onLi
       {blackholeMissing ? (
         <BlackholeNotice />
       ) : (
-        <StartCaptureButton onClick={onStart} />
+        <>
+          {lastError && <CaptureErrorNotice message={lastError} />}
+          <StartCaptureButton onClick={onStart} />
+        </>
       )}
 
       <div className="flex items-center gap-4">

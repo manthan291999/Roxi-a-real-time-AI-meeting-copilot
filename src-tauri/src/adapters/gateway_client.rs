@@ -2,17 +2,23 @@ use crate::ports::gateway::{GatewayClient, SessionRequest};
 use anyhow::{anyhow, Result};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
 pub struct NodeGatewayClient {
     sidecar: Arc<Mutex<Option<Child>>>,
+    /// Set before signaling the sidecar in `stop_session`, so the stdout
+    /// reader thread can tell an intentional stop from the process dying on
+    /// its own — only the latter should synthesize an error event.
+    stopping: Arc<AtomicBool>,
 }
 
 impl NodeGatewayClient {
     pub fn new() -> Self {
         Self {
             sidecar: Arc::new(Mutex::new(None)),
+            stopping: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -33,6 +39,12 @@ impl GatewayClient for NodeGatewayClient {
 
         let mut cmd = Command::new("node");
         cmd.arg(&sidecar_path);
+
+        if let Some(n) = request.name {
+            if !n.trim().is_empty() {
+                cmd.arg("--meeting-name").arg(n);
+            }
+        }
 
         if let Some(ctx) = request.context {
             if !ctx.trim().is_empty() {
@@ -58,7 +70,7 @@ impl GatewayClient for NodeGatewayClient {
             .current_dir(current_dir.join("../gateway"))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| anyhow!("Failed to start Node.js sidecar: {}", e))?;
 
@@ -70,19 +82,55 @@ impl GatewayClient for NodeGatewayClient {
             .stdout
             .take()
             .ok_or_else(|| anyhow!("Failed to open sidecar stdout"))?;
+        let sidecar_stderr = sidecar_process
+            .stderr
+            .take()
+            .ok_or_else(|| anyhow!("Failed to open sidecar stderr"))?;
 
         *sidecar_lock = Some(sidecar_process);
+        self.stopping.store(false, Ordering::SeqCst);
 
         // Start stdout listener thread
+        let stopping = self.stopping.clone();
         thread::spawn(move || {
             let reader = BufReader::new(sidecar_stdout);
             for line in reader.lines() {
                 match line {
                     Ok(text) => on_event(text),
-                    Err(_) => {
-                        tracing::warn!("[sidecar] Stdout closed.");
-                        break;
-                    }
+                    Err(_) => break,
+                }
+            }
+
+            // The loop above only ends when stdout closes — the sidecar
+            // process exited. If that wasn't triggered by our own
+            // stop_session (which sets `stopping` first), the process died
+            // on its own and never got a chance to report why over its
+            // normal Error/ProviderStatus protocol lines: without this, the
+            // frontend has no signal at all and the UI just freezes on
+            // whatever status it last showed.
+            if !stopping.load(Ordering::SeqCst) {
+                tracing::warn!("[sidecar] Stdout closed unexpectedly — sidecar process likely died.");
+                let synthetic = serde_json::json!({
+                    "type": "Error",
+                    "message": "Transcription process ended unexpectedly"
+                })
+                .to_string();
+                on_event(synthetic);
+            } else {
+                tracing::info!("[sidecar] Stdout closed.");
+            }
+        });
+
+        // stderr carries the gateway's own structured log lines (see
+        // gateway/infrastructure/logger.js) — parsed and re-emitted through
+        // this process's own formatter (crate::logging) instead of being
+        // inherited raw into the terminal.
+        thread::spawn(move || {
+            let reader = BufReader::new(sidecar_stderr);
+            for line in reader.lines() {
+                match line {
+                    Ok(text) => crate::logging::relay_sidecar_log("gateway", &text),
+                    Err(_) => break,
                 }
             }
         });
@@ -91,6 +139,9 @@ impl GatewayClient for NodeGatewayClient {
     }
 
     fn stop_session(&self) -> Result<()> {
+        // Set before signaling: the stdout reader thread checks this the
+        // moment the pipe closes, which can race the kill signal below.
+        self.stopping.store(true, Ordering::SeqCst);
         let mut sidecar_lock = self.sidecar.lock().unwrap();
         if let Some(mut child) = sidecar_lock.take() {
             let pid = child.id();

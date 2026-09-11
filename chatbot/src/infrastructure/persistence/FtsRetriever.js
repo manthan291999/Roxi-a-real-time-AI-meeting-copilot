@@ -49,7 +49,8 @@ class FtsRetriever {
              f.speaker       AS speaker,
              snippet(chat_fts, 4, '', '', ' … ', 48) AS snippetText,
              bm25(chat_fts)  AS bm25,
-             m.start_time    AS meetingDate
+             m.start_time    AS meetingDate,
+             m.name          AS meetingName
       FROM chat_fts AS f
       LEFT JOIN meetings_ref AS m ON m.id = f.meeting_id
       WHERE chat_fts MATCH ?
@@ -74,6 +75,7 @@ class FtsRetriever {
         seen.set(key, {
           meetingId: r.meetingId,
           meetingDate: r.meetingDate || '',
+          meetingName: r.meetingName || '',
           sourceTable: r.sourceTable,
           sourceId: r.sourceId,
           speaker: r.speaker || '',

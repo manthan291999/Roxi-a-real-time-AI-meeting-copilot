@@ -13,9 +13,10 @@ import {
   DocumentProgress,
   DocumentReady,
   UploadedDocument,
-  DocumentDeleted
+  DocumentDeleted,
+  AudioLevel
 } from '../shared/types';
-import { SuggestAnswerWire, TranscriptWire } from './wire';
+import { AudioLevelWire, SuggestAnswerWire, TranscriptWire } from './wire';
 import { toSuggestCard, toTxLine } from './mappers';
 
 export class TauriEventBus implements IEventBus {
@@ -32,6 +33,26 @@ export class TauriEventBus implements IEventBus {
     };
   }
   
+  /**
+   * Stamped with the arrival time here rather than in Rust: the two clocks are
+   * unrelated, and the only question a consumer asks of it is "how long since
+   * the last reading", which is a local one.
+   */
+  onAudioLevel(cb: (level: AudioLevel) => void) {
+    const unlisten = listen<AudioLevelWire>('audio_level', (e) =>
+      cb({
+        rms: e.payload.rms ?? 0,
+        low: e.payload.low ?? 0,
+        mid: e.payload.mid ?? 0,
+        high: e.payload.high ?? 0,
+        at: performance.now(),
+      })
+    );
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }
+
   onTranscriptPartial(cb: (line: TxLine) => void) {
     const unlisten = listen<TranscriptWire>('transcript_partial', (e) => cb(toTxLine(e.payload, true)));
     return () => unlisten.then(f => f());

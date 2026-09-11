@@ -21,10 +21,21 @@ const {
  * Which corpus a hit came from. EvidenceSource adapters stamp sourceType; the
  * fallbacks cover hits assembled by hand (tests, older callers) and default
  * to 'meeting' — the vocabulary the shipped prompt already used.
- * @returns {'meeting'|'document'|'live'}
+ * 'semantic' is glossary/vocabulary knowledge (SemanticMemoryEvidenceSource)
+ * — cross-meeting by nature (meetingId is always null), so it must NOT fall
+ * through to the 'meeting' default below: that would derive a citation from
+ * a hit that has no meeting at all, reproducing the exact "Meeting #0" bug
+ * toSources()'s own doc comment already warns about, just for a new source
+ * type that was never added to this allow-list.
+ * @returns {'meeting'|'document'|'live'|'semantic'}
  */
 function sourceTypeOf(hit) {
-  if (hit.sourceType === 'meeting' || hit.sourceType === 'document' || hit.sourceType === 'live') {
+  if (
+    hit.sourceType === 'meeting' ||
+    hit.sourceType === 'document' ||
+    hit.sourceType === 'live' ||
+    hit.sourceType === 'semantic'
+  ) {
     return hit.sourceType;
   }
   return hit.docId ? 'document' : 'meeting';
@@ -89,12 +100,15 @@ function boundEvidence(hits) {
   }
 
   let docSeq = 0;
+  let semSeq = 0;
   return selectGroups([...groups.values()]).flatMap((group) => {
     const ref = group.sourceType === 'document'
       ? `D${(docSeq += 1)}`
       : group.sourceType === 'live'
         ? 'L1' // one group, 'live:current' — always the sole live citation in an answer
-        : `M${group.hits[0].meetingId}`;
+        : group.sourceType === 'semantic'
+          ? `G${(semSeq += 1)}` // glossary/vocabulary — no meetingId to key off
+          : `M${group.hits[0].meetingId}`;
     return group.hits.map((h) => ({
       ...h,
       ref,
@@ -147,10 +161,16 @@ function toSources(hits, citedRefs = null) {
       // No meetingId/date to attach — it hasn't been persisted as a
       // completed meeting record yet, unlike a 'meeting' hit.
       card.speaker = h.speaker || '';
+    } else if (sourceType === 'semantic') {
+      // No meetingId/date either, for the opposite reason: glossary/
+      // vocabulary knowledge is cross-meeting by design (plan §06's "a term
+      // shouldn't look project- or meeting-scoped from one stray mention") —
+      // `h.text` already carries "term: definition", same as the snippet.
     } else {
       card.meetingId = Number(h.meetingId);
       card.date = h.meetingDate || '';
       card.speaker = h.speaker || '';
+      card.meetingName = h.meetingName || '';
     }
     out.push(card);
   }

@@ -65,7 +65,7 @@ async fn run_agent_timed(agent: Arc<dyn Agent>, state: ChunkState) -> (ChunkStat
     match agent.run(&state).await {
         Ok(next) => (next, start.elapsed().as_millis() as u64, "OK".to_string()),
         Err(e) => {
-            tracing::error!("[chunk_graph] {} failed: {:?}", agent.name(), e);
+            tracing::error!("[chunk_graph] {} failed: {}", agent.name(), e);
             (state, start.elapsed().as_millis() as u64, "ERR".to_string())
         }
     }

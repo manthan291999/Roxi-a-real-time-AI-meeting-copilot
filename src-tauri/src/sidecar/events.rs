@@ -41,6 +41,25 @@ pub struct SidecarEvent {
     // --- ChunkPersisted ---
     #[serde(rename = "chunkId")]
     pub chunk_id: Option<i64>,
+
+    // --- AudioLevel ---
+    // Synthesised by application/capture_usecase.rs, not sent by the gateway:
+    // the meter rides this channel because it already exists and is routed.
+    // All four are normalised 0.0..=1.0.
+    pub rms: Option<f32>,
+    pub low: Option<f32>,
+    pub mid: Option<f32>,
+    pub high: Option<f32>,
+}
+
+/// Payload of the `audio_level` Tauri event. Flat and unlabelled on purpose —
+/// it is read ~31 times a second by a render loop.
+#[derive(serde::Serialize, Clone, Copy)]
+pub struct AudioLevelPayload {
+    pub rms: f32,
+    pub low: f32,
+    pub mid: f32,
+    pub high: f32,
 }
 
 #[derive(serde::Serialize, Clone)]

@@ -77,12 +77,14 @@ class MeetingSession {
  * @param {string} dbPath          from config; ':memory:' in tests
  * @param {string} [meetingContext] user-supplied briefing
  * @param {{id?: number|null}} [projectSelection] resolved by the Rust host
+ * @param {string} [meetingRole]
+ * @param {string} [meetingName] user-chosen title, collected at capture start
  * @returns {MeetingSession}
  * @throws if the database cannot be opened or migrated
  */
-function startSession(dbPath, meetingContext = '', projectSelection = {}, meetingRole = null) {
+function startSession(dbPath, meetingContext = '', projectSelection = {}, meetingRole = null, meetingName = null) {
   const { db } = open(dbPath);
-  const meetings = MeetingRepository.start(db, meetingContext, projectSelection, meetingRole);
+  const meetings = MeetingRepository.start(db, meetingContext, projectSelection, meetingRole, meetingName);
   return new MeetingSession(
     db,
     meetings,

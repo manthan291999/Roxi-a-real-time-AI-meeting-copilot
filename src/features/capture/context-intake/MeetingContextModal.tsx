@@ -4,6 +4,7 @@ import { tokens, radius } from '../../../design-system';
 import { StartCaptureButton } from '../StartCaptureButton';
 import { MEETING_PRESETS, MEETING_ROLES } from './presets';
 import { useMeetingContextForm } from './useMeetingContextForm';
+import { MeetingNameField } from './MeetingNameField';
 import { DescriptionField } from './DescriptionField';
 import { FieldLabel } from './FieldLabel';
 import { IntakeBrand } from './IntakeBrand';
@@ -16,8 +17,12 @@ import { useDocumentLibrary } from '../../library/useDocumentLibrary';
 import { ContextDocumentPicker } from './ContextDocumentPicker';
 
 interface MeetingContextModalProps {
-  /** Receives the assembled context, or undefined when the user skips. */
-  onConfirm: (context?: MeetingContext) => void;
+  /**
+   * Receives the assembled context. `name` is always present — both buttons
+   * stay disabled until it's filled in; "Skip this context" sends just the
+   * name, discarding description/role/project/docs.
+   */
+  onConfirm: (context: MeetingContext) => void;
   onCancel: () => void;
 }
 
@@ -27,6 +32,7 @@ interface MeetingContextModalProps {
  */
 export const MeetingContextModal: React.FC<MeetingContextModalProps> = ({ onConfirm, onCancel }) => {
   const form = useMeetingContextForm();
+  const canStart = form.name.trim().length > 0;
   const services = useServices();
   const picker = useProjectPicker(services.projectRepository);
   const { documents, progressMap, addDocument } = useDocumentLibrary(0);
@@ -68,6 +74,11 @@ export const MeetingContextModal: React.FC<MeetingContextModalProps> = ({ onConf
             the short (780px) widget window. */}
         <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto custom-scrollbar">
           <IntakeBrand />
+
+          <section className="flex shrink-0 flex-col gap-3">
+            <FieldLabel>Meeting name (required)</FieldLabel>
+            <MeetingNameField value={form.name} onChange={form.setName} />
+          </section>
 
           <header className="flex shrink-0 flex-col gap-2">
             <h2 className="text-[26px] font-bold leading-tight tracking-tight" style={{ color: tokens.paper }}>
@@ -119,16 +130,24 @@ export const MeetingContextModal: React.FC<MeetingContextModalProps> = ({ onConf
           />
         </div>
 
-        <footer className="mt-5 flex shrink-0 items-center justify-between gap-4">
-          <button
-            type="button"
-            onClick={() => onConfirm(undefined)}
-            className="text-[14px] transition-opacity ease-[cubic-bezier(.2,.8,.2,1)] hover:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-focus-ring)] rounded"
-            style={{ color: tokens.mute }}
-          >
-            Skip this context
-          </button>
-          <StartCaptureButton onClick={() => onConfirm(form.toMeetingContext())} />
+        <footer className="mt-5 flex shrink-0 flex-col gap-2">
+          {!canStart && (
+            <p className="text-[12px]" style={{ color: tokens.mute }}>
+              Enter a meeting name to continue.
+            </p>
+          )}
+          <div className="flex items-center justify-between gap-4">
+            <button
+              type="button"
+              disabled={!canStart}
+              onClick={() => canStart && onConfirm({ name: form.name.trim() })}
+              className="text-[14px] transition-opacity ease-[cubic-bezier(.2,.8,.2,1)] hover:enabled:opacity-70 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-focus-ring)] rounded"
+              style={{ color: tokens.mute }}
+            >
+              Skip this context
+            </button>
+            <StartCaptureButton disabled={!canStart} onClick={() => onConfirm(form.toMeetingContext())} />
+          </div>
         </footer>
       </div>
     </div>

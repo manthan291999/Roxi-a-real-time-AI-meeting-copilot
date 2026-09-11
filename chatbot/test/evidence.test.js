@@ -54,6 +54,21 @@ function liveHit(sourceId, text = 'we just said this', speaker = 'Speaker A') {
   };
 }
 
+function semanticHit(term, sourceId = term) {
+  // Mirrors SemanticMemoryEvidenceSource.js's hit shape exactly.
+  return {
+    sourceType: 'semantic',
+    groupKey: `glossary:${term}`,
+    sourceTable: 'glossary_term',
+    sourceId,
+    meetingId: null,
+    meetingDate: '',
+    speaker: '',
+    text: `${term}: a definition`,
+    score: 0.95,
+  };
+}
+
 test('boundEvidence caps groups and snippets per group', () => {
   const hits = [];
   for (let m = 1; m <= MAX_EVIDENCE_GROUPS + 3; m++) {
@@ -159,12 +174,23 @@ test('toSources maps meeting hits to protocol shape and dedupes', () => {
   assert.strictEqual(sources.length, 2);
   assert.deepStrictEqual(
     Object.keys(sources[0]).sort(),
-    ['date', 'meetingId', 'ref', 'snippet', 'sourceTable', 'sourceType', 'speaker'],
+    ['date', 'meetingId', 'meetingName', 'ref', 'snippet', 'sourceTable', 'sourceType', 'speaker'],
   );
   assert.strictEqual(sources[0].meetingId, 3);
   assert.strictEqual(sources[0].ref, 'M3');
   assert.strictEqual(sources[0].sourceType, 'meeting');
   assert.strictEqual(sources[0].snippet, 'hello');
+});
+
+test('toSources carries the meeting name through to the source card', () => {
+  const named = { ...hit(64, 1, 'deep learning'), meetingName: 'Deep Learning Fundamentals Review' };
+  const [card] = toSources(boundEvidence([named]));
+  assert.strictEqual(card.meetingName, 'Deep Learning Fundamentals Review');
+});
+
+test('toSources falls back to an empty meeting name for legacy (unnamed) meetings', () => {
+  const [card] = toSources(boundEvidence([hit(64, 1, 'no name on this one')]));
+  assert.strictEqual(card.meetingName, '');
 });
 
 test('toSources emits document fields and no meetingId for document hits', () => {
@@ -233,4 +259,43 @@ test('toSources filters cited refs across all three source types', () => {
   const hits = boundEvidence([hit(3, 1), docHit('abc', 'c1'), liveHit(0)]);
   const sources = toSources(hits, ['L1']);
   assert.deepStrictEqual(sources.map((s) => s.ref), ['L1']);
+});
+
+test('semantic (glossary) hits get ref G1, not a fabricated "Meeting #0"', () => {
+  // Regression test: sourceTypeOf() used to have no 'semantic' branch, so a
+  // glossary hit fell through to the 'meeting' default and was keyed off its
+  // (always-null) meetingId — producing the literal ref string "Mnull" and,
+  // downstream in toSources, `meetingId: Number(null) === 0`, which the UI
+  // renders as "Meeting #0".
+  const hits = boundEvidence([semanticHit('rrf'), semanticHit('smb')]);
+  assert.deepStrictEqual(hits.map((h) => h.ref).sort(), ['G1', 'G2']);
+  assert.ok(hits.every((h) => h.sourceType === 'semantic'));
+  assert.ok(hits.every((h) => h.ref !== 'Mnull'));
+});
+
+test('a semantic hit and a meeting hit never collide into the same group', () => {
+  const hits = boundEvidence([semanticHit('rrf'), hit(3, 1)]);
+  const groupKeys = new Set(hits.map((h) => h.groupKey));
+  assert.strictEqual(groupKeys.size, 2);
+  assert.ok(groupKeys.has('glossary:rrf'));
+});
+
+test('toSources emits no meetingId/date for semantic hits — no "Meeting #0"', () => {
+  const hits = boundEvidence([semanticHit('rrf')]);
+  const [card] = toSources(hits);
+  assert.deepStrictEqual(
+    Object.keys(card).sort(),
+    ['ref', 'snippet', 'sourceTable', 'sourceType'],
+  );
+  assert.ok(!('meetingId' in card));
+  assert.ok(!('date' in card));
+  assert.strictEqual(card.sourceType, 'semantic');
+  assert.strictEqual(card.snippet, 'rrf: a definition');
+  assert.strictEqual(card.ref, 'G1');
+});
+
+test('toSources filters cited refs across all four source types', () => {
+  const hits = boundEvidence([hit(3, 1), docHit('abc', 'c1'), liveHit(0), semanticHit('rrf')]);
+  const sources = toSources(hits, ['G1']);
+  assert.deepStrictEqual(sources.map((s) => s.ref), ['G1']);
 });

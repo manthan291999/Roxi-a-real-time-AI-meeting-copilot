@@ -50,11 +50,11 @@ class SqliteMeetingStore {
     return this.db;
   }
 
-  /** @returns {Array<{id:number,start_time:string,end_time:string|null,status:string,context:string|null}>} */
+  /** @returns {Array<{id:number,start_time:string,end_time:string|null,status:string,context:string|null,name:string|null}>} */
   listMeetings() {
     try {
       return this._open()
-        .prepare('SELECT id, start_time, end_time, status, context FROM meetings ORDER BY id')
+        .prepare('SELECT id, start_time, end_time, status, context, name FROM meetings ORDER BY id')
         .all();
     } catch (err) {
       throw new StoreError(`listMeetings failed: ${err.message}`);

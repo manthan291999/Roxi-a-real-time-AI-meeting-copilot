@@ -33,8 +33,8 @@ impl Database for SqliteDatabase {
             return Ok(Vec::new());
         }
 
-        let mut stmt =
-            conn.prepare("SELECT id, start_time, summary FROM meetings ORDER BY start_time DESC")?;
+        let mut stmt = conn
+            .prepare("SELECT id, start_time, summary, name FROM meetings ORDER BY start_time DESC")?;
         let meeting_iter = stmt.query_map([], |row| {
             Ok(Meeting {
                 id: row.get(0)?,
@@ -42,6 +42,7 @@ impl Database for SqliteDatabase {
                 end_time: None,
                 context: None,
                 summary: row.get(2)?,
+                name: row.get(3)?,
             })
         })?;
 
@@ -57,7 +58,7 @@ impl Database for SqliteDatabase {
         let conn = self.open_db()?;
 
         let meeting = conn.query_row(
-            "SELECT id, start_time, summary FROM meetings WHERE id = ?1",
+            "SELECT id, start_time, summary, name FROM meetings WHERE id = ?1",
             [meeting_id],
             |row| {
                 Ok(Meeting {
@@ -66,6 +67,7 @@ impl Database for SqliteDatabase {
                     end_time: None,
                     context: None,
                     summary: row.get(2)?,
+                    name: row.get(3)?,
                 })
             },
         )?;

@@ -25,6 +25,7 @@ export function toStartCapturePayload(context?: MeetingContext): StartCapturePay
   // kind === 'unsorted' → both undefined → Rust uses GEN bucket
 
   return {
+    name: toOptionalText(context?.name),
     context: toOptionalText(context?.description),
     role: toOptionalText(context?.role?.label),
     project_id,

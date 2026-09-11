@@ -53,19 +53,32 @@ impl PipelineTrace {
     }
 
     pub fn log_summary(&self) {
-        let mut out = String::new();
-        out.push_str(&format!("┌─ CHUNK  speaker={}  complexity={} ──────────────────────────┐\n", self.speaker, self.complexity));
-        
-        for span in &self.spans {
-            let parallel = if span.stage == 2 && span.status == "OK" { " [parallel]" } else { "" };
-            let line = format!("│  Stage {}  {:<15} → {:<5} ({:3}ms){}\n", 
-                span.stage, span.name, span.status, span.latency_ms, parallel);
-            out.push_str(&line);
-        }
-
         let agents_run = self.spans.iter().filter(|s| s.status == "OK").count();
-        out.push_str(&format!("└─ DONE  {} agents  {}ms ─────────────────────────────────────┘", agents_run, self.total_ms));
-        
-        tracing::info!("\n{}", out);
+
+        // One-line summary, always visible at INFO.
+        tracing::info!(
+            "chunk → {agents_run} agents  complexity={}  total={}ms",
+            self.complexity,
+            self.total_ms
+        );
+
+        // Full per-stage breakdown, only built and printed when RUST_LOG=debug
+        // — same information as before, just no longer competing with every
+        // other line's format by default.
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            let mut out = String::new();
+            out.push_str(&format!("┌─ CHUNK  speaker={}  complexity={} ──────────────────────────┐\n", self.speaker, self.complexity));
+
+            for span in &self.spans {
+                let parallel = if span.stage == 2 && span.status == "OK" { " [parallel]" } else { "" };
+                let line = format!("│  Stage {}  {:<15} → {:<5} ({:3}ms){}\n",
+                    span.stage, span.name, span.status, span.latency_ms, parallel);
+                out.push_str(&line);
+            }
+
+            out.push_str(&format!("└─ DONE  {agents_run} agents  {}ms ─────────────────────────────────────┘", self.total_ms));
+
+            tracing::debug!("\n{}", out);
+        }
     }
 }

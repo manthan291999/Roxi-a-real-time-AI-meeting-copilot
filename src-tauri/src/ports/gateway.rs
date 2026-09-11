@@ -10,6 +10,8 @@ use std::io::Write;
 /// strings at every call and every fake.
 #[derive(Clone, Debug, Default)]
 pub struct SessionRequest {
+    /// The meeting's human-chosen name, always collected by the intake modal.
+    pub name: Option<String>,
     /// What the user said the meeting is about.
     pub context: Option<String>,
     /// Who the user is in the meeting, as a human label.

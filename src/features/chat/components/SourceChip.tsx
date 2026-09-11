@@ -9,24 +9,33 @@ import { tokens, radius } from '../../../design-system';
  * inline version read `meeting_title` and `text` — fields that have never been
  * on the wire — so every card rendered with a blank title and a blank body.
  *
- * Handles all three corpora. A meeting hit has no `sourceType`, so its
- * absence is treated as 'meeting' and document/live support stays additive.
+ * Handles all four corpora. A meeting hit has no `sourceType`, so its
+ * absence is treated as 'meeting' and document/live/semantic support stays
+ * additive.
  */
 export const SourceChip: React.FC<{ source: ChatSource }> = ({ source }) => {
-  const kind = source.sourceType === 'document' || source.sourceType === 'live'
-    ? source.sourceType
-    : 'meeting';
+  const kind =
+    source.sourceType === 'document' || source.sourceType === 'live' || source.sourceType === 'semantic'
+      ? source.sourceType
+      : 'meeting';
 
-  const icon = kind === 'document' ? '\u{1F4C4}' : kind === 'live' ? '\u{1F534}' : '\u{1F399}\u{FE0F}';
+  const icon =
+    kind === 'document'
+      ? '\u{1F4C4}'
+      : kind === 'live'
+        ? '\u{1F534}'
+        : kind === 'semantic'
+          ? '\u{1F4D6}'
+          : '\u{1F399}\u{FE0F}';
 
   const title =
     kind === 'document'
       ? source.fileName || 'Document'
       : kind === 'live'
         ? 'Live'
-        : source.meetingId != null
-          ? `Meeting #${source.meetingId}`
-          : 'Meeting';
+        : kind === 'semantic'
+          ? 'Glossary'
+          : source.meetingName || (source.meetingId != null ? `Meeting #${source.meetingId}` : 'Meeting');
 
   const detail =
     kind === 'document'
@@ -35,9 +44,11 @@ export const SourceChip: React.FC<{ source: ChatSource }> = ({ source }) => {
         : ''
       : kind === 'live'
         ? 'now'
-        : source.date
-          ? new Date(source.date).toLocaleDateString()
-          : '';
+        : kind === 'semantic'
+          ? ''
+          : source.date
+            ? new Date(source.date).toLocaleDateString()
+            : '';
 
   return (
     <div

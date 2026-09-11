@@ -82,7 +82,8 @@ function formatEvidenceBlock(hit, idx) {
   const ref = hit.ref || `M${hit.meetingId}`;
   const who = hit.speaker ? ` · ${hit.speaker}` : '';
   const when = hit.meetingDate ? ` · ${hit.meetingDate}` : '';
-  return `[${ref}] (evidence ${idx}) Meeting #${hit.meetingId}${when} · ${hit.sourceTable}${who}\n"${hit.text}"`;
+  const label = hit.meetingName ? `Meeting "${hit.meetingName}" (#${hit.meetingId})` : `Meeting #${hit.meetingId}`;
+  return `[${ref}] (evidence ${idx}) ${label}${when} · ${hit.sourceTable}${who}\n"${hit.text}"`;
 }
 
 /** Format the evidence list for prompts. */

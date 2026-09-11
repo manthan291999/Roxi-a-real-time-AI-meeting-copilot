@@ -12,17 +12,20 @@ export type ChatThreadId = (typeof CHAT_THREAD_IDS)[number];
  * `text`, neither of which the sidecar has ever sent, so every source card
  * rendered blank.
  *
- * `ref` is the citation token used inline in the answer ('M3', 'D2', 'L1'),
- * stable only within the answer it came with. The document fields are absent
- * on meeting/live hits and the meeting fields are absent on document hits.
- * A 'live' hit is a line from the meeting currently being recorded — it has
- * no meetingId/date yet because it hasn't been persisted as a completed
- * meeting record.
+ * `ref` is the citation token used inline in the answer ('M3', 'D2', 'L1',
+ * 'G1'), stable only within the answer it came with. The document fields are
+ * absent on meeting/live/semantic hits and the meeting fields are absent on
+ * document/semantic hits. A 'live' hit is a line from the meeting currently
+ * being recorded — it has no meetingId/date yet because it hasn't been
+ * persisted as a completed meeting record. A 'semantic' hit is a glossary
+ * term (Meeting Semantic Memory plan §06) — it has no meetingId/date because
+ * it's cross-meeting knowledge by design, not tied to any single meeting.
  */
 export interface ChatSource {
   ref?: string;
-  sourceType?: 'meeting' | 'document' | 'live';
+  sourceType?: 'meeting' | 'document' | 'live' | 'semantic';
   meetingId?: number;
+  meetingName?: string;
   date?: string;
   speaker?: string;
   snippet?: string;

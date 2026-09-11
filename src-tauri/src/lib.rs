@@ -1,9 +1,9 @@
 mod adapters;
 mod agents;
 mod application;
-#[cfg(target_os = "macos")]
 mod commands;
 mod domain;
+mod logging;
 mod ports;
 mod resample;
 mod sidecar;
@@ -38,17 +38,21 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Initialize professional tracing logger
+    // Initialize professional tracing logger — one shared column/color format
+    // (see src/logging.rs) across this process AND the gateway/chatbot
+    // sidecars, whose stderr gets parsed and relayed through the same
+    // formatter (adapters/gateway_client.rs, adapters/chat_client.rs).
+    // RUST_LOG still gates verbosity exactly as before; only the rendering
+    // of a line, once it's going to print, changed.
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env().add_directive("tauri_app=info".parse().unwrap()))
-        .with_target(false)
-        .with_thread_ids(false)
-        .with_file(false)
-        .with_line_number(false)
+        .event_format(logging::RoxiFormatter)
         .init();
 
     // Load .env file first — critical for macOS .app bundles that don't inherit shell env vars
     let _ = dotenvy::dotenv(); // silently ignore if no .env file is present
+
+    logging::print_startup_banner();
 
     // 1. Initialize Adapters
     let audio_capture = Arc::new(MacAudioCapture::new());

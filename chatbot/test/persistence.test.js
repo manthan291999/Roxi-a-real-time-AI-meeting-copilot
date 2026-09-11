@@ -27,7 +27,7 @@ before(() => {
   fixtureDb.exec(`
     CREATE TABLE meetings (
       id INTEGER PRIMARY KEY, start_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-      end_time DATETIME, summary TEXT, context TEXT,
+      end_time DATETIME, summary TEXT, context TEXT, name TEXT,
       status TEXT DEFAULT 'ended', api_calls INTEGER DEFAULT 0, provider TEXT
     );
     CREATE TABLE transcripts (id INTEGER PRIMARY KEY AUTOINCREMENT, meeting_id INTEGER, speaker TEXT, text TEXT);

@@ -8,6 +8,7 @@ interface RawMeeting {
   end_time: string | null;
   context: string | null;
   summary: string | null;
+  name: string | null;
 }
 
 interface RawMeetingDetails {
@@ -18,7 +19,8 @@ interface RawMeetingDetails {
 }
 
 function toMeeting(raw: RawMeeting): Meeting {
-  const title = raw.context?.trim()
+  const title = raw.name?.trim()
+    || raw.context?.trim()
     || (raw.summary ? raw.summary.slice(0, 80).trimEnd() + '…' : null)
     || `Meeting on ${new Date(raw.start_time + 'Z').toLocaleDateString()}`;
 

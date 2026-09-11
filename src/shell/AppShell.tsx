@@ -6,7 +6,14 @@ interface AppShellProps {
 }
 
 /**
- * The main widget's shared shell — full size of the Tauri window (420x780).
+ * The main widget's shared shell — sized by whatever the OS window currently
+ * is, from the packaged minimum (480x520, tauri.conf.json) up to however wide
+ * the user drags it. There is no fixed design width: `container-type:
+ * inline-size` below turns this element into the query container that every
+ * descendant's `@container roxi-shell (...)` rule and `cqw`-based spacing
+ * measures against, so layout responds to the window's actual content box
+ * rather than a hardcoded breakpoint list.
+ *
  * Idle and live surfaces both render inside this same shell; there is no
  * separate chrome for the pre-session screens.
  *
@@ -25,7 +32,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => (
         borderRadius: radius.shell,
         border: `1px solid ${tokens.hairline}`,
         boxShadow: tokens.shellShadow,
-      }}
+        containerType: 'inline-size',
+        containerName: 'roxi-shell',
+      } as React.CSSProperties}
     >
       {/*
         Drag region: spans the full header height. z-[1] keeps it ABOVE the

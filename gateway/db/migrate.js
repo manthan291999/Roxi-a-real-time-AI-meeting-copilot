@@ -152,6 +152,11 @@ const MIGRATIONS = [
     description: 'M009 persist meeting role for post-hoc persona framing',
     statements: ['ALTER TABLE meetings ADD COLUMN role TEXT'],
   },
+  {
+    version: 10,
+    description: 'M010 persist meeting name, asked for at capture start',
+    statements: ['ALTER TABLE meetings ADD COLUMN name TEXT'],
+  },
 ];
 
 /**

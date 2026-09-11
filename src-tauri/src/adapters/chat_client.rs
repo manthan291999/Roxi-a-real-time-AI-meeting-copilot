@@ -45,7 +45,7 @@ impl ChatGatewayClient for NodeChatClient {
             .current_dir(sidecar_dir)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| anyhow!("Failed to start chat sidecar: {}", e))?;
 
@@ -57,6 +57,10 @@ impl ChatGatewayClient for NodeChatClient {
             .stdout
             .take()
             .ok_or_else(|| anyhow!("Failed to open chat sidecar stdout"))?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| anyhow!("Failed to open chat sidecar stderr"))?;
 
         *session_lock = Some(ChatSession { child, stdin });
 
@@ -70,6 +74,20 @@ impl ChatGatewayClient for NodeChatClient {
                         tracing::warn!("[chat sidecar] Stdout closed.");
                         break;
                     }
+                }
+            }
+        });
+
+        // stderr carries the chatbot's own structured log lines (see
+        // chatbot/src/infrastructure/logging/JsonLineLogger.js) — parsed and
+        // re-emitted through this process's own formatter (crate::logging)
+        // instead of being inherited raw into the terminal.
+        thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines() {
+                match line {
+                    Ok(text) => crate::logging::relay_sidecar_log("chatbot", &text),
+                    Err(_) => break,
                 }
             }
         });

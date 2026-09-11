@@ -2,18 +2,20 @@ import { useCallback, useMemo, useState } from 'react';
 import { MeetingContext, MeetingPreset, MeetingRole, ProjectSelection } from '../../../shared/types';
 
 export interface MeetingContextForm {
+  name: string;
   description: string;
   selectedPresetId?: string;
   selectedRoleId?: string;
   project?: ProjectSelection;
   selectedDocIds: string[];
+  setName: (value: string) => void;
   setDescription: (value: string) => void;
   applyPreset: (preset: MeetingPreset) => void;
   selectRole: (role: MeetingRole) => void;
   setProject: (project: ProjectSelection) => void;
   toggleDoc: (docId: string) => void;
-  /** The assembled context, or undefined when nothing was filled in. */
-  toMeetingContext: () => MeetingContext | undefined;
+  /** The assembled context. `name` is required — callers gate on it separately. */
+  toMeetingContext: () => MeetingContext;
 }
 
 /**
@@ -21,6 +23,7 @@ export interface MeetingContextForm {
  * so MeetingContextModal only composes and the chips stay dumb.
  */
 export function useMeetingContextForm(): MeetingContextForm {
+  const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedPresetId, setSelectedPresetId] = useState<string | undefined>();
   const [selectedRole, setSelectedRole] = useState<MeetingRole | undefined>();
@@ -53,24 +56,26 @@ export function useMeetingContextForm(): MeetingContextForm {
     });
   }, []);
 
-  const toMeetingContext = useCallback((): MeetingContext | undefined => {
-    const trimmed = description.trim();
-    if (!trimmed && !selectedRole && !project && selectedDocIds.length === 0) return undefined;
-    return { 
-      description: trimmed || undefined, 
-      role: selectedRole, 
+  const toMeetingContext = useCallback((): MeetingContext => {
+    const trimmedDescription = description.trim();
+    return {
+      name: name.trim(),
+      description: trimmedDescription || undefined,
+      role: selectedRole,
       project,
       docIds: selectedDocIds.length > 0 ? selectedDocIds : undefined
     };
-  }, [description, selectedRole, project, selectedDocIds]);
+  }, [name, description, selectedRole, project, selectedDocIds]);
 
   return useMemo(
     () => ({
+      name,
       description,
       selectedPresetId,
       selectedRoleId: selectedRole?.id,
       project,
       selectedDocIds,
+      setName,
       setDescription: handleDescriptionChange,
       applyPreset,
       selectRole,
@@ -78,6 +83,6 @@ export function useMeetingContextForm(): MeetingContextForm {
       toggleDoc,
       toMeetingContext,
     }),
-    [description, selectedPresetId, selectedRole, project, selectedDocIds, handleDescriptionChange, applyPreset, selectRole, toggleDoc, toMeetingContext],
+    [name, description, selectedPresetId, selectedRole, project, selectedDocIds, handleDescriptionChange, applyPreset, selectRole, toggleDoc, toMeetingContext],
   );
 }

@@ -11,7 +11,8 @@ import {
   DocumentProgress,
   DocumentReady,
   UploadedDocument,
-  DocumentDeleted
+  DocumentDeleted,
+  AudioLevel
 } from '../types';
 
 export interface ProviderStatus {
@@ -21,6 +22,13 @@ export interface ProviderStatus {
 
 export interface IEventBus {
   onSuggestAnswer(cb: (card: SuggestCardType) => void): () => void;
+  /**
+   * Loudness of the capture mix, ~31 Hz while a session runs.
+   *
+   * Far higher frequency than every other event here: a subscriber must not
+   * route this into React state. See features/capture/useAudioLevel.
+   */
+  onAudioLevel(cb: (level: AudioLevel) => void): () => void;
   onTranscriptPartial(cb: (line: TxLine) => void): () => void;
   onTranscriptFinal(cb: (line: TxLine) => void): () => void;
   onContextExplanation(cb: (data: {text: string, speaker: string}) => void): () => void;

@@ -12,10 +12,16 @@ interface LiveSessionDashboardProps {
 }
 
 /**
- * The always-visible 3-part live view: LiveStage banner on top, "Ask Roxi"
- * and Suggested Answers side by side below. Replaces the old Suggest/Ask/
- * Listen tab switcher — nothing here is hidden behind a tab except the full
- * transcript history, which opens as a drawer over this view.
+ * The always-visible 3-part live view: LiveStage banner on top, Suggested
+ * Answers and "Ask Roxi" below it. Replaces the old Suggest/Ask/Listen tab
+ * switcher — nothing here is hidden behind a tab except the full transcript
+ * history, which opens as a drawer over this view.
+ *
+ * Suggested Answers is rendered FIRST so that the stacked narrow layout reads
+ * top-to-bottom in source order: the listening panel on top, the composer
+ * within thumb reach at the bottom. The wide two-column split still shows
+ * Chat on the left — styles.css reorders the row with `order`, keyed off the
+ * session-col--chat / --suggest classes below.
  */
 export const LiveSessionDashboard: React.FC<LiveSessionDashboardProps> = ({
   isLive,
@@ -28,12 +34,12 @@ export const LiveSessionDashboard: React.FC<LiveSessionDashboardProps> = ({
     <div className="flex-1 flex flex-col overflow-hidden relative animate-fade-in">
       <LiveStage isLive={isLive} onExpandTranscript={() => setTranscriptExpanded(true)} />
 
-      <div className="flex-1 flex flex-row overflow-hidden">
-        <div className="flex-1 min-w-0 h-full" style={{ borderRight: `1px solid ${tokens.hairline}` }}>
-          <ChatPane threadId="ask" getLiveContext={getLiveContext} />
-        </div>
-        <div className="flex-1 min-w-0 h-full overflow-y-auto custom-scrollbar p-4" style={{ background: tokens.panel }}>
+      <div className="session-columns flex-1 flex overflow-hidden">
+        <div className="session-col session-col--suggest flex-1 min-w-0 min-h-0 h-full overflow-y-auto custom-scrollbar p-4" style={{ background: tokens.panel }}>
           <SuggestAnswersPane onAskChat={onAskChat} />
+        </div>
+        <div className="session-col session-col--chat flex-1 min-w-0 min-h-0 h-full">
+          <ChatPane threadId="ask" getLiveContext={getLiveContext} />
         </div>
       </div>
 

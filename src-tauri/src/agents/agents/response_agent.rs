@@ -89,7 +89,7 @@ impl Agent for ResponseAgent {
                     next.context_items = parsed_items;
                 }
                 Err(e) => {
-                    tracing::error!("[response_agent] Failed to parse context_items: {:?}", e);
+                    tracing::error!("[response_agent] Failed to parse context_items: {}", e);
                 }
             }
         }
@@ -103,7 +103,7 @@ impl Agent for ResponseAgent {
                 }
                 Ok(_) => {}
                 Err(e) => {
-                    tracing::warn!("[response_agent] suggested_bullets parse failed: {:?}", e);
+                    tracing::warn!("[response_agent] suggested_bullets parse failed: {}", e);
                 }
             }
         }

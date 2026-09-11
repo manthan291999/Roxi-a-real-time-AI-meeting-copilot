@@ -8,6 +8,7 @@ use tauri::{AppHandle, State};
 pub async fn start_capture(
     app: AppHandle,
     capture_use_case: State<'_, Arc<CaptureUseCase>>,
+    name: Option<String>,
     context: Option<String>,
     role: Option<String>,
     // `project_id` wins over `new_project_name`: the picker only sends a name
@@ -22,10 +23,11 @@ pub async fn start_capture(
     capture_use_case
         .start(
             selection,
+            name,
             context,
             role,
             doc_ids,
-            Box::new(move |text| {
+            Arc::new(move |text| {
                 event_router::route_sidecar_event(&app_clone, &text);
             }),
         )
