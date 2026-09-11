@@ -23,7 +23,7 @@ const DEFAULT_BLOCKLIST = Object.freeze([
 ]);
 
 const DEFAULT_MIN_CONFIDENCE = 0.4;
-const MIN_WORDS = 2;
+const MIN_CHARS = 1;
 
 class TranscriptSanitizer {
   /**
@@ -54,8 +54,7 @@ class TranscriptSanitizer {
     const lowerText = text.toLowerCase().trim();
 
     // Word count check
-    const wordCount = lowerText.split(/\s+/).length;
-    if (wordCount < MIN_WORDS) {
+    if (lowerText.length < MIN_CHARS) {
       return { ok: false, text, reason: 'too_short' };
     }
 

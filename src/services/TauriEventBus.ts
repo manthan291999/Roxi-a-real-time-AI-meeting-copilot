@@ -3,6 +3,7 @@ import { IEventBus, ProviderStatus } from '../shared/interfaces';
 import {
   SuggestCardType,
   TxLine,
+  SpeakerRevision,
   Significance,
   MeetingDecision,
   MeetingActionItem,
@@ -16,8 +17,8 @@ import {
   DocumentDeleted,
   AudioLevel
 } from '../shared/types';
-import { AudioLevelWire, SuggestAnswerWire, TranscriptWire } from './wire';
-import { toSuggestCard, toTxLine } from './mappers';
+import { AudioLevelWire, SpeakerRevisionWire, SuggestAnswerWire, TranscriptWire } from './wire';
+import { toSpeakerRevisions, toSuggestCard, toTxLine } from './mappers';
 
 export class TauriEventBus implements IEventBus {
   /**
@@ -60,6 +61,16 @@ export class TauriEventBus implements IEventBus {
 
   onTranscriptFinal(cb: (line: TxLine) => void) {
     const unlisten = listen<TranscriptWire>('transcript_final', (e) => cb(toTxLine(e.payload, false)));
+    return () => unlisten.then(f => f());
+  }
+
+  onSpeakerRevision(cb: (revisions: SpeakerRevision[]) => void) {
+    // Forwarded by the host as raw gateway JSON rather than a typed struct, so
+    // the payload may be null or malformed — toSpeakerRevisions filters it.
+    const unlisten = listen<SpeakerRevisionWire[] | null>('speaker_revision', (e) => {
+      const revisions = toSpeakerRevisions(e.payload);
+      if (revisions.length > 0) cb(revisions);
+    });
     return () => unlisten.then(f => f());
   }
 

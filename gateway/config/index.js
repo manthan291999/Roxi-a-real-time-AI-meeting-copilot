@@ -31,6 +31,24 @@ function toPositiveInt(value) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+/**
+ * Parse an integer within [min, max], falling back to `fallback`.
+ *
+ * Out-of-range values fall back rather than clamp: these map onto STT provider
+ * parameters with documented ranges, and a silently clamped value hides a typo
+ * in a `.env` that would otherwise be obvious from the behaviour.
+ */
+function toBoundedInt(value, fallback, min, max) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
+}
+
+/** Lowercase `value` if it is one of `allowed`, else `fallback`. */
+function toEnum(value, allowed, fallback) {
+  const normalized = String(value || '').toLowerCase();
+  return allowed.includes(normalized) ? normalized : fallback;
+}
+
 /** Read one `--flag value` pair out of argv. */
 function readArg(argv, flag) {
   const idx = argv.indexOf(flag);
@@ -67,20 +85,51 @@ function load({ env = process.env, argv = process.argv } = {}) {
     stt: Object.freeze({
       assemblyaiKey,
       speechmaticsKey,
+      /** Array of supported language codes for Automatic Language Detection (ALD) */
+      languages: resolved.STT_LANGUAGES 
+        ? resolved.STT_LANGUAGES.split(',').map((s) => s.trim())
+        : ['en', 'es', 'fr', 'de', 'it', 'pt', 'nl', 'hi', 'ja', 'zh', 'ko'],
       /** Force a single provider; otherwise the full fallback chain is used. */
       forced: resolved.STT_PROVIDER ? resolved.STT_PROVIDER.toLowerCase() : null,
+
+      /**
+       * Turn-detection and audio tuning, passed straight through to the
+       * provider's streaming session.
+       *
+       * The defaults are deliberately not AssemblyAI's own (100ms / 1000ms):
+       * those are tuned for voice agents, where cutting a turn early is cheap
+       * because the user can interrupt. This is multi-person meeting audio,
+       * where people pause mid-thought and an early cut splits one idea across
+       * two chunks — which then reach the agent pipeline as two unrelated
+       * fragments. These sit between AssemblyAI's defaults and the much longer
+       * values they replace.
+       */
+      minTurnSilence: toBoundedInt(resolved.STT_MIN_TURN_SILENCE, 400, 50, 10000),
+      maxTurnSilence: toBoundedInt(resolved.STT_MAX_TURN_SILENCE, 1500, 400, 10000),
+      /** Diarization cap. Universal-3.5-Pro supports up to 10. */
+      maxSpeakers: toBoundedInt(resolved.STT_MAX_SPEAKERS, 10, 1, 10),
+      /** Latency/accuracy preset. `max_accuracy` suits noisy far-field rooms. */
+      mode: toEnum(resolved.STT_MODE, ['balanced', 'max_accuracy', 'min_latency'], 'balanced'),
+      /**
+       * Background-noise suppression, off by default: the primary source here
+       * is BlackHole loopback, which is already-clean audio from the
+       * conferencing app, and suppression bills extra per hour. Worth enabling
+       * (`far-field`) when the mic in an open room is the main input.
+       */
+      voiceFocus: toEnum(resolved.STT_VOICE_FOCUS, ['near-field', 'far-field'], null),
     }),
 
     meeting: Object.freeze({
       /** The human-chosen title asked for by the intake modal. */
       name: readArg(argv, '--meeting-name') || '',
 
-      context: readArg(argv, '--context') || '',
       /**
-       * Accepted because the Rust host sends it (gateway_client.rs), but not
-       * consumed here: prompt construction lives in the Rust agent pipeline,
-       * which builds its own profile. Kept so the CLI contract stays stable.
+       * Used twice: the Rust agent pipeline builds its own prompts from its own
+       * copy, and the STT provider takes this as a recognition hint
+       * (`prompt` / `keyterms_prompt`) so names said aloud are spelled the way
+       * the user typed them.
        */
+      context: readArg(argv, '--context') || '',
       role: readArg(argv, '--role') || null,
 
       /**

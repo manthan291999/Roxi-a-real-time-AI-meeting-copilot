@@ -44,6 +44,18 @@ export interface TranscriptWire {
   text?: string;
   speaker?: string;
   sttLabel?: string;
+  /** Present on finals from providers that number their turns. */
+  turnOrder?: number;
+}
+
+/**
+ * One retroactive speaker correction: the turn that was mislabelled, and the
+ * STT label it should have carried. Sent as a batch (`speaker_revision`) once
+ * the provider has re-clustered the voices it has heard so far.
+ */
+export interface SpeakerRevisionWire {
+  turnOrder: number;
+  speaker: string;
 }
 
 export interface SuggestAnswerWire {

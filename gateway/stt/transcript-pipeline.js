@@ -39,6 +39,7 @@ class TranscriptPipeline {
     const validated = validateTranscriptEvent(event);
     if (!validated.ok) {
       log('warn', 'sidecar', 'invalid_transcript_event', { reason: validated.reason });
+      this.retirePartial(event && event.speaker);
       return;
     }
 
@@ -50,14 +51,38 @@ class TranscriptPipeline {
       // The turn is discarded, but the audio it buffered still belongs to this
       // speaker — attribute it so the voice embedding stays accurate.
       this.diarization.attributeTurn(sttLabel);
+      this.retirePartial(sttLabel);
       return;
     }
 
     const displayName = this.diarization.resolveLabel(sttLabel);
-    this.protocol.emitFinal(sanitized.text, displayName, sttLabel, event.start, event.end);
+    this.protocol.emitFinal(
+      sanitized.text,
+      displayName,
+      sttLabel,
+      event.start,
+      event.end,
+      event.turnOrder
+    );
 
     this.diarization.attributeTurn(sttLabel);
     this.transcripts.save(displayName, sanitized.text);
+  }
+
+  /**
+   * Withdraw the partial a turn had already put on screen, for the two paths
+   * that end a turn without emitting a final.
+   *
+   * The UI clears a partial when the matching final arrives. Returning early
+   * from onFinal without saying anything left the turn's last words frozen in
+   * the live pane, and a stuck partial there also suppressed every later one —
+   * the "live transcript sometimes doesn't show" symptom. An empty-text Partial
+   * is the withdrawal signal; it needs no new message type, and a consumer that
+   * ignores it is no worse off than before.
+   */
+  retirePartial(sttLabel) {
+    if (!sttLabel) return;
+    this.protocol.emitPartial('', this.diarization.resolveLabel(sttLabel), sttLabel);
   }
 }
 

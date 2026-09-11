@@ -17,10 +17,14 @@ test('TranscriptSanitizer conformance tests', async (t) => {
     assert.strictEqual(result.reason, 'empty_text');
   });
 
-  await t.test('rejects too short text', () => {
-    const result = sanitizer.sanitize('Hi', 0.9);
-    assert.strictEqual(result.ok, false);
-    assert.strictEqual(result.reason, 'too_short');
+  await t.test('accepts single meaningful word', () => {
+    const result = sanitizer.sanitize('Yes', 0.9);
+    assert.strictEqual(result.ok, true);
+  });
+
+  await t.test('accepts single character word', () => {
+    const result = sanitizer.sanitize('I', 0.9);
+    assert.strictEqual(result.ok, true);
   });
 
   await t.test('rejects missing confidence', () => {

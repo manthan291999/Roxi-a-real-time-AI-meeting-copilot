@@ -23,8 +23,14 @@ pub struct SidecarEvent {
     pub state: Option<String>,
     #[serde(rename = "sttLabel")]
     pub stt_label: Option<String>,
+    /// The STT provider's index for this turn. Carried only so a later
+    /// `SpeakerRevision` can be matched back to the turn it corrects.
+    #[serde(rename = "turnOrder")]
+    pub turn_order: Option<i64>,
     pub items: Option<serde_json::Value>,
-    pub revision: Option<serde_json::Value>,
+    /// Retroactive speaker corrections — an array. The provider revises a batch
+    /// of earlier turns at once, once diarization has settled.
+    pub revisions: Option<serde_json::Value>,
     pub reply_type: Option<String>,
 
     // --- MeetingStarted ---
@@ -85,6 +91,10 @@ pub struct TranscriptPayload {
     pub speaker: String,
     #[serde(rename = "sttLabel")]
     pub stt_label: Option<String>,
+    /// Present on finals from providers that number their turns; the webview
+    /// matches incoming speaker revisions against it.
+    #[serde(rename = "turnOrder", skip_serializing_if = "Option::is_none")]
+    pub turn_order: Option<i64>,
 }
 
 #[derive(serde::Serialize, Clone)]

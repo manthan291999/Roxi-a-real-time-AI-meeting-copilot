@@ -68,7 +68,12 @@ export const LiveStage: React.FC<LiveStageProps> = ({ isLive, onExpandTranscript
   // re-render this subtree. VoiceWave samples it from its own frame loop.
   const readLevel = useAudioLevel();
   const elapsed = useElapsed(isLive);
-  const activePartial = Object.values(partials)[0];
+  // Last, not first: TranscriptProvider keeps `partials` in recency order, and
+  // taking [0] pinned this to whoever spoke first in the session — so once that
+  // speaker's partial failed to clear, every later speaker's live text was held
+  // in state but never shown.
+  const openPartials = Object.values(partials);
+  const activePartial = openPartials[openPartials.length - 1];
 
   const displayLines: { line: TxLine; dim?: boolean }[] = activePartial
     ? [

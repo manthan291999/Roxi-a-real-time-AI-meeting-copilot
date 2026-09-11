@@ -9,8 +9,19 @@ use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 const MAGIC: [u8; 4] = [0x50, 0x43, 0x4D, 0x31];
-const CHUNK_MS: u32 = 250;
-const SAMPLES_PER_CHUNK: usize = 4000;
+
+/// Audio is sent in 100ms chunks (1600 samples at 16kHz mono).
+///
+/// This was 250ms, which sat at the front of every transcript as a flat quarter
+/// second of latency — audio could not begin being recognised until the chunk
+/// holding it was full. The STT provider rejects messages outside 50-1000ms
+/// (`Input Duration Error`), so 50ms is the floor; 100ms takes most of the
+/// available win while leaving room for the trailing-chunk padding in
+/// `finalize` and for any rounding in the resampler's output granularity.
+const CHUNK_MS: u32 = 100;
+const SAMPLES_PER_CHUNK: usize = 1600;
+/// Shortest chunk the STT provider will accept, in samples (50ms at 16kHz).
+const MIN_SAMPLES_PER_CHUNK: usize = 800;
 const HEADER_SIZE: usize = 8;
 
 pub struct StreamingSink {
@@ -56,7 +67,9 @@ impl StreamingSink {
         }
 
         let count = self.chunks_sent.fetch_add(1, Ordering::Relaxed) + 1;
-        if count % 40 == 0 {
+        // Every 100 chunks — still one line per 10s of audio, now that a chunk
+        // is 100ms rather than 250ms.
+        if count % 100 == 0 {
             debug!("Streaming: {} chunks sent ({:.1}s of audio)", count, count as f64 * CHUNK_MS as f64 / 1000.0);
         }
         Ok(())
@@ -77,8 +90,15 @@ impl PcmSink for StreamingSink {
 
     fn finalize(&mut self) -> Result<()> {
         if !self.buffer.is_empty() {
-            let remaining: Vec<i16> = self.buffer.drain(..).collect();
+            let mut remaining: Vec<i16> = self.buffer.drain(..).collect();
             warn!("Streaming: flushing final short chunk ({} samples)", remaining.len());
+            // Pad to the provider's 50ms floor rather than sending a chunk it
+            // would reject outright with `Input Duration Error`. Silence is the
+            // right filler: this is the tail of the meeting, and the padding is
+            // at most 50ms of quiet appended to audio that has already stopped.
+            if remaining.len() < MIN_SAMPLES_PER_CHUNK {
+                remaining.resize(MIN_SAMPLES_PER_CHUNK, 0);
+            }
             self.emit_chunk(&remaining)?;
         }
 

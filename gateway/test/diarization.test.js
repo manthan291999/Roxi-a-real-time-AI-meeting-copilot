@@ -190,7 +190,7 @@ test('a low-confidence turn is dropped but its audio is still attributed', () =>
 
   pipeline.onFinal({ text: 'mumbled words here', speaker: 'Speaker A', confidence: 0.1 });
 
-  assert.strictEqual(emitted.length, 0, 'not emitted');
+  assert.ok(!emitted.some((e) => e.kind === 'final'), 'no final emitted');
   assert.strictEqual(saved.length, 0, 'not stored');
   assert.strictEqual(diarization.pendingAudio.length, 0, 'audio still consumed for the voice');
 });
@@ -198,7 +198,25 @@ test('a low-confidence turn is dropped but its audio is still attributed', () =>
 test('blocklisted hallucinations are dropped', () => {
   const { pipeline, emitted } = pipelineHarness();
   pipeline.onFinal({ text: 'thanks for watching', speaker: 'Speaker A', confidence: 0.99 });
-  assert.strictEqual(emitted.length, 0);
+  assert.ok(!emitted.some((e) => e.kind === 'final'), 'no final emitted');
+});
+
+// A dropped turn still ended, and the UI clears a partial only when it sees the
+// matching final. Staying silent here left the turn's words frozen in the live
+// pane, which in turn suppressed every later speaker's partial.
+test('a dropped turn withdraws the partial it had already shown', () => {
+  const { pipeline, emitted } = pipelineHarness();
+  pipeline.onFinal({ text: 'thanks for watching', speaker: 'Speaker A', confidence: 0.99 });
+
+  const withdrawals = emitted.filter((e) => e.kind === 'partial' && e.text === '');
+  assert.strictEqual(withdrawals.length, 1, 'one withdrawal emitted');
+  assert.strictEqual(withdrawals[0].speaker, 'Speaker A');
+});
+
+test('a turn that survives the sanitizer withdraws nothing', () => {
+  const { pipeline, emitted } = pipelineHarness();
+  pipeline.onFinal({ text: 'we should ship on friday', speaker: 'Speaker A', confidence: 0.9 });
+  assert.ok(!emitted.some((e) => e.kind === 'partial'), 'the final alone clears the partial');
 });
 
 // --- Control handler ------------------------------------------------------------

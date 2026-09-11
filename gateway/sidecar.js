@@ -48,6 +48,37 @@ async function main() {
   const cfg = config.load();
   logger.configure(cfg.logLevel);
 
+  // Assigned once the session exists; the crash handlers below are installed
+  // before that so there is never a window where a fatal error goes unreported.
+  let shutdown = null;
+
+  /**
+   * Last line of defence.
+   *
+   * Anything that escapes the per-turn guards further down — an EventEmitter
+   * 'error' with no listener, a promise nobody awaited — kills this process
+   * instantly and silently: stdout closes with no protocol line explaining
+   * why, the host can only synthesise "transcription process ended
+   * unexpectedly", and the meeting row is left stuck at 'running' forever
+   * because the shutdown sequence never ran. Report the real reason over the
+   * protocol, close the session properly, and exit.
+   */
+  const onFatal = (kind) => (err) => {
+    const message = (err && err.message) || String(err);
+    logger.log('error', 'sidecar', `uncaught_${kind}`, {
+      message: String(message).slice(0, 300),
+      stack: String((err && err.stack) || '').slice(0, 1200),
+    });
+    protocol.emitError(`Transcription stopped: ${message}`);
+    if (shutdown) {
+      shutdown(`uncaught_${kind}`, 'aborted').catch(() => exitAfterDrain(1));
+    } else {
+      exitAfterDrain(1);
+    }
+  };
+  process.on('uncaughtException', onFatal('exception'));
+  process.on('unhandledRejection', onFatal('rejection'));
+
   const check = config.validate(cfg);
   if (!check.ok) {
     protocol.emitError(`Missing required env vars: ${check.missing.join(', ')}`);
@@ -55,7 +86,7 @@ async function main() {
     return;
   }
 
-  const chain = buildChain(cfg.stt);
+  const chain = buildChain(cfg.stt, cfg.meeting);
   if (chain.length === 0) {
     protocol.emitError('No STT providers configured');
     exitAfterDrain(1);
@@ -113,7 +144,7 @@ async function main() {
     },
     commands
   );
-  const shutdown = createShutdown({ session, providerCloser: manager });
+  shutdown = createShutdown({ session, providerCloser: manager });
 
   // --- Event wiring -----------------------------------------------------------
   manager.on('status', ({ provider, state }) => {
@@ -144,7 +175,7 @@ async function main() {
       });
     }
   });
-  manager.on('speakerRevision', ({ revision }) => protocol.emitSpeakerRevision(revision));
+  manager.on('speakerRevision', ({ revisions }) => protocol.emitSpeakerRevision(revisions));
   manager.on('providerError', ({ provider, message }) => {
     logger.log('warn', 'sidecar', 'stt_provider_error', {
       provider,

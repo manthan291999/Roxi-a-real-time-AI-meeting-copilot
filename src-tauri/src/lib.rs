@@ -44,8 +44,25 @@ pub fn run() {
     // formatter (adapters/gateway_client.rs, adapters/chat_client.rs).
     // RUST_LOG still gates verbosity exactly as before; only the rendering
     // of a line, once it's going to print, changed.
+    //
+    // Every target we own is named explicitly, rather than setting a bare
+    // default level that would also switch on every dependency's logging
+    // (tauri, hyper, rustls, ...). `gateway` and `chatbot` are the targets
+    // relay_sidecar_log() re-emits the two Node sidecars' stderr under.
+    //
+    // Naming those two is load-bearing: a target no directive matches falls
+    // back to EnvFilter's own default of ERROR, so every sidecar line below
+    // error level was being dropped on the floor — including the WARN that an
+    // unparseable line (a Node stack trace, an npm warning) gets relayed as.
+    // A sidecar could crash mid-meeting and the terminal would show nothing
+    // but this process noticing its stdout had closed, with no reason.
+    let filter = tracing_subscriber::EnvFilter::from_default_env()
+        .add_directive("tauri_app=info".parse().unwrap())
+        .add_directive("gateway=info".parse().unwrap())
+        .add_directive("chatbot=info".parse().unwrap());
+
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env().add_directive("tauri_app=info".parse().unwrap()))
+        .with_env_filter(filter)
         .event_format(logging::RoxiFormatter)
         .init();
 

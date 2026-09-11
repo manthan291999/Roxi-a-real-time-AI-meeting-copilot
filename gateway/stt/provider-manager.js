@@ -19,19 +19,61 @@
 
 const EventEmitter = require('events');
 
-// 20 chunks x 250ms = 5s of audio retained for replay on switchover.
-const RING_CHUNKS = 20;
+// 50 chunks x 100ms = 5s of audio retained for replay on switchover.
+// Counted in chunks, so it tracks the host's framing: when that moved from
+// 250ms to 100ms per chunk, 20 chunks quietly became 2s of replay instead of 5.
+const RING_CHUNKS = 50;
 
-// If audio has been flowing to the active provider for this long with zero
+// If *speech* has been flowing to the active provider for this long with zero
 // partial/final activity back, treat the connection as dead even though
 // neither an 'error' nor a 'closed' event ever arrived — e.g. a websocket
-// dropped silently behind a NAT/firewall idle timeout. Comfortably above a
-// normal in-meeting pause so a quiet room doesn't trigger a false failover.
+// dropped silently behind a NAT/firewall idle timeout.
 const WATCHDOG_TIMEOUT_MS = 45_000;
 const WATCHDOG_CHECK_INTERVAL_MS = 10_000;
 
+/**
+ * Normalised RMS (0..1) a chunk must reach before it counts as "somebody is
+ * actually talking" for watchdog purposes.
+ *
+ * This gate is the whole reason the watchdog is safe. Audio never stops
+ * flowing during a capture — the mixer feeds mic + loopback continuously, so
+ * a silent room still produces a full-rate stream of near-zero samples. The
+ * watchdog used to key off "any audio arrived recently", which is always true,
+ * and so it really measured *how long nobody had spoken*. Fifty seconds of
+ * quiet — one person reading a doc, a pause before a demo starts — was enough
+ * to declare a perfectly healthy socket dead and force a failover, every ~50s,
+ * for as long as the room stayed quiet. That reconnect loop is what piled up
+ * concurrent STT sessions until the provider refused a new one.
+ *
+ * STT providers emit nothing during silence, so "no transcript" is only
+ * evidence of a dead connection when there was speech to transcribe. ~0.02
+ * (≈ -34 dBFS) sits well above mic room tone but below any normal speaking
+ * voice. When in doubt this deliberately under-triggers: missing a genuinely
+ * dead socket costs one late failover (the provider's own 'closed'/'error'
+ * events still catch the common cases), while over-triggering costs the
+ * session.
+ */
+const SPEECH_RMS_THRESHOLD = 0.02;
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Normalised RMS of one PCM16LE chunk. Returns 0 for anything that isn't a
+ * readable buffer, which makes the watchdog treat it as silence — the safe
+ * direction (see SPEECH_RMS_THRESHOLD).
+ */
+function chunkRms(chunk) {
+  if (!chunk || typeof chunk.readInt16LE !== 'function' || chunk.length < 2) return 0;
+
+  const sampleCount = chunk.length >> 1;
+  let sumSquares = 0;
+  for (let i = 0; i < sampleCount; i++) {
+    const sample = chunk.readInt16LE(i * 2) / 32768;
+    sumSquares += sample * sample;
+  }
+  return Math.sqrt(sumSquares / sampleCount);
 }
 
 function looksLikeAuthFailure(message) {
@@ -56,7 +98,12 @@ class ProviderManager extends EventEmitter {
     this.failoverInFlight = false;
     this.ring = [];
     this.lastEventAt = null;
-    this.lastAudioAt = null;
+    /**
+     * When speech-level audio was last handed to the active provider — not
+     * when audio last arrived, which is continuously true for a whole capture
+     * whether or not anyone is speaking. See SPEECH_RMS_THRESHOLD.
+     */
+    this.lastSpeechAt = null;
     this.watchdogTimer = null;
   }
 
@@ -82,8 +129,19 @@ class ProviderManager extends EventEmitter {
     if (this.ring.length > RING_CHUNKS) this.ring.shift();
 
     if (this.active) {
-      this.lastAudioAt = Date.now();
-      this.active.sendAudio(chunk);
+      if (chunkRms(chunk) >= SPEECH_RMS_THRESHOLD) this.lastSpeechAt = Date.now();
+      // A provider whose socket is closing can throw synchronously from here.
+      // This runs on the stdin 'data' handler, where an escaping exception is
+      // an uncaught exception and kills the process mid-meeting — the audio
+      // path must never be able to do that.
+      try {
+        this.active.sendAudio(chunk);
+      } catch (err) {
+        this.emit('providerError', {
+          provider: this.active.name,
+          message: `sendAudio failed: ${err?.message || err}`,
+        });
+      }
     }
   }
 
@@ -104,6 +162,50 @@ class ProviderManager extends EventEmitter {
   setState(state, providerName) {
     this.state = state;
     this.emit('status', { provider: providerName, state });
+  }
+
+  /**
+   * Give a provider an 'error' listener the instant it exists.
+   *
+   * EventEmitter turns an 'error' emission that has no registered listener
+   * into a *thrown* exception. In a sidecar that is an uncaught exception:
+   * the process dies, stdout closes, and the host can only report
+   * "transcription process ended unexpectedly" with no reason attached.
+   *
+   * The real handler is attached in setActive(), which only ever runs for a
+   * provider that connected successfully. A provider whose connect() failed —
+   * or one that has since been detached by a failover — therefore had no
+   * 'error' listener at all, while its websocket was still open and could
+   * still deliver a server-side error seconds later. A Speechmatics
+   * "Concurrent Quota Exceeded" rejection arriving on exactly such a provider
+   * is what killed live meetings mid-session.
+   *
+   * This listener only reports; setActive()'s handler is the one that reacts,
+   * and the `active` check keeps exactly one of them acting on any given
+   * event.
+   */
+  guardErrors(provider) {
+    provider.on('error', (payload) => {
+      if (this.active === provider) return; // setActive()'s handler owns this one
+      this.emit('providerError', {
+        provider: provider.name,
+        message: `detached provider reported: ${payload?.message || payload}`,
+      });
+    });
+  }
+
+  /**
+   * Tear a provider down without letting teardown failures escape. Closing is
+   * always best-effort — the connection we are closing is by definition one we
+   * already believe is broken.
+   */
+  async closeQuietly(provider) {
+    if (!provider) return;
+    try {
+      await provider.close();
+    } catch (_) {
+      /* best-effort teardown */
+    }
   }
 
   /**
@@ -145,6 +247,7 @@ class ProviderManager extends EventEmitter {
       if (this.closing) return null;
 
       const provider = descriptor.create();
+      this.guardErrors(provider);
       try {
         await provider.connect();
         return provider;
@@ -154,6 +257,12 @@ class ProviderManager extends EventEmitter {
           provider: descriptor.name,
           message: `connect failed: ${message}`,
         });
+
+        // connect() failing does not mean no socket was opened — the
+        // Speechmatics client opens one before start() resolves. Left alone it
+        // keeps holding a server-side session against the account's
+        // concurrency quota until the server times it out.
+        await this.closeQuietly(provider);
 
         if (looksLikeAuthFailure(message)) break;
 
@@ -219,13 +328,16 @@ class ProviderManager extends EventEmitter {
 
       const now = Date.now();
       const silentForMs = now - (this.lastEventAt || now);
-      const audioRecentlyFlowing = this.lastAudioAt && now - this.lastAudioAt < WATCHDOG_TIMEOUT_MS;
+      // Speech, not merely audio: a quiet room streams continuously and must
+      // never be mistaken for a dead socket. See SPEECH_RMS_THRESHOLD.
+      const speechRecentlyFlowing =
+        this.lastSpeechAt && now - this.lastSpeechAt < WATCHDOG_TIMEOUT_MS;
 
-      if (silentForMs > WATCHDOG_TIMEOUT_MS && audioRecentlyFlowing) {
+      if (silentForMs > WATCHDOG_TIMEOUT_MS && speechRecentlyFlowing) {
         const provider = this.active;
         this.emit('providerError', {
           provider: provider.name,
-          message: `no transcript activity for ${Math.round(silentForMs / 1000)}s while audio is flowing — assuming the connection died silently`,
+          message: `no transcript activity for ${Math.round(silentForMs / 1000)}s while speech is flowing — assuming the connection died silently`,
         });
         this.handleActiveFailure();
       }
@@ -246,7 +358,16 @@ class ProviderManager extends EventEmitter {
     this.stopWatchdog();
 
     try {
+      const previous = this.active;
       this.active = null; // detach: further events from it are ignored
+
+      // Detaching is not closing. The old websocket stays open, keeps its
+      // server-side session alive, and keeps consuming one of the account's
+      // concurrent-stream slots. Every failover used to leak one, so a session
+      // that failed over a few times would eventually be refused a new stream
+      // ("Concurrent Quota Exceeded") — the error that then crashed the
+      // sidecar. Close it before asking for another.
+      await this.closeQuietly(previous);
 
       const nextIndex = this.chainIndex + 1;
       if (nextIndex < this.chain.length) {

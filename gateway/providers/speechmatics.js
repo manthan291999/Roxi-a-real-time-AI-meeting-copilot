@@ -47,10 +47,11 @@ function mapSpeaker(rawSpeaker, lastKnownSpeaker) {
 }
 
 class SpeechmaticsProvider extends EventEmitter {
-  constructor(apiKey) {
+  constructor(apiKey, languages = ['en']) {
     super();
     this.name = 'speechmatics';
     this.apiKey = apiKey;
+    this.languages = languages;
     this.isConnected = false;
     this.lastKnownSpeaker = "Speaker A";
     this.client = null;
@@ -105,7 +106,7 @@ class SpeechmaticsProvider extends EventEmitter {
         sample_rate: SAMPLE_RATE,
       },
       transcription_config: {
-        language: 'en',
+        language: this.languages[0] || 'en',
         diarization: 'speaker',
         enable_partials: true,
         speaker_diarization_config: {

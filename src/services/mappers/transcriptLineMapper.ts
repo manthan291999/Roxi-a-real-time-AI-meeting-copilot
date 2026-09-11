@@ -52,5 +52,6 @@ export function toTxLine(
     time: receivedAt,
     partial,
     speakerIdx: indexFor(sttLabel),
+    turnOrder: wire.turnOrder,
   };
 }

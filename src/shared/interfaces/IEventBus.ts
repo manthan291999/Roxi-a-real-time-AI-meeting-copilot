@@ -1,6 +1,7 @@
 import {
   SuggestCardType,
   TxLine,
+  SpeakerRevision,
   Significance,
   MeetingDecision,
   MeetingActionItem,
@@ -31,6 +32,14 @@ export interface IEventBus {
   onAudioLevel(cb: (level: AudioLevel) => void): () => void;
   onTranscriptPartial(cb: (line: TxLine) => void): () => void;
   onTranscriptFinal(cb: (line: TxLine) => void): () => void;
+  /**
+   * Retroactive speaker corrections for turns already on screen.
+   *
+   * The STT provider re-clusters voices as it hears more of the meeting, and
+   * sends a batch naming the turns it had attributed to the wrong speaker.
+   * Each entry identifies its turn by `turnOrder` — the only handle it gives.
+   */
+  onSpeakerRevision(cb: (revisions: SpeakerRevision[]) => void): () => void;
   onContextExplanation(cb: (data: {text: string, speaker: string}) => void): () => void;
   onTechnicalExplanation(cb: (data: {text: string, speaker: string}) => void): () => void;
   onMeetingRisks(cb: (risks: MeetingRisk[]) => void): () => void;

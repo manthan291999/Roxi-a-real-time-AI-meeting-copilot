@@ -53,9 +53,17 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
     if let Ok(event) = serde_json::from_str::<SidecarEvent>(text) {
         match event.event_type.as_str() {
             "Partial" => {
+                // Empty text is meaningful, not a no-op: the gateway sends it to
+                // withdraw a partial whose turn ended without producing a final,
+                // so it must reach the webview like any other partial.
                 if let Some(t) = event.text {
                     let s = event.speaker.unwrap_or_else(|| "Speaker A".to_string());
-                    let _ = app.emit("transcript_partial", TranscriptPayload { text: t, speaker: s, stt_label: event.stt_label });
+                    if let Err(e) = app.emit("transcript_partial", TranscriptPayload { text: t, speaker: s, stt_label: event.stt_label, turn_order: None }) {
+                        // Was `let _ =`. A partial vanishing between here and the
+                        // webview looks exactly like an STT problem from the UI,
+                        // so it needs to be visible in the log.
+                        tracing::warn!("failed to emit transcript_partial: {e}");
+                    }
                 }
             }
             // Not a gateway message: capture_usecase.rs synthesises this from
@@ -97,7 +105,7 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                 if let Some(t) = event.text {
                     let s = event.speaker.unwrap_or_else(|| "Speaker A".to_string());
                     // 1. Emit the final transcript instantly to the UI — never blocked by LLM
-                    let _ = app.emit("transcript_final", TranscriptPayload { text: t.clone(), speaker: s.clone(), stt_label: event.stt_label });
+                    let _ = app.emit("transcript_final", TranscriptPayload { text: t.clone(), speaker: s.clone(), stt_label: event.stt_label, turn_order: event.turn_order });
 
                     // 2. Snapshot the session BEFORE recording this turn, so the
                     //    rolling window this chunk sees is the turns that
@@ -308,7 +316,7 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                 let _ = app.emit("billing", event.items);
             }
             "SpeakerRevision" => {
-                let _ = app.emit("speaker_revision", event.revision);
+                let _ = app.emit("speaker_revision", event.revisions);
             }
             "MeetingSummary" => {
                 if let Some(t) = event.text {

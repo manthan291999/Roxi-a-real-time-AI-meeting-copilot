@@ -105,3 +105,4 @@ Thumbs.db
 # =================================- added for transparency work -
 .git_disabled/
 src-tauri/gen/schemas/
+gateway/qdrant_storage/
