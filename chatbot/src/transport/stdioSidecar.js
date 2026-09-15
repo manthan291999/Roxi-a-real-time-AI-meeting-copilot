@@ -2,10 +2,22 @@
  * stdioSidecar — transport boundary for the Tauri/Rust integration.
  *
  * Protocol (line-delimited JSON):
- *   stdin  -> {"type":"Ask","question":"...","threadId":"...","history":[...],"liveContext":"..."}
+ *   stdin  -> {"type":"Ask","question":"...","threadId":"...","history":[...],"liveContext":"...","mode":"rag|direct"}
  *             liveContext: recent lines from the meeting currently being
  *             recorded, if any — covers the gap before those lines are
  *             indexed into chat_index.db. Optional, omitted when idle.
+ *             mode: 'direct' is the Knowledge switch turned off — the graph
+ *             answers from the model alone, consulting no corpus and no
+ *             liveContext. Optional; anything but 'direct' means 'rag'.
+ *             webMode: 'auto' | 'always' | 'never' — the Web switch, an
+ *             axis INDEPENDENT of mode. 'auto' offers the model a
+ *             web-search tool and lets it decide whether the question needs
+ *             one; 'always' forces a search; 'never' sends no tool at all.
+ *             Optional — omit it to use the sidecar's configured default
+ *             (CHATBOT_WEB_SEARCH_MODE, 'auto'). An unrecognised value
+ *             means 'never'. Note the asymmetry with mode above: absent is
+ *             NOT the same as unrecognised here, because absent has to be
+ *             able to mean "use the default".
  *             {"type":"UploadDocument","docId":"uuid","filePath":"/abs/spec.pdf","fileName":"spec.pdf"}
  *             {"type":"ListDocuments"}
  *             {"type":"DeleteDocument","docId":"uuid"}
@@ -15,6 +27,9 @@
  *   stdout <- {"type":"Ready"}
  *             {"type":"ChatThinking","threadId":"ask","node":"retrieve"}
  *             {"type":"ChatReply","threadId":"ask","payload":{...}}
+ *             ChatReply.payload additionally carries webMode, usedWebSearch
+ *             and webSearchCount, and its sources may contain
+ *             sourceType:'web' cards with a title and url.
  *             {"type":"DocumentProgress","docId":"…","phase":"parse|chunk|embed|store","done":128,"total":200}
  *             {"type":"DocumentReady","docId":"…","fileName":"spec.pdf","chunkCount":200,"pageCount":42}
  *             {"type":"DocumentList","docs":[{…}]}
@@ -221,6 +236,12 @@ function startStdioSidecar(container, io = {}) {
             threadId,
             history: Array.isArray(msg.history) ? msg.history : [],
             liveContext: typeof msg.liveContext === 'string' ? msg.liveContext : '',
+            // Validated in the use case, so every transport gets one rule.
+            mode: msg.mode,
+            // undefined rather than '' when absent: the use case has to be
+            // able to tell "not specified, use the configured default" from
+            // "explicitly off".
+            webMode: typeof msg.webMode === 'string' ? msg.webMode : undefined,
             onNode: (node) => emit({ type: 'ChatThinking', threadId, node }),
           });
           emit({ type: 'ChatReply', threadId, payload });

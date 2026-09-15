@@ -141,3 +141,16 @@ export const CoinIcon: React.FC<IconProps> = ({ className = '', style }) => (
     <path d="M12 8v8M9.5 9.8c0-1.2 1.1-1.8 2.5-1.8s2.5.7 2.5 1.7-1 1.4-2.5 1.6-2.5.6-2.5 1.7 1.1 1.8 2.5 1.8 2.5-.6 2.5-1.8" />
   </svg>
 );
+
+export const CopyIcon: React.FC<IconProps> = ({ className = '', style }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+    <rect x="9" y="9" width="11" height="11" rx="2.5" />
+    <path d="M5.5 15H5a1.5 1.5 0 0 1-1.5-1.5v-8A1.5 1.5 0 0 1 5 4h8A1.5 1.5 0 0 1 14.5 5.5V6" />
+  </svg>
+);
+
+export const CheckIcon: React.FC<IconProps> = ({ className = '', style }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+    <path d="M5 12.5 10 17.5 19 7" />
+  </svg>
+);

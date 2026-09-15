@@ -33,8 +33,17 @@ const StageLine: React.FC<{ line: TxLine; dim?: boolean }> = ({ line, dim = fals
     >
       {line.speaker}
     </span>
+    {/*
+      Wraps rather than truncates: the gateway sends a cumulative partial, so
+      this text grows word by word across the whole utterance and a single
+      ellipsised line would show only its first few words.
+
+      The live line gets two lines, settled ones a single line. That bounds the
+      ticker's height, so a long sentence can never push the panes below it down
+      — and spends the extra room on the sentence still being said.
+    */}
     <span
-      className="truncate"
+      className={`${dim ? 'line-clamp-1' : 'line-clamp-2'} break-words`}
       style={{ color: tokens.paper, fontSize: typeScale.label.fontSize, lineHeight: typeScale.label.lineHeight, fontWeight: 400 }}
     >
       {line.text}
@@ -75,12 +84,14 @@ export const LiveStage: React.FC<LiveStageProps> = ({ isLive, onExpandTranscript
   const openPartials = Object.values(partials);
   const activePartial = openPartials[openPartials.length - 1];
 
+  // Three, not two: with wrapped text the settled line above stays readable
+  // while the next sentence builds beneath it.
   const displayLines: { line: TxLine; dim?: boolean }[] = activePartial
     ? [
-        ...(lines.length > 0 ? [{ line: lines[lines.length - 1], dim: true }] : []),
+        ...lines.slice(-2).map((line) => ({ line, dim: true })),
         { line: activePartial },
-      ].slice(-2)
-    : lines.slice(-2).map((line) => ({ line }));
+      ].slice(-3)
+    : lines.slice(-3).map((line) => ({ line }));
 
   return (
     <div

@@ -41,6 +41,17 @@ export const tokens = {
   hairlineSoft: 'var(--t-hairline-soft)',
 
   /**
+   * Code surfaces inside a rendered answer. Inline and block are separate
+   * grounds because they do different jobs: inline has to interrupt a
+   * sentence without breaking its rhythm, block has to read as a slab you
+   * can copy out of.
+   */
+  codeBg: 'var(--t-code-bg)',
+  codeLine: 'var(--t-code-line)',
+  codeBlock: 'var(--t-code-block)',
+  codeHead: 'var(--t-code-head)',
+
+  /**
    * Sheets sit OVER the glass (modals, tooltips), so they cannot derive from
    * --glass-alpha: they need their own readable ground or the text behind
    * them shows through.
@@ -60,6 +71,18 @@ export const tokens = {
   signalLine: 'var(--t-signal-line)',
   /** The focus ring. Its own token because a component must not build it. */
   signalFocus: 'var(--t-signal-focus)',
+
+  /**
+   * The user's own chat turn. Four tokens rather than one because a glass
+   * surface is a recipe, not a colour: tint, edge, gloss and thickness have
+   * to change together or it stops reading as one material. Composing them
+   * in the component would be exactly the "derive a colour in a component"
+   * mistake this file's header warns about.
+   */
+  bubbleUser: 'var(--t-bubble-user)',
+  bubbleUserLine: 'var(--t-bubble-user-line)',
+  bubbleUserSheen: 'var(--t-bubble-user-sheen)',
+  bubbleUserBevel: 'var(--t-bubble-user-bevel)',
 
   /** Semantic tag colors — meaning-carrying, kept off interactive chrome. */
   decision: 'var(--t-decision)',

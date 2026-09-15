@@ -176,11 +176,22 @@ function pipelineHarness() {
   return { pipeline, emitted, saved, diarization: d };
 }
 
-test('a good final turn is emitted and stored', () => {
+// A turn is no longer committed the moment it arrives: the provider chops one
+// spoken sentence into several, so fragments accumulate until the speaker
+// actually stops. flushAll() is the shutdown path, used here to close the
+// utterance without waiting on the gap timer.
+test('a good final turn is emitted and stored once the utterance closes', () => {
   const { pipeline, emitted, saved } = pipelineHarness();
   pipeline.onFinal({ text: 'we should ship on friday', speaker: 'Speaker A', confidence: 0.9 });
-  assert.strictEqual(emitted.length, 1);
-  assert.strictEqual(emitted[0].kind, 'final');
+
+  assert.ok(!emitted.some((e) => e.kind === 'final'), 'not committed while the utterance is open');
+  assert.strictEqual(saved.length, 0, 'not stored while the utterance is open');
+
+  pipeline.flushAll();
+
+  const finals = emitted.filter((e) => e.kind === 'final');
+  assert.strictEqual(finals.length, 1);
+  assert.strictEqual(finals[0].text, 'we should ship on friday');
   assert.deepStrictEqual(saved, [{ speaker: 'Speaker A', text: 'we should ship on friday' }]);
 });
 
@@ -216,7 +227,13 @@ test('a dropped turn withdraws the partial it had already shown', () => {
 test('a turn that survives the sanitizer withdraws nothing', () => {
   const { pipeline, emitted } = pipelineHarness();
   pipeline.onFinal({ text: 'we should ship on friday', speaker: 'Speaker A', confidence: 0.9 });
-  assert.ok(!emitted.some((e) => e.kind === 'partial'), 'the final alone clears the partial');
+
+  // The partial it does emit is the standing sentence, not a withdrawal: the
+  // words stay on screen while the speaker carries on, and are cleared by the
+  // final once the utterance is committed.
+  assert.ok(!emitted.some((e) => e.kind === 'partial' && e.text === ''), 'nothing withdrawn');
+  const partials = emitted.filter((e) => e.kind === 'partial');
+  assert.strictEqual(partials.at(-1).text, 'we should ship on friday');
 });
 
 // --- Control handler ------------------------------------------------------------

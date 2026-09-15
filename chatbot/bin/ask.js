@@ -6,6 +6,14 @@
  *   node bin/ask.js "what did we decide about the database?"
  *   node bin/ask.js --repl                 # interactive multi-turn chat
  *   node bin/ask.js --rebuild "question"   # force index rebuild first
+ *
+ * Web search (independent of retrieval):
+ *   node bin/ask.js --web=auto "…"      offer the tool, let the model decide
+ *   node bin/ask.js --web=always "…"    force a search (research mode)
+ *   node bin/ask.js --web=never "…"     no tool at all
+ *   node bin/ask.js --direct "…"        Knowledge off (model + web only)
+ * Omitting --web uses CHATBOT_WEB_SEARCH_MODE (default 'auto'). 'always' is
+ * reachable here and over the protocol; the UI exposes only auto/never.
  */
 
 const { buildContainer } = require('../src/composition/container');
@@ -16,6 +24,12 @@ async function main() {
   const repl = args.includes('--repl');
   const rebuild = args.includes('--rebuild');
   const question = args.filter((a) => !a.startsWith('--')).join(' ').trim();
+  const webArg = args.find((a) => a.startsWith('--web'));
+  // --web on its own means 'auto'; --web=x passes x through to be validated
+  // in the use case, so the CLI and the sidecar share one rule.
+  const webMode = webArg ? (webArg.includes('=') ? webArg.split('=')[1] : 'auto') : undefined;
+  const mode = args.includes('--direct') ? 'direct' : undefined;
+  const opts = { webMode, mode };
 
   const container = buildContainer();
 
@@ -30,7 +44,7 @@ async function main() {
   }
 
   if (repl) {
-    await startRepl(container);
+    await startRepl(container, opts);
     return;
   }
   if (!question) {
@@ -40,7 +54,7 @@ async function main() {
   }
 
   try {
-    await askOnce(container, question);
+    await askOnce(container, question, 'cli', opts);
   } finally {
     container.shutdown();
   }

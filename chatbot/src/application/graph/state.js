@@ -19,6 +19,31 @@ const GraphState = Annotation.Root({
   history: Annotation({ reducer: lastWrite, default: () => [] }),
   /** @type {string} recent lines from the meeting currently being recorded, if any */
   liveContext: Annotation({ reducer: lastWrite, default: () => '' }),
+  /**
+   * @type {'rag'|'direct'} which entry path this turn takes.
+   *
+   * Set per question by the caller, never by a node. `lastWrite` ignores an
+   * absent value and the graph is checkpointed per thread, so a turn that
+   * omits it inherits the previous turn's mode — AnswerQuestionUseCase
+   * therefore normalizes it to a concrete value on every run.
+   */
+  mode: Annotation({ reducer: lastWrite, default: () => 'rag' }),
+  /**
+   * @type {'auto'|'always'|'never'} may this turn reach the web.
+   *
+   * Independent of `mode` (see WEB_MODES). Defaults to 'never' HERE on
+   * purpose, even though the product default is 'auto': the graph and its
+   * pure decision functions must treat an unset value as off, so that a
+   * caller who knows nothing about web search gets exactly the behaviour it
+   * had before. The 'auto' default is applied one layer up, in
+   * AnswerQuestionUseCase, from config.
+   *
+   * Carries the same hazard as `mode` above — lastWrite ignores an absent
+   * value and the graph is checkpointed per thread, so a turn that omitted
+   * it would inherit the previous turn's. The use case normalizes it on
+   * every run for exactly that reason.
+   */
+  webMode: Annotation({ reducer: lastWrite, default: () => 'never' }),
 
   // ---- analyze_query outputs --------------------------------------------
   /** @type {string[]} sanitized FTS match expressions */
@@ -49,6 +74,16 @@ const GraphState = Annotation.Root({
   clarifyingQuestion: Annotation({ reducer: lastWrite, default: () => '' }),
   /** @type {string[]} suggested follow-up questions */
   followUps: Annotation({ reducer: lastWrite, default: () => [] }),
+  /**
+   * @type {boolean} did the model actually search the web on this turn.
+   *
+   * Counted from the provider's web_search_call items, never inferred from
+   * the prose — it is the ground truth behind every metric this feature
+   * reports, and the answer to "is 'auto' tuned right".
+   */
+  usedWebSearch: Annotation({ reducer: lastWrite, default: () => false }),
+  /** @type {number} how many searches the model ran. */
+  webSearchCount: Annotation({ reducer: lastWrite, default: () => 0 }),
   /** @type {string} non-fatal internal error note (degraded paths) */
   degradedNote: Annotation({ reducer: lastWrite, default: () => '' }),
 });

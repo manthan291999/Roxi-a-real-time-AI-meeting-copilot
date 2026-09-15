@@ -27,14 +27,22 @@ const {
  * a hit that has no meeting at all, reproducing the exact "Meeting #0" bug
  * toSources()'s own doc comment already warns about, just for a new source
  * type that was never added to this allow-list.
- * @returns {'meeting'|'document'|'live'|'semantic'}
+ * 'web' is a page the model retrieved itself during generation. It never
+ * reaches boundEvidence — nothing retrieved it into the evidence pipeline, so
+ * it has no score and no group to be bounded against — and its cards are
+ * built by webCitations.toWebSources() instead. It is listed here anyway,
+ * deliberately: this allow-list is exactly the thing whose omission causes
+ * the bug described above, and "it cannot get here today" is not a property
+ * worth relying on.
+ * @returns {'meeting'|'document'|'live'|'semantic'|'web'}
  */
 function sourceTypeOf(hit) {
   if (
     hit.sourceType === 'meeting' ||
     hit.sourceType === 'document' ||
     hit.sourceType === 'live' ||
-    hit.sourceType === 'semantic'
+    hit.sourceType === 'semantic' ||
+    hit.sourceType === 'web'
   ) {
     return hit.sourceType;
   }
@@ -47,6 +55,8 @@ function groupKeyOf(hit) {
   const type = sourceTypeOf(hit);
   if (type === 'document') return `doc:${hit.docId}`;
   if (type === 'live') return 'live:current';
+  // One group per URL, matching how webCitations assigns its refs.
+  if (type === 'web') return `web:${hit.url || ''}`;
   return `meeting:${hit.meetingId}`;
 }
 
@@ -166,6 +176,11 @@ function toSources(hits, citedRefs = null) {
       // vocabulary knowledge is cross-meeting by design (plan §06's "a term
       // shouldn't look project- or meeting-scoped from one stray mention") —
       // `h.text` already carries "term: definition", same as the snippet.
+    } else if (sourceType === 'web') {
+      // No meetingId/date/speaker: it is not the team's material at all. The
+      // address is what identifies it, and the title is what a reader reads.
+      card.title = h.title || '';
+      card.url = h.url || '';
     } else {
       card.meetingId = Number(h.meetingId);
       card.date = h.meetingDate || '';

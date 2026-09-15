@@ -19,17 +19,19 @@
         "height": 760,
         "minWidth": 480,
         "minHeight": 520,
-        "transparent": false,
+        "transparent": true,
         "decorations": true,
         "alwaysOnTop": false,
         "resizable": true,
         "shadow": true,
-        "visible": true
+        "visible": true,
+        "titleBarStyle": "Transparent"
       }
     ],
     "security": {
       "csp": null
-    }
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,

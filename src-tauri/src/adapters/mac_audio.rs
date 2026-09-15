@@ -303,6 +303,15 @@ fn capture_to_sink_internal(
         warn!("Failed to setup microphone capture. Continuing with loopback only.");
     }
 
+    // Which sources actually opened. The mixer needs this to tell "the other
+    // stream is mid-jitter, wait a tick for it" apart from "that source does
+    // not exist, never wait for it".
+    let loopback_live = loopback_stream.is_some();
+    let mic_live = mic_stream.is_some();
+    // Two seconds of audio. Past this a silent source is stalled rather than
+    // jittering, and no buffer is allowed to hold more than this.
+    let max_buffered = (config.target_sample_rate as usize) * 2;
+
     // --- Start Mixer Thread ---
     let mixer_running = running.clone();
     let mixer_sink = sink.clone();
@@ -330,8 +339,38 @@ fn capture_to_sink_internal(
                 mic_buf.extend(chunk);
             }
             
-            // Mix available samples
-            let n = loopback_buf.len().max(mic_buf.len());
+            // Drift guard: the two devices run on independent hardware clocks,
+            // so one creeps ahead over a long meeting. Cap each buffer so a
+            // lead costs one small discontinuity instead of growing latency.
+            for buf in [&mut loopback_buf, &mut mic_buf] {
+                if buf.len() > max_buffered {
+                    let excess = buf.len() - max_buffered;
+                    buf.drain(..excess);
+                }
+            }
+
+            // Mix only what both live sources actually have. Taking `max` here
+            // emitted one output sample per sample of whichever stream happened
+            // to be ahead, so a session streamed ~1.5x real time and the two
+            // tracks slid permanently out of alignment — which stalls a
+            // real-time STT socket and shreds transcription accuracy.
+            let n = match (loopback_live, mic_live) {
+                (true, true) => {
+                    let paired = loopback_buf.len().min(mic_buf.len());
+                    if paired > 0 {
+                        paired
+                    } else if loopback_buf.len().max(mic_buf.len()) >= max_buffered {
+                        // One side has been quiet for seconds: treat it as
+                        // silence rather than freezing the mix waiting on it.
+                        loopback_buf.len().max(mic_buf.len())
+                    } else {
+                        0 // brief jitter — the other half arrives within a tick
+                    }
+                }
+                (true, false) => loopback_buf.len(),
+                (false, true) => mic_buf.len(),
+                (false, false) => 0,
+            };
             if n > 0 {
                 let mut mixed = Vec::with_capacity(n);
                 for _ in 0..n {

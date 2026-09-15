@@ -12,6 +12,7 @@ const { FtsRetriever } = require('../infrastructure/persistence/FtsRetriever');
 const { CallCountBudgetGuard } = require('../infrastructure/budget/CallCountBudgetGuard');
 const { OpenAiLlmGateway } = require('../infrastructure/llm/OpenAiLlmGateway');
 const { LangchainLlmGateway } = require('../infrastructure/llm/LangchainLlmGateway');
+const { OpenAiResponsesGateway } = require('../infrastructure/llm/OpenAiResponsesGateway');
 const { UsageRecorder } = require('../infrastructure/usage/UsageRecorder');
 const { OpenAiEmbeddingGateway } = require('../infrastructure/embedding/OpenAiEmbeddingGateway');
 const { SqliteChunkStore } = require('../infrastructure/persistence/SqliteChunkStore');
@@ -36,6 +37,9 @@ const { createRewriteQueryNode } = require('../application/nodes/rewriteQueryNod
 const { createClarifyNode } = require('../application/nodes/clarifyNode');
 const { createGenerateNode } = require('../application/nodes/generateNode');
 const { createRespondNoDataNode } = require('../application/nodes/respondNoDataNode');
+const { createDirectAnswerNode } = require('../application/nodes/directAnswerNode');
+const { createWebAnswerNode } = require('../application/nodes/webAnswerNode');
+const { createGenerateWebNode } = require('../application/nodes/generateWebNode');
 const { buildChatGraph } = require('../application/graph/buildChatGraph');
 const { AnswerQuestionUseCase } = require('../application/useCases/AnswerQuestionUseCase');
 const { IndexDocumentUseCase } = require('../application/useCases/IndexDocumentUseCase');
@@ -78,6 +82,8 @@ function buildContainer(overrides = {}) {
   let syncSemanticMemory = null;
   let semanticVectorIndex = null;
   let purgeEpisodicMemory = null;
+  let webGateway = null;
+  let webBudget = null;
 
   if (!overrides.skipLlm) {
     budget = new CallCountBudgetGuard({
@@ -105,6 +111,31 @@ function buildContainer(overrides = {}) {
     llm = config.llmAdapter === 'langchain'
       ? new LangchainLlmGateway(llmOpts)
       : new OpenAiLlmGateway(llmOpts);
+
+    // Web search gets its own budget, for the same reason embeddings do: one
+    // research-mode question must not consume the call allowance belonging to
+    // the conversation it was asked in. Soft equals hard — unlike chat, there
+    // is no useful degraded web call to allow through.
+    webBudget = new CallCountBudgetGuard({
+      softLimit: config.webBudgetHard,
+      hardLimit: config.webBudgetHard,
+      logger,
+    });
+    webGateway = new OpenAiResponsesGateway({
+      apiKey: config.openAiApiKey,
+      // Empty config means "use the chat model" — the override exists so the
+      // web path can differ without moving any other node.
+      model: config.webSearchModel || config.model,
+      baseUrl: config.openAiBaseUrl,
+      toolType: config.webSearchToolType,
+      contextSize: config.webSearchContextSize,
+      maxToolCalls: config.webMaxToolCalls,
+      userLocation: buildUserLocation(config),
+      timeoutMs: config.webTimeoutMs,
+      budget: webBudget,
+      logger,
+      usageRecorder,
+    });
 
     // Embeddings get their own budget: one large upload must not consume the
     // call allowance belonging to the conversation it was uploaded for.
@@ -186,17 +217,46 @@ function buildContainer(overrides = {}) {
       logger,
     });
 
+    // Built before the graph because the two web nodes are handed their
+    // non-web twin as a fallback: when the web is unreachable, web_answer
+    // delegates to direct_answer and generate_web to generate (or to
+    // respond_no_data when there was no evidence either). Injected rather
+    // than imported, so neither web node learns what it falls back to and
+    // the graph needs no extra edge.
+    const directAnswer = createDirectAnswerNode({ llm, logger });
+    const generate = createGenerateNode({ llm, logger, store });
+    const respondNoData = createRespondNoDataNode({ logger, retriever });
+
     const graph = buildChatGraph({
       analyzeQuery: createAnalyzeQueryNode({ llm, logger }),
       retrieve: createRetrieveNode({ evidenceSource, logger }),
       gradeDocuments: createGradeDocumentsNode({ llm, logger }),
       rewriteQuery: createRewriteQueryNode({ llm, logger }),
       clarify: createClarifyNode({ llm, logger }),
-      generate: createGenerateNode({ llm, logger, store }),
-      respondNoData: createRespondNoDataNode({ logger, retriever }),
+      generate,
+      respondNoData,
+      // Knowledge switch OFF: no evidence source injected, by design.
+      directAnswer,
+      // Web switch ON. Both offer the tool and let the MODEL decide whether
+      // the question needs it — there is no classifier call anywhere here.
+      webAnswer: createWebAnswerNode({
+        web: webGateway, logger, fallback: directAnswer,
+      }),
+      generateWeb: createGenerateWebNode({
+        web: webGateway, logger, store,
+        fallback: generate, noDataFallback: respondNoData,
+      }),
     });
 
-    useCase = new AnswerQuestionUseCase({ graph, logger });
+    useCase = new AnswerQuestionUseCase({
+      graph,
+      logger,
+      // The PRODUCT default, applied to any turn that does not specify one.
+      // The graph's own default is 'never' (see state.js) so that a caller
+      // which knows nothing about web search is unaffected; this is where
+      // 'auto' actually enters the system.
+      defaultWebMode: config.webSearchMode,
+    });
 
     // Upload/list/delete. Deliberately built from the SAME documents
     // repository the evidence source reads, so a document is searchable the
@@ -236,7 +296,9 @@ function buildContainer(overrides = {}) {
     embeddings,
     budget,
     embedBudget,
+    webBudget,
     llm,
+    webGateway,
     useCase,
     parsers,
     indexDocument,
@@ -249,6 +311,23 @@ function buildContainer(overrides = {}) {
     syncSemanticMemory,
     purgeEpisodicMemory,
     shutdown,
+  };
+}
+
+/**
+ * The search tool's optional locality. Returns null unless something was
+ * configured — an absent user_location is different from an empty one.
+ */
+function buildUserLocation(config) {
+  const country = config.webUserCountry;
+  const city = config.webUserCity;
+  const region = config.webUserRegion;
+  if (!country && !city && !region) return null;
+  return {
+    type: 'approximate',
+    ...(country ? { country } : {}),
+    ...(city ? { city } : {}),
+    ...(region ? { region } : {}),
   };
 }
 

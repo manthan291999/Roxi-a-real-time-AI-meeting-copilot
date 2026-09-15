@@ -23,6 +23,9 @@ const { createRewriteQueryNode } = require('../src/application/nodes/rewriteQuer
 const { createClarifyNode } = require('../src/application/nodes/clarifyNode');
 const { createGenerateNode } = require('../src/application/nodes/generateNode');
 const { createRespondNoDataNode } = require('../src/application/nodes/respondNoDataNode');
+const { createDirectAnswerNode } = require('../src/application/nodes/directAnswerNode');
+const { createWebAnswerNode } = require('../src/application/nodes/webAnswerNode');
+const { createGenerateWebNode } = require('../src/application/nodes/generateWebNode');
 const { JsonLineLogger } = require('../src/infrastructure/logging/JsonLineLogger');
 
 /** Scripted LlmGateway double — canned JSON per tag, records calls. */
@@ -87,7 +90,11 @@ after(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-function makeUseCase(llm, evidenceSource = null) {
+function makeUseCase(llm, evidenceSource = null, web = null, defaultWebMode = undefined) {
+  const directAnswer = createDirectAnswerNode({ llm, logger: silentLogger });
+  const generate = createGenerateNode({ llm, logger: silentLogger });
+  const respondNoData = createRespondNoDataNode({ logger: silentLogger, retriever });
+
   const graph = buildChatGraph({
     analyzeQuery: createAnalyzeQueryNode({ llm, logger: silentLogger }),
     retrieve: createRetrieveNode({
@@ -97,12 +104,124 @@ function makeUseCase(llm, evidenceSource = null) {
     gradeDocuments: createGradeDocumentsNode({ llm, logger: silentLogger }),
     rewriteQuery: createRewriteQueryNode({ llm, logger: silentLogger }),
     clarify: createClarifyNode({ llm, logger: silentLogger }),
-    generate: createGenerateNode({ llm, logger: silentLogger }),
-    respondNoData: createRespondNoDataNode({ logger: silentLogger, retriever }),
+    generate,
+    respondNoData,
+    directAnswer,
+    ...(web
+      ? {
+        webAnswer: createWebAnswerNode({ web, logger: silentLogger, fallback: directAnswer }),
+        generateWeb: createGenerateWebNode({
+          web, logger: silentLogger, fallback: generate, noDataFallback: respondNoData,
+        }),
+      }
+      : {}),
   });
-  return new AnswerQuestionUseCase({ graph, logger: silentLogger });
+  return new AnswerQuestionUseCase({
+    graph, logger: silentLogger, ...(defaultWebMode ? { defaultWebMode } : {}),
+  });
 }
 
+
+test('direct mode: one LLM call, no retrieval, no sources', async () => {
+  const llm = new FakeLlm({
+    direct_answer: { answer: 'Use `^v?\\d+\\.\\d+\\.\\d+$` for a semver tag.', followUps: ['How do I match prereleases?'] },
+  });
+  const useCase = makeUseCase(llm);
+  const nodes = [];
+  const payload = await useCase.run({
+    question: 'Write a regex for a semver tag',
+    threadId: 't-direct',
+    mode: 'direct',
+    onNode: (n) => nodes.push(n),
+  });
+
+  assert.deepStrictEqual(llm.calls, ['direct_answer']);
+  assert.deepStrictEqual(nodes, ['direct_answer']);
+  assert.strictEqual(payload.route, 'direct');
+  assert.strictEqual(payload.mode, 'direct');
+  assert.deepStrictEqual(payload.sources, []);
+  assert.ok(payload.answer.includes('semver'));
+  assert.deepStrictEqual(payload.followUps, ['How do I match prereleases?']);
+});
+
+test('direct mode: liveContext never reaches the prompt', async () => {
+  const seen = [];
+  const llm = new FakeLlm({
+    direct_answer: (tag, messages) => {
+      seen.push(...messages.map((m) => m.content));
+      return { answer: 'Answered without the meeting.', followUps: [] };
+    },
+  });
+  const useCase = makeUseCase(llm);
+  await useCase.run({
+    question: 'What is exponential backoff?',
+    threadId: 't-direct-live',
+    mode: 'direct',
+    liveContext: 'Speaker A: SENTINEL_LIVE_LINE',
+  });
+
+  assert.ok(!seen.some((c) => c.includes('SENTINEL_LIVE_LINE')));
+});
+
+test('direct mode: history travels as real turns', async () => {
+  let turns = [];
+  const llm = new FakeLlm({
+    direct_answer: (tag, messages) => {
+      turns = messages;
+      return { answer: 'Yes.', followUps: [] };
+    },
+  });
+  const useCase = makeUseCase(llm);
+  await useCase.run({
+    question: 'And in TypeScript?',
+    threadId: 't-direct-history',
+    mode: 'direct',
+    history: [
+      { role: 'user', content: 'How do I debounce in JS?' },
+      { role: 'assistant', content: 'Wrap it in setTimeout.' },
+    ],
+  });
+
+  assert.strictEqual(turns[0].role, 'system');
+  assert.deepStrictEqual(
+    turns.slice(1).map((m) => m.role),
+    ['user', 'assistant', 'user'],
+  );
+  assert.strictEqual(turns[turns.length - 1].content, 'And in TypeScript?');
+});
+
+test('direct mode: LLM failure degrades instead of throwing', async () => {
+  const llm = new FakeLlm({ direct_answer: new Error('network down') });
+  const useCase = makeUseCase(llm);
+  const payload = await useCase.run({
+    question: 'Anything',
+    threadId: 't-direct-fail',
+    mode: 'direct',
+  });
+
+  assert.strictEqual(payload.route, 'direct');
+  assert.deepStrictEqual(payload.sources, []);
+  assert.ok(payload.degradedNote.length > 0);
+  assert.ok(payload.answer.includes('Knowledge'));
+});
+
+test('unknown mode falls back to retrieval', async () => {
+  const llm = new FakeLlm({
+    analyze_query: { searchKeywords: ['webhook'], isAmbiguous: false, ambiguityNote: '' },
+    grade_documents: allRelevant,
+    generate: { answer: 'Answered from meetings [M1].', citedRefs: ['M1'], followUps: [] },
+  });
+  const useCase = makeUseCase(llm);
+  const payload = await useCase.run({
+    question: 'Why does the payment webhook fail?',
+    threadId: 't-mode-typo',
+    mode: 'DIRECT',
+  });
+
+  assert.strictEqual(payload.mode, 'rag');
+  assert.ok(llm.calls.includes('analyze_query'));
+  assert.ok(!llm.calls.includes('direct_answer'));
+});
 
 test('generate route: grounded answer with sources', async () => {
   const llm = new FakeLlm({
@@ -350,4 +469,225 @@ test('grading candidates describe documents by file, not by meeting', async () =
   assert.ok(gradePrompt.includes('Meeting #1 · transcripts (Speaker A)'));
   // A document must never be labelled "Meeting #null".
   assert.ok(!gradePrompt.includes('Meeting #null'));
+});
+
+
+/**
+ * Scripted WebSearchGateway double — canned result per tag, records requests.
+ * Mirrors FakeLlm above so the two read the same way.
+ */
+class FakeWeb {
+  constructor(scripts = {}) {
+    this.scripts = scripts; // tag -> result | fn(req) -> result | Error
+    this.calls = [];
+  }
+  model() { return 'fake-web-model'; }
+  async answer(req) {
+    this.calls.push(req);
+    const script = this.scripts[req.tag];
+    const out = typeof script === 'function' ? script(req) : script;
+    if (out instanceof Error) throw out;
+    return {
+      answer: '', citations: [], usedWebSearch: false, searchCalls: 0,
+      latencyMs: 1, model: 'fake-web-model', ...(out || {}),
+    };
+  }
+}
+
+test('web off: the graph is exactly the one that shipped before', async () => {
+  // Same assertions as the plain generate-route test, with a web gateway
+  // wired but webMode absent. Nothing may reach it.
+  const llm = new FakeLlm({
+    analyze_query: { searchKeywords: ['webhook'], isAmbiguous: false, ambiguityNote: '' },
+    grade_documents: allRelevant,
+    generate: { answer: 'Times out in production [M1].', citedRefs: ['M1'], followUps: [] },
+  });
+  const web = new FakeWeb({ generate_web: { answer: 'SHOULD NOT BE CALLED' } });
+  const payload = await makeUseCase(llm, null, web).run({
+    question: 'Why does the payment webhook fail?', threadId: 't-web-off',
+  });
+
+  assert.strictEqual(payload.route, 'generate');
+  assert.strictEqual(payload.webMode, 'never');
+  assert.strictEqual(payload.usedWebSearch, false);
+  assert.deepStrictEqual(web.calls, []);
+});
+
+test('direct + web auto: one web call, no retrieval, cited cards', async () => {
+  const llm = new FakeLlm({});
+  const web = new FakeWeb({
+    web_answer: {
+      answer: 'Node 22 is the current LTS.',
+      citations: [{ title: 'Node releases', url: 'https://nodejs.org/x', startIndex: 0, endIndex: 27 }],
+      usedWebSearch: true,
+      searchCalls: 1,
+    },
+  });
+  const nodes = [];
+  const payload = await makeUseCase(llm, null, web).run({
+    question: 'What is the latest Node LTS?',
+    threadId: 't-web-direct',
+    mode: 'direct',
+    webMode: 'auto',
+    onNode: (n) => nodes.push(n),
+  });
+
+  assert.deepStrictEqual(nodes, ['web_answer']);
+  assert.deepStrictEqual(llm.calls, []); // no retrieval, no analyze, no grade
+  assert.strictEqual(payload.route, 'web');
+  assert.strictEqual(payload.usedWebSearch, true);
+  assert.strictEqual(payload.webSearchCount, 1);
+  assert.ok(payload.answer.includes('[W1]'), payload.answer);
+  assert.strictEqual(payload.sources.length, 1);
+  assert.strictEqual(payload.sources[0].sourceType, 'web');
+  assert.strictEqual(payload.sources[0].url, 'https://nodejs.org/x');
+});
+
+test('direct + web auto: the model declining to search costs one plain call', async () => {
+  // The behaviour the whole design exists for: 'auto' must not turn every
+  // question into a search.
+  const web = new FakeWeb({
+    web_answer: { answer: 'A debounce delays a call until input settles.' },
+  });
+  const payload = await makeUseCase(new FakeLlm({}), null, web).run({
+    question: 'What is a debounce?', threadId: 't-web-nosearch', mode: 'direct', webMode: 'auto',
+  });
+
+  assert.strictEqual(web.calls.length, 1);
+  assert.strictEqual(payload.usedWebSearch, false);
+  assert.deepStrictEqual(payload.sources, []);
+  assert.ok(!payload.answer.includes('[W'), payload.answer);
+});
+
+test('rag + web auto: evidence and web citations arrive together', async () => {
+  const llm = new FakeLlm({
+    analyze_query: { searchKeywords: ['sqlite'], isAmbiguous: false, ambiguityNote: '' },
+    grade_documents: allRelevant,
+    generate: { answer: 'SHOULD NOT BE CALLED' },
+  });
+  const web = new FakeWeb({
+    generate_web: {
+      answer: 'You chose SQLite [M1]; 3.46 is the current release.',
+      citations: [{ title: 'SQLite changes', url: 'https://sqlite.org/c', startIndex: 24, endIndex: 50 }],
+      usedWebSearch: true,
+      searchCalls: 1,
+    },
+  });
+  const nodes = [];
+  const payload = await makeUseCase(llm, new MixedEvidenceSource(), web).run({
+    question: 'what database do we use and is it current?',
+    threadId: 't-web-rag',
+    webMode: 'auto',
+    onNode: (n) => nodes.push(n),
+  });
+
+  // Retrieval still ran in full; only the terminal changed.
+  assert.ok(nodes.includes('analyze_query'));
+  assert.ok(nodes.includes('grade_documents'));
+  assert.ok(nodes.includes('generate_web'));
+  assert.ok(!nodes.includes('generate'));
+  assert.ok(!llm.calls.includes('generate'));
+
+  assert.strictEqual(payload.route, 'generate_web');
+  const refs = payload.sources.map((x) => x.ref);
+  assert.deepStrictEqual(refs, ['M1', 'W1']);
+  assert.strictEqual(payload.sources[0].meetingId, 1);
+  assert.strictEqual(payload.sources[1].url, 'https://sqlite.org/c');
+});
+
+test('rag + web: no evidence after the rewrite loop goes to the web, not to no_data', async () => {
+  const llm = new FakeLlm({
+    analyze_query: { searchKeywords: ['kubernetes'], isAmbiguous: false, ambiguityNote: '' },
+    rewrite_query: { searchKeywords: ['zzzstillnothing'] },
+  });
+  const web = new FakeWeb({
+    generate_web: (req) => {
+      // The prompt must admit the records were empty rather than imply it read them.
+      assert.ok(req.messages[1].content.includes('(none'), 'expected an empty-evidence prompt');
+      return {
+        answer: 'Your meetings say nothing about this. The docs recommend X.',
+        citations: [{ title: 'Docs', url: 'https://k8s.example', startIndex: 0, endIndex: 44 }],
+        usedWebSearch: true,
+        searchCalls: 1,
+      };
+    },
+  });
+  const payload = await makeUseCase(llm, null, web).run({
+    question: 'kubernetes deployment plan?', threadId: 't-web-nodata', webMode: 'auto',
+  });
+
+  assert.strictEqual(payload.route, 'generate_web');
+  assert.strictEqual(payload.attempts, 3); // the corrective loop still ran first
+  assert.deepStrictEqual(payload.sources.map((x) => x.ref), ['W1']);
+});
+
+test('web unreachable in auto: degrades to the model alone and says so', async () => {
+  const llm = new FakeLlm({
+    direct_answer: { answer: 'From my own knowledge.', followUps: [] },
+  });
+  const web = new FakeWeb({ web_answer: new Error('network down') });
+  const payload = await makeUseCase(llm, null, web).run({
+    question: 'latest node?', threadId: 't-web-degrade', mode: 'direct', webMode: 'auto',
+  });
+
+  assert.strictEqual(payload.answer, 'From my own knowledge.');
+  assert.deepStrictEqual(payload.sources, []);
+  assert.strictEqual(payload.usedWebSearch, false);
+  assert.ok(payload.degradedNote.includes('without the web'), payload.degradedNote);
+  assert.deepStrictEqual(llm.calls, ['direct_answer']);
+});
+
+test('web unreachable in always: refuses rather than answering unsourced', async () => {
+  const llm = new FakeLlm({ direct_answer: { answer: 'SHOULD NOT BE CALLED' } });
+  const web = new FakeWeb({ web_answer: new Error('network down') });
+  const payload = await makeUseCase(llm, null, web).run({
+    question: 'verify this claim', threadId: 't-web-always-fail', mode: 'direct', webMode: 'always',
+  });
+
+  assert.ok(payload.answer.includes("couldn't reach the web"), payload.answer);
+  assert.deepStrictEqual(llm.calls, []);
+  assert.strictEqual(payload.degradedNote, 'Web search unavailable.');
+});
+
+test('the configured default applies when a turn does not specify a web mode', async () => {
+  // This is where 'auto' actually enters the system in production.
+  const web = new FakeWeb({ web_answer: { answer: 'Answered.', usedWebSearch: true, searchCalls: 1 } });
+  const payload = await makeUseCase(new FakeLlm({}), null, web, 'auto').run({
+    question: 'anything', threadId: 't-web-default', mode: 'direct',
+  });
+
+  assert.strictEqual(payload.webMode, 'auto');
+  assert.strictEqual(web.calls.length, 1);
+});
+
+test('an unrecognised web mode is off, even when the default is auto', async () => {
+  const llm = new FakeLlm({ direct_answer: { answer: 'Model only.', followUps: [] } });
+  const web = new FakeWeb({ web_answer: { answer: 'SHOULD NOT BE CALLED' } });
+  const payload = await makeUseCase(llm, null, web, 'auto').run({
+    question: 'anything', threadId: 't-web-typo', mode: 'direct', webMode: 'Auto',
+  });
+
+  assert.strictEqual(payload.webMode, 'never');
+  assert.deepStrictEqual(web.calls, []);
+  assert.deepStrictEqual(llm.calls, ['direct_answer']);
+});
+
+test('a thread that omits webMode on a later turn does not inherit the earlier one', async () => {
+  // The checkpointer hazard state.js warns about for `mode`: lastWrite
+  // ignores an absent value, so without normalization in the use case turn
+  // two would silently keep turn one's web mode.
+  const llm = new FakeLlm({ direct_answer: { answer: 'Model only.', followUps: [] } });
+  const web = new FakeWeb({ web_answer: { answer: 'Searched.', usedWebSearch: true, searchCalls: 1 } });
+  const useCase = makeUseCase(llm, null, web); // defaultWebMode 'never'
+
+  const first = await useCase.run({
+    question: 'latest node?', threadId: 't-web-sticky', mode: 'direct', webMode: 'auto',
+  });
+  const second = await useCase.run({
+    question: 'and a debounce?', threadId: 't-web-sticky', mode: 'direct',
+  });
+
+  assert.strictEqual(first.webMode, 'auto');
+  assert.strictEqual(second.webMode, 'never');
+  assert.strictEqual(web.calls.length, 1);
 });

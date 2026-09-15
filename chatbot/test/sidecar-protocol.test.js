@@ -398,3 +398,121 @@ test('episodic memory sync', async (t) => {
     assert.strictEqual(h.of('Error')[0].code, 'CONFIG_ERROR');
   });
 });
+
+// --- Ask: the Knowledge switch rides the protocol -----------------------
+
+/** Records what the transport hands the use case, answers immediately. */
+function askRecorder() {
+  const seen = [];
+  return {
+    seen,
+    useCase: {
+      async run(input) {
+        seen.push(input);
+        return { answer: 'ok', sources: [], followUps: [], route: 'direct', attempts: 1, degradedNote: '', mode: input.mode };
+      },
+    },
+  };
+}
+
+test('Ask forwards mode to the use case', async () => {
+  const rec = askRecorder();
+  const h = harness({ useCase: rec.useCase });
+  h.send({ type: 'Ask', question: 'Write a regex', threadId: 'ask', mode: 'direct' });
+  await h.settle();
+
+  assert.strictEqual(rec.seen[0].mode, 'direct');
+  const [reply] = h.of('ChatReply');
+  assert.strictEqual(reply.threadId, 'ask');
+  assert.strictEqual(reply.payload.mode, 'direct');
+});
+
+test('Ask without a mode still answers (the use case defaults it)', async () => {
+  const rec = askRecorder();
+  const h = harness({ useCase: rec.useCase });
+  h.send({ type: 'Ask', question: 'What did we decide?', threadId: 'ask' });
+  await h.settle();
+
+  assert.strictEqual(rec.seen.length, 1);
+  assert.strictEqual(rec.seen[0].mode, undefined);
+  assert.strictEqual(h.of('ChatReply').length, 1);
+  assert.strictEqual(h.of('Error').length, 0);
+});
+
+
+// --- the Web switch on the wire ----------------------------------------
+
+test('webMode is forwarded verbatim so the sidecar default can apply', async () => {
+  const seen = [];
+  const h = harness({
+    useCase: { run: async (input) => { seen.push(input); return { answer: 'ok', sources: [] }; } },
+  });
+
+  h.send({ type: 'Ask', question: 'q1', threadId: 'ask', webMode: 'auto' });
+  await h.settle();
+  h.send({ type: 'Ask', question: 'q2', threadId: 'ask', webMode: 'always' });
+  await h.settle();
+  h.send({ type: 'Ask', question: 'q3', threadId: 'ask', webMode: 'never' });
+  await h.settle();
+
+  assert.deepStrictEqual(seen.map((i) => i.webMode), ['auto', 'always', 'never']);
+});
+
+test('an absent webMode reaches the use case as undefined, not as a value', async () => {
+  // The distinction matters: undefined means "use the configured default"
+  // (auto in production), which is not the same as any concrete mode. A '' or
+  // a 'never' substituted here would silently disable the feature for every
+  // caller that had not been updated.
+  const seen = [];
+  const h = harness({
+    useCase: { run: async (input) => { seen.push(input); return { answer: 'ok', sources: [] }; } },
+  });
+
+  h.send({ type: 'Ask', question: 'q', threadId: 'ask' });
+  await h.settle();
+
+  assert.strictEqual(seen.length, 1);
+  assert.strictEqual(seen[0].webMode, undefined);
+  assert.ok('webMode' in seen[0]);
+});
+
+test('a non-string webMode is dropped rather than passed through', async () => {
+  const seen = [];
+  const h = harness({
+    useCase: { run: async (input) => { seen.push(input); return { answer: 'ok', sources: [] }; } },
+  });
+
+  h.send({ type: 'Ask', question: 'q', threadId: 'ask', webMode: 42 });
+  await h.settle();
+
+  assert.strictEqual(seen[0].webMode, undefined);
+});
+
+test('the reply payload carries the web fields through to the host', async () => {
+  // The payload is whatever the use case returns; the transport must not
+  // reshape it, which is what lets three new fields ship with no Rust change.
+  const h = harness({
+    useCase: {
+      run: async () => ({
+        answer: 'Node 22 is LTS. [W1]',
+        sources: [{ ref: 'W1', sourceType: 'web', title: 'Node', url: 'https://nodejs.org' }],
+        route: 'web',
+        mode: 'direct',
+        webMode: 'auto',
+        usedWebSearch: true,
+        webSearchCount: 1,
+      }),
+    },
+  });
+
+  h.send({ type: 'Ask', question: 'latest node?', threadId: 'ask', webMode: 'auto' });
+  await h.settle();
+
+  const [reply] = h.of('ChatReply');
+  assert.strictEqual(reply.threadId, 'ask');
+  assert.strictEqual(reply.payload.usedWebSearch, true);
+  assert.strictEqual(reply.payload.webSearchCount, 1);
+  assert.strictEqual(reply.payload.webMode, 'auto');
+  assert.strictEqual(reply.payload.sources[0].sourceType, 'web');
+  assert.strictEqual(reply.payload.sources[0].url, 'https://nodejs.org');
+});

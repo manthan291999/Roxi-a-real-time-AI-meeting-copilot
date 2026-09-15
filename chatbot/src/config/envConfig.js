@@ -36,6 +36,16 @@ function envInt(name, fallback) {
   return Number.isFinite(v) && v > 0 ? v : fallback;
 }
 
+function envIntOrZero(name, fallback) {
+  const v = parseInt(process.env[name], 10);
+  return Number.isFinite(v) && v >= 0 ? v : fallback;
+}
+
+function envEnum(name, allowed, fallback) {
+  const v = process.env[name];
+  return allowed.includes(v) ? v : fallback;
+}
+
 function envFloat(name, fallback) {
   const v = parseFloat(process.env[name]);
   return Number.isFinite(v) && v >= 0 ? v : fallback;
@@ -134,6 +144,50 @@ function loadConfig() {
     episodicRetentionDays: envInt('EPISODIC_RETENTION_DAYS', 90),
     /** How often PurgeEpisodicMemoryUseCase runs. Daily is plenty for a 90-day window. */
     episodicPurgeIntervalMs: envInt('EPISODIC_PURGE_INTERVAL_MS', 24 * 60 * 60 * 1000),
+    /**
+     * ---- Web search (auto tool use) ----------------------------------
+     *
+     * The default is 'auto': the tool is offered on every turn and the MODEL
+     * decides whether the question needs it. Deliberately NOT validated
+     * against the known set here — webPolicy.normalizeWebMode() owns that one
+     * rule, and its answer for anything unrecognised is 'never', which is the
+     * safe direction for a typo in a .env file.
+     */
+    webSearchMode: envStr('CHATBOT_WEB_SEARCH_MODE', 'auto'),
+    /**
+     * Model for the web path only. Empty means "use `model`". Exists so the
+     * web path can point at a tool-capable model without moving any other
+     * node off the one it runs on today.
+     */
+    webSearchModel: envStr('CHATBOT_WEB_SEARCH_MODEL'),
+    /**
+     * Hosted tool id. OpenAiResponsesGateway falls back once to
+     * 'web_search_preview' if the API rejects this, which is the name the
+     * installed SDK (4.104.0) types.
+     */
+    webSearchToolType: envStr('CHATBOT_WEB_SEARCH_TOOL_TYPE', 'web_search'),
+    /** How much context the search may consume. 'low' is the latency lever. */
+    webSearchContextSize: envEnum('CHATBOT_WEB_SEARCH_CONTEXT_SIZE', ['low', 'medium', 'high'], 'medium'),
+    /**
+     * Search budget per turn. 0 means do not send the parameter at all — it
+     * is absent from SDK 4.104.0's types, so opting in is explicit.
+     */
+    webMaxToolCalls: envIntOrZero('CHATBOT_WEB_MAX_TOOL_CALLS', 0),
+    /**
+     * Double the chat gateway's 30s on purpose: a multi-search turn
+     * routinely exceeds 30s and would otherwise time out mid-answer.
+     */
+    webTimeoutMs: envInt('CHATBOT_WEB_TIMEOUT_MS', 60000),
+    /**
+     * Web search gets its OWN call budget, for the same reason embeddings do
+     * (see above): one research-mode question must not consume the call
+     * allowance belonging to the conversation it was asked in.
+     */
+    webBudgetHard: envInt('CHATBOT_WEB_BUDGET_HARD', 20),
+    /** Optional locality for the search tool. Only sent when configured. */
+    webUserCountry: envStr('CHATBOT_WEB_USER_COUNTRY'),
+    webUserCity: envStr('CHATBOT_WEB_USER_CITY'),
+    webUserRegion: envStr('CHATBOT_WEB_USER_REGION'),
     /** Log level: debug|info|warn|error. */
     logLevel: envStr('CHATBOT_LOG_LEVEL', 'info'),
   });

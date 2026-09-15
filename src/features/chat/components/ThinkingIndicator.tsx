@@ -11,6 +11,13 @@ const nodeToLabel: Record<string, string> = {
   'grade_documents': 'Finding the most relevant moments…',
   'clarify': 'Writing your answer…',
   'generate': 'Writing your answer…',
+  // Knowledge switch off: nothing is being searched, so say nothing about it.
+  'direct_answer': 'Thinking…',
+  // Web on. These two are the slowest waits in the app, so the label is the
+  // one people read longest — and without them the component leaks the raw
+  // node name into the product.
+  'web_answer': 'Searching the web…',
+  'generate_web': 'Checking your meetings and the web…',
 };
 
 export const ThinkingIndicator: React.FC<Props> = ({ nodeName }) => {

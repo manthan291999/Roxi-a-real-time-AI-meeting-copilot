@@ -6,52 +6,71 @@
 
 :root {
   /* ---- Glass shell tunables -------------------------------------------
-     Two numbers control the whole look; nothing else moves.
+     ONE number controls the look now: --glass-alpha, below.
 
-     --glass-alpha  alpha of the shell's light layer. Lower = more see-through.
-     --glass-dim    brightness() applied to the BACKDROP before the shell
-                    composites over it. HIGHER = more readable text here,
-                    because the shell is light and the text is dark.
+     WHAT CHANGED, AND WHY THE OLD NUMBERS ARE GONE.
 
-     Why this theme is less see-through than the dark one was: the dark shell
-     could rely on brightness(0.25) to darken any backdrop, because multiplying
-     toward zero always works — white x 0.25 is mid-grey. A light shell needs
-     the mirror trick and cannot have it: brightness(k) on a black desktop is
-     still black for every k, since 0 x k = 0. So on a dark wallpaper the only
-     thing standing between dark text and a dark backdrop is the shell's own
-     alpha, which is why it is 0.85 here and was 0.35 before. --glass-dim
-     still earns its place on mid-tone wallpapers; it simply cannot rescue the
-     worst case on its own.
+     This block used to describe a CSS-only glass: a 0.65 white layer over a
+     backdrop-filter of blur + saturate + brightness(1.5), with contrast
+     ratios measured against a black desktop. Every one of those measurements
+     was taken while the OS window was declared "transparent": false, so the
+     filter was compositing over the window's own opaque background. It looked
+     like glass and saw through nothing.
 
-     The worst case has therefore FLIPPED. It used to be a white desktop; it is
-     now a BLACK one. Measured there, with --glass-alpha 0.65 + --glass-dim 1.50:
-       paper  on shell  7.10:1 AAA   on a 0.035 card  6.59:1 AAA
-       mute   on shell  3.06:1 AA*   on a 0.035 card  2.84:1 large-text only
-     (*muted labels are 13px semibold, which qualifies as large text under WCAG.
-      On a non-black wallpaper --glass-dim 1.50 recovers significant contrast.
-      Re-measure if you change either number.)
- 
-     Exactly ONE layer carries transparency: the shell. Interior surfaces are
-     transparent or an overlay at <= 0.06 alpha, because transmittance
-     multiplies — stacking alpha layers destroys see-through:
-       shell only                 0.15                      = 15.0%
-       shell + 0.035 + 0.055      0.15 x 0.965 x 0.945       = 13.7%  ok
-       shell + 0.20 + 0.45        0.15 x 0.80 x 0.55         =  6.6%  not ok
+     The window is now transparent (tauri.conf.json, app.macOSPrivateApi) and
+     an NSVisualEffectView is installed behind the webview in
+     src-tauri/src/window_material.rs. That view is what blurs the desktop.
+
+     CSS CANNOT DO THAT JOB, which is the whole reason for the native layer:
+     backdrop-filter samples the backdrop WITHIN the page, and the desktop is
+     not in the page. Do not reintroduce a blur here expecting it to reach
+     outside the window — it cannot, and at full screen it costs a pass over
+     31x the pixels of the smallest window, every frame, for nothing.
+
+     --glass-alpha is therefore a TINT over the material, not a ground of its
+     own. Tune it by eye against a real desktop; there is no formula for it,
+     because the material adapts to what is behind the window and a fixed
+     luminance sum no longer describes the result.
+
+     The material is Sidebar (light), and window_material.rs pins the window
+     to the Aqua appearance so it stays light under system Dark Mode. Roxi's
+     palette is light-only — near-black text — so a dark material would put
+     that text on a dark ground.
+
+     NO CONTRAST RATIOS ARE QUOTED HERE ANY MORE, on purpose. The old ones
+     described a surface that no longer exists, and a comment stating a false
+     measurement is worse than no comment. Re-measure against the real app
+     over a real desktop before writing any back.
+
+     Interior surfaces still follow the opacity budget: transparent, or an
+     overlay at <= 0.06 alpha, because transmittance multiplies and stacking
+     alpha layers destroys see-through. The two documented exceptions,
+     --t-card and --t-sheet, are annotated at their own declarations.
   */
-  --glass-alpha: 0.65;
-  --glass-dim: 1.50;
-  --glass-blur: 32px;
+  /* The window is transparent and an NSVisualEffectView sits behind the
+     webview (src-tauri/src/window_material.rs), so the OS now supplies the
+     blur and the legible ground. What is left here is a TINT on top of that
+     material, not a surface of its own — hence 0.30 rather than 0.65.
+
+     This is the one number to tune by eye. Everything else in this block is
+     derived from it or from the material. */
+  --glass-alpha: 0.30;
+  /* --glass-dim and --glass-blur are gone. backdrop-filter samples the
+     backdrop WITHIN the page; the desktop is not in the page, so once the
+     window is transparent those filters had nothing left to sample. Keeping
+     them would have cost a full-window blur pass every frame for no visible
+     effect — 31x the work at full screen versus the smallest window. */
 
   /* The shell recipe, composed here rather than in AppShell.tsx so that the
      component stays purely structural and owns no colour. */
   --t-shell-rgb: 255, 255, 255;
   --t-shell: rgba(var(--t-shell-rgb), var(--glass-alpha));
-  --t-shell-backdrop: blur(var(--glass-blur)) saturate(150%) brightness(var(--glass-dim));
-  --t-shell-shadow:
-    0 24px 64px rgba(0, 0, 0, 0.28),
-    0 0 0 0.5px rgba(0, 0, 0, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.70),
-    0 0 120px rgba(67, 56, 202, 0.05);
+  --t-shell-backdrop: none;
+  /* Only the inner highlight survives. The drop shadow and the hairline
+     outline were drawing a floating card inside an opaque window; the window
+     is now the card, and macOS draws its own frame and shadow
+     (tauri.conf.json "shadow": true). Two shadows would read as a seam. */
+  --t-shell-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 
   /* ---- Theme palette ---------------------------------------------------
      THE single source of truth for colour. `design-system/tokens.ts` maps each
@@ -72,10 +91,24 @@
   --t-hairline: rgba(0, 0, 0, 0.12);
   --t-hairline-soft: rgba(0, 0, 0, 0.07);
 
+  /* Code surfaces for rendered answers. The model is asked for inline code
+     and fenced blocks, so both need a ground of their own — a monospace face
+     alone does not separate a command from the sentence around it.
+     All four stay inside the <= 0.06 interior budget above; the hairline,
+     not the fill, is what draws the edge. */
+  --t-code-bg: rgba(0, 0, 0, 0.055);
+  --t-code-line: rgba(0, 0, 0, 0.11);
+  --t-code-block: rgba(0, 0, 0, 0.045);
+  --t-code-head: rgba(0, 0, 0, 0.06);
+
   /* Sheets sit OVER the glass (modals, tooltips), so they cannot derive from
      --glass-alpha: they need their own readable ground or the text behind them
      shows through. */
-  --t-sheet: rgba(252, 252, 254, 0.88);
+  /* Deliberately NOT dropped as far as --t-card. A sheet's job is to
+     suppress what is behind it while you read it; a modal you can see the
+     app through is a worse modal. The two exceptions to the opacity budget
+     split here rather than moving together. */
+  --t-sheet: rgba(252, 252, 254, 0.82);
   --t-sheet-inner: rgba(0, 0, 0, 0.05);
 
   /* Text. Fully opaque — the opacity budget does not apply to these. */
@@ -88,6 +121,37 @@
   --t-signal-dim: rgba(67, 56, 202, 0.10);
   --t-signal-line: rgba(67, 56, 202, 0.30);
   --t-signal-focus: rgba(67, 56, 202, 0.20);
+
+  /* The user's own chat turn — the ONE place the accent fills a shape instead
+     of marking an edge, so it gets its own recipe rather than borrowing
+     --t-signal-dim: a bubble is a surface, and a surface needs a sheen and a
+     bevel that a flat tint has no use for.
+
+     It used to be solid --t-signal with white text. That was legible (7.9:1)
+     but it was the only opaque saturated block in the app, so it punched a
+     hole in the glass everything else is made of. The fix is to make the
+     user's turn the same glass as the shell, tinted and catching light.
+
+     White text could not come along: on a 0.13 wash it measures 1.6:1. Dark
+     --t-paper text measures 6.21:1 in the black-desktop worst case the
+     opacity budget above defines, and 14.0:1 on a white one.
+
+     The tint sits at 0.13, inside the 0.07-0.14 band the semantic tints and
+     --t-bullet-best-bg already occupy, so the shell's transmittance drops
+     from 15.0% to 13.1% under the bubble — the same order as the 13.7% the
+     budget above already calls ok. */
+  --t-bubble-user: rgba(67, 56, 202, 0.13);
+  --t-bubble-user-line: rgba(67, 56, 202, 0.22);
+  /* The gloss. Its own gradient rather than --t-card-sheen because that one's
+     55% stop is measured for a full-width card; on a two-line bubble it would
+     gloss the whole surface and read as a wash, not a highlight. Stopping at
+     38% keeps the light in the top-left corner where a single source would
+     actually put it. */
+  --t-bubble-user-sheen: linear-gradient(157deg, rgba(255, 255, 255, 0.58) 0%, rgba(255, 255, 255, 0.10) 38%, rgba(255, 255, 255, 0) 62%);
+  /* Thickness. Same shape as --t-card-inset, except the underside is tinted
+     indigo rather than neutral black, so the bubble's own colour wraps its
+     bottom edge instead of a grey line sitting under it. */
+  --t-bubble-user-bevel: inset 0 1px 0 rgba(255, 255, 255, 0.72), inset 0 -1px 0 rgba(67, 56, 202, 0.12);
 
   /* Semantic tag colours — meaning-carrying, kept off interactive chrome.
      Re-derived for a light ground, not merely darkened by eye: the dark
@@ -132,7 +196,9 @@
   /* A raised card with its own ground, sitting ON the shell (GlassCard,
      modal bodies). Not bound by the opacity budget — like a sheet, it needs
      its own surface or the shell's backdrop reads through the text. */
-  --t-card: rgba(255, 255, 255, 0.90);
+  /* Was 0.90, which transmitted 10%. Inside a see-through window that read
+     as a solid patch pasted onto glass rather than part of the same pane. */
+  --t-card: rgba(255, 255, 255, 0.45);
   --t-card-sheen: linear-gradient(160deg, rgba(255, 255, 255, 0.60) 0%, rgba(255, 255, 255, 0) 55%);
   --t-card-inset: inset 0 1px 0 rgba(255, 255, 255, 0.80), inset 0 -1px 0 rgba(0, 0, 0, 0.06);
   /* Depth under a sheet. Lighter than the dark theme's: a heavy black shadow
@@ -211,6 +277,32 @@
 
    Both are additive to the existing Tailwind utility classes already on
    these elements — nothing here duplicates a component for a size. */
+
+/* ---- Rendered answers -------------------------------------------------
+   Tailwind's preflight strips list markers, so a markdown list needs them
+   put back explicitly. Scoped to .roxi-md rather than set globally: these
+   are the only lists in the app that come from model output, and every
+   other list in the UI is deliberately unstyled.
+
+   The markers are muted on purpose. In a 420px panel a row of full-contrast
+   bullets reads as a column of dots before it reads as text. */
+.roxi-md ul,
+.roxi-md ol {
+  padding-left: 1.25em;
+}
+.roxi-md ul { list-style: disc; }
+.roxi-md ul ul { list-style: circle; }
+.roxi-md ul ul ul { list-style: square; }
+.roxi-md ol { list-style: decimal; }
+.roxi-md li::marker {
+  color: var(--t-mute-dim);
+}
+/* A nested list belongs to the item above it, so it sits tighter than a gap
+   between two separate blocks would. */
+.roxi-md li > ul,
+.roxi-md li > ol {
+  margin-top: 4px;
+}
 
 .roxi-header {
   padding-left: clamp(16px, 5cqw, 24px);

@@ -13,6 +13,19 @@ pub struct ChatMessage {
 
 /// Ask the meeting-history chatbot. Answers arrive asynchronously via
 /// Tauri events: chat_thinking (progress), chat_reply (payload), chat_error.
+///
+/// `mode` is the frontend's Knowledge switch: "direct" answers from the model
+/// alone (no retrieval, no live context), anything else searches the meeting
+/// corpora. The sidecar validates it — this layer only forwards it, and
+/// defaults it so an older caller keeps the searching behaviour it expects.
+///
+/// `web_mode` is the Web switch, an axis INDEPENDENT of `mode`: "auto" offers
+/// the model a web-search tool and lets it decide whether the question needs
+/// one, "always" forces a search, "never" sends no tool at all. Unlike `mode`
+/// it is forwarded WITHOUT a default — absent has to reach the sidecar as
+/// absent so that the sidecar's own configured default (auto) applies.
+/// Defaulting it here would pin every caller to one mode forever and move the
+/// decision out of config.
 #[tauri::command]
 pub async fn ask_chat(
     app: AppHandle,
@@ -21,6 +34,8 @@ pub async fn ask_chat(
     thread_id: Option<String>,
     history: Option<Vec<ChatMessage>>,
     live_context: Option<String>,
+    mode: Option<String>,
+    web_mode: Option<String>,
 ) -> Result<(), String> {
     let app_clone = app.clone();
     chat.start_session(Box::new(move |text| {
@@ -34,6 +49,8 @@ pub async fn ask_chat(
         "threadId": thread_id.unwrap_or_else(|| "default".into()),
         "history": history.unwrap_or_default(),
         "liveContext": live_context.unwrap_or_default(),
+        "mode": mode.unwrap_or_else(|| "rag".into()),
+        "webMode": web_mode,
     });
 
     chat.send(payload.to_string()).map_err(|e| e.to_string())

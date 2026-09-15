@@ -15,6 +15,20 @@ fn send_control(app: &AppHandle, command: &serde_json::Value) {
     }
 }
 
+/// Fewest words a final must carry before it is worth an LLM pipeline run.
+///
+/// The gateway assembles provider fragments into whole utterances before it
+/// sends a Final, so anything below this really is a short utterance ("Yes.",
+/// "Okay, sure") rather than half a chopped sentence. Running the graph on those
+/// produced no artifacts and still spent a premium ResponseAgent call — one
+/// meeting burned 511 pipeline runs that way when the provider was chopping
+/// turns every two words.
+///
+/// The turn is still emitted to the UI, still persisted by the gateway, and
+/// still enters the rolling context window the next substantive chunk is
+/// analysed against. Only its own analysis is skipped.
+const MIN_CHUNK_WORDS: usize = 4;
+
 /// Caps concurrent LLM pipeline work at 3, which is ~15-24s of LLM budget in
 /// parallel — enough for real-time meetings without saturating the OpenAI rate
 /// limit.
@@ -128,6 +142,16 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                     };
                     if let Some(registry) = registry.as_ref() {
                         registry.push_turn(&s, &t);
+                    }
+
+                    // Recorded above, analysed below. A short utterance is
+                    // context for the next chunk, not a chunk of its own.
+                    let word_count = t.split_whitespace().count();
+                    if word_count < MIN_CHUNK_WORDS {
+                        tracing::debug!(
+                            "[event_router] short final ({word_count} words) — recorded, not analysed"
+                        );
+                        return;
                     }
 
                     // 3. Run the Rust Native ChunkGraph. See PIPELINE_SEMAPHORE above

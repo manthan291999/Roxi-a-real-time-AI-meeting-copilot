@@ -1,5 +1,5 @@
 import React from 'react';
-import { tokens, radius } from '../design-system';
+import { tokens } from '../design-system';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -20,17 +20,25 @@ interface AppShellProps {
  * This component owns layout and nothing else. The glass recipe — background,
  * backdrop filter, shadow — lives in styles.css beside the contrast
  * measurements that justify it, and arrives here as three tokens.
+ *
+ * The window itself is transparent and a native material sits behind the
+ * webview (src-tauri/src/window_material.rs). That is what supplies the blur
+ * and the readable ground; what this element paints is a tint over it.
  */
 export const AppShell: React.FC<AppShellProps> = ({ children }) => (
-  <div className="w-screen h-screen overflow-hidden flex flex-col p-2 bg-transparent select-none">
+  // No inset. The 8px gutter used to hold the CSS drop shadow; with a
+  // transparent window the material fills the whole window, so that ring
+  // would show a blurred frame around the app instead of the desktop.
+  <div className="w-screen h-screen overflow-hidden flex flex-col bg-transparent select-none">
     <div
       className="w-full h-full flex flex-col font-sans relative overflow-hidden"
       style={{
         background: tokens.shell,
         backdropFilter: tokens.shellBackdrop,
         WebkitBackdropFilter: tokens.shellBackdrop,
-        borderRadius: radius.shell,
-        border: `1px solid ${tokens.hairline}`,
+        // No radius and no border: macOS clips the window to its own rounded
+        // rect now, and a second curve inside that one ghosts at every corner.
+        // The OS owns the frame; this element just fills it.
         boxShadow: tokens.shellShadow,
         containerType: 'inline-size',
         containerName: 'roxi-shell',

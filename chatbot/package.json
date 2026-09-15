@@ -12,7 +12,8 @@
     "sidecar": "node sidecar.js",
     "test": "node --test \"test/*.test.js\"",
     "test:ci": "node --test --reporter=tap \"test/*.test.js\"",
-    "lint": "eslint . --ext .js --max-warnings=0"
+    "lint": "eslint . --ext .js --max-warnings=0",
+    "eval:web": "node bin/eval-web-search.js"
   },
   "dependencies": {
     "@langchain/core": "^0.3.0",

@@ -19,15 +19,28 @@ const { log } = require('../infrastructure/logger.js');
  * @param {Object} deps
  * @param {import('../db/index.js').MeetingSession} deps.session
  * @param {{close: () => Promise<void>}} deps.providerCloser  only close() is needed
+ * @param {{flushAll: () => void}} [deps.transcriptFlusher]  only flushAll() is needed
  * @returns {(reason: string, status: 'ended'|'aborted'|'exhausted') => Promise<void>}
  */
-function createShutdown({ session, providerCloser }) {
+function createShutdown({ session, providerCloser, transcriptFlusher }) {
   let shuttingDown = false;
 
   return async function shutdown(reason, status) {
     if (shuttingDown) return;
     shuttingDown = true;
     log('info', 'sidecar', 'shutdown_started', { reason, status });
+
+    // First, before anything reads the session: the pipeline holds the utterance
+    // currently being spoken, and nothing else will arrive to close it. Without
+    // this the last thing said in every meeting is lost — and lost from the
+    // aggregates the summary below is built from, too.
+    try {
+      if (transcriptFlusher) transcriptFlusher.flushAll();
+    } catch (err) {
+      log('error', 'sidecar', 'transcript_flush_failed', {
+        message: (err.message || '').slice(0, 200),
+      });
+    }
 
     let summary = '';
     try {

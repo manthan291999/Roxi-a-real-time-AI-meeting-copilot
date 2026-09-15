@@ -5,7 +5,7 @@ import { ChatInput } from './ChatInput';
 import { RoxiAnswerCard } from './components/RoxiAnswerCard';
 import { ThinkingIndicator } from './components/ThinkingIndicator';
 import { UserBubble } from './components/UserBubble';
-import { tokens } from '../../design-system';
+import { tokens, Toggle } from '../../design-system';
 import { useDocumentLibrary } from '../library/useDocumentLibrary';
 import { DocumentTray } from './components/documents/DocumentTray';
 
@@ -31,7 +31,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   emptyHint = 'Ask a question about the meeting…',
   getLiveContext,
 }) => {
-  const { messages, isLoading, thinkingNode, askQuestion } = useChatThreadContext(threadId);
+  const { messages, isLoading, thinkingNode, askQuestion, mode, setMode } =
+    useChatThreadContext(threadId);
+  const isDirect = mode === 'direct';
   const { documents, progressMap, addDocument, deleteDocument } = useDocumentLibrary(0);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -49,14 +51,22 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             className="h-full flex flex-col items-center justify-center italic text-[14px] text-center"
             style={{ color: tokens.muteDim }}
           >
-            {documents.length > 0 || Object.keys(progressMap).length > 0 
-              ? "Ask a question about your uploaded documents or the meeting…" 
-              : emptyHint}
+            {isDirect
+              ? 'Ask anything. Your meetings are not being searched.'
+              : documents.length > 0 || Object.keys(progressMap).length > 0
+                ? 'Ask a question about your uploaded documents or the meeting…'
+                : emptyHint}
             <br />
-            {documents.length === 0 && Object.keys(progressMap).length === 0 && (
+            {isDirect ? (
               <span className="text-xs mt-2 opacity-80 not-italic">
-                Add context from a PDF or TXT file using the attachment button to get better answers.
+                Turn Knowledge back on to answer from your meetings and documents.
               </span>
+            ) : (
+              documents.length === 0 && Object.keys(progressMap).length === 0 && (
+                <span className="text-xs mt-2 opacity-80 not-italic">
+                  Add context from a PDF or TXT file using the attachment button to get better answers.
+                </span>
+              )
             )}
           </div>
         ) : (
@@ -79,6 +89,23 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           progressMap={progressMap} 
           onDelete={deleteDocument} 
         />
+        {/* Disabled while a question is in flight: the answer on its way was
+            asked in the mode shown here, and letting the switch drift mid-ask
+            would make the label lie about the reply it is about to render. */}
+        <div className="px-4 py-2.5 border-t" style={{ borderColor: tokens.hairlineSoft }}>
+          <Toggle
+            id={`chat-knowledge-${threadId}`}
+            checked={!isDirect}
+            onChange={(on) => setMode(on ? 'rag' : 'direct')}
+            label="Knowledge"
+            hint={
+              isDirect
+                ? 'Model only — meetings and documents are not searched'
+                : 'Answers from your meetings and documents'
+            }
+            disabled={isLoading}
+          />
+        </div>
         <ChatInput onSend={send} isLoading={isLoading} onUpload={addDocument} />
       </div>
     </div>

@@ -8,6 +8,7 @@ mod ports;
 mod resample;
 mod sidecar;
 mod streaming;
+mod window_material;
 
 use adapters::chat_client::NodeChatClient;
 use adapters::gateway_client::NodeGatewayClient;
@@ -170,8 +171,17 @@ pub fn run() {
             {
                 app.set_activation_policy(tauri::ActivationPolicy::Regular);
 
-                for (_label, _win) in app.webview_windows() {
-                    // Normal window setup, no overlay needed
+                // The window is declared transparent in tauri.conf.json, which
+                // on its own would put the UI straight onto the desktop. The
+                // material installed here is what makes it readable; see
+                // window_material.rs for why CSS cannot do this job.
+                for (label, win) in app.webview_windows() {
+                    if let Err(e) = crate::window_material::apply(&win) {
+                        // Logged, never fatal. A window without its material is
+                        // degraded but still usable, and the tray still offers
+                        // Quit — crashing here would be the worse outcome.
+                        tracing::error!("[window] no translucent material on '{label}': {e:#}");
+                    }
                 }
 
                 app.global_shortcut().register("Option+Space")?;

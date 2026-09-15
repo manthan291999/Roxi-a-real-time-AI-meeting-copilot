@@ -1,0 +1,74 @@
+{
+  "$comment": [
+    "Labelled cases for bin/eval-web-search.js. This is the only artefact that",
+    "measures the FEATURE rather than the code: the decision to search lives",
+    "inside the model, so no unit test can tell you whether 'auto' is tuned",
+    "right. Six categories, because each one fails differently and each one",
+    "wants a different fix.",
+    "",
+    "expectSearch is the label. For category C it is deliberately true even",
+    "where the model probably 'knows' the answer: remembering a version or a",
+    "price correctly as of training is not the same as it still being true.",
+    "",
+    "needsCorpus marks cases that only mean anything against a real",
+    "meeting_history.db with relevant content. Edit their questions to match",
+    "your own meetings before trusting their results."
+  ],
+  "categories": {
+    "A": "Stable concept — must NOT search. Failures here are pure waste and are the likeliest default-tuning problem.",
+    "B": "Current fact — MUST search. Failure means a confidently stale answer, the worst outcome in the set.",
+    "C": "Mutable but plausibly known — MUST search. The category that justifies not waiting for the model to say 'I don't know'.",
+    "D": "Explicit request — MUST search. Failure is a broken promise, not a judgement call.",
+    "E": "Internal only — must NOT search. The answer is in the team's own records.",
+    "F": "Both — MUST search, and must also cite internal evidence."
+  },
+  "cases": [
+    { "id": "A1", "category": "A", "question": "What is gradient descent?", "mode": "direct", "webMode": "auto", "expectSearch": false },
+    { "id": "A2", "category": "A", "question": "Explain the difference between a process and a thread.", "mode": "direct", "webMode": "auto", "expectSearch": false },
+    { "id": "A3", "category": "A", "question": "What does the SQL GROUP BY clause do?", "mode": "direct", "webMode": "auto", "expectSearch": false },
+    { "id": "A4", "category": "A", "question": "Write a JavaScript function that debounces another function.", "mode": "direct", "webMode": "auto", "expectSearch": false },
+    { "id": "A5", "category": "A", "question": "Why does floating point arithmetic give 0.1 + 0.2 !== 0.3?", "mode": "direct", "webMode": "auto", "expectSearch": false },
+    { "id": "A6", "category": "A", "question": "Rewrite this sentence more concisely: we have made the decision to proceed with the implementation.", "mode": "direct", "webMode": "auto", "expectSearch": false },
+    { "id": "A7", "category": "A", "question": "What is the difference between UNION and UNION ALL?", "mode": "direct", "webMode": "auto", "expectSearch": false },
+    { "id": "A8", "category": "A", "question": "Thanks, that helped.", "mode": "direct", "webMode": "auto", "expectSearch": false },
+    { "id": "A9", "category": "A", "question": "What is a reciprocal rank fusion and why would I use it for merging search results?", "mode": "direct", "webMode": "auto", "expectSearch": false },
+    { "id": "A10", "category": "A", "question": "Explain what a monorepo is.", "mode": "direct", "webMode": "auto", "expectSearch": false },
+
+    { "id": "B1", "category": "B", "question": "What is the latest stable release of Node.js?", "mode": "direct", "webMode": "auto", "expectSearch": true },
+    { "id": "B2", "category": "B", "question": "What is the newest version of Tauri and what changed in it?", "mode": "direct", "webMode": "auto", "expectSearch": true },
+    { "id": "B3", "category": "B", "question": "Has React shipped a stable release of the compiler yet?", "mode": "direct", "webMode": "auto", "expectSearch": true },
+    { "id": "B4", "category": "B", "question": "What are the most recent papers on agent memory architectures?", "mode": "direct", "webMode": "auto", "expectSearch": true },
+    { "id": "B5", "category": "B", "question": "What is the current LTS schedule for Node.js?", "mode": "direct", "webMode": "auto", "expectSearch": true },
+    { "id": "B6", "category": "B", "question": "Did AssemblyAI change their streaming API recently?", "mode": "direct", "webMode": "auto", "expectSearch": true },
+    { "id": "B7", "category": "B", "question": "What is the latest version of better-sqlite3 and does it support Node 24?", "mode": "direct", "webMode": "auto", "expectSearch": true },
+    { "id": "B8", "category": "B", "question": "What changed in the most recent LangGraph release?", "mode": "direct", "webMode": "auto", "expectSearch": true },
+
+    { "id": "C1", "category": "C", "question": "What does the OpenAI Responses API charge per web search call?", "mode": "direct", "webMode": "auto", "expectSearch": true },
+    { "id": "C2", "category": "C", "question": "What is the current per-token price of text-embedding-3-small?", "mode": "direct", "webMode": "auto", "expectSearch": true },
+    { "id": "C3", "category": "C", "question": "What is the maximum context window of the model you are running on?", "mode": "direct", "webMode": "auto", "expectSearch": true },
+    { "id": "C4", "category": "C", "question": "Is Qdrant's HTTP API still on /collections/{name}/points/search?", "mode": "direct", "webMode": "auto", "expectSearch": true },
+    { "id": "C5", "category": "C", "question": "Does the Tauri opener plugin still expose openUrl in v2?", "mode": "direct", "webMode": "auto", "expectSearch": true },
+    { "id": "C6", "category": "C", "question": "What are Speechmatics' current real-time transcription rate limits?", "mode": "direct", "webMode": "auto", "expectSearch": true },
+    { "id": "C7", "category": "C", "question": "Is pdf-parse still maintained?", "mode": "direct", "webMode": "auto", "expectSearch": true },
+
+    { "id": "D1", "category": "D", "question": "Search the web for recent work on corrective RAG.", "mode": "direct", "webMode": "auto", "expectSearch": true },
+    { "id": "D2", "category": "D", "question": "Look up whether SQLite supports full-text search over JSON columns.", "mode": "direct", "webMode": "auto", "expectSearch": true },
+    { "id": "D3", "category": "D", "question": "Can you verify that MFCC-based speaker diarization is still considered viable?", "mode": "direct", "webMode": "auto", "expectSearch": true },
+    { "id": "D4", "category": "D", "question": "Check the official docs for how OpenAI bills hosted tool calls.", "mode": "direct", "webMode": "auto", "expectSearch": true },
+    { "id": "D5", "category": "D", "question": "Fact-check this: WAL mode lets multiple processes write to SQLite at once.", "mode": "direct", "webMode": "auto", "expectSearch": true },
+
+    { "id": "E1", "category": "E", "question": "What did we decide about the database?", "mode": "rag", "webMode": "auto", "expectSearch": false, "needsCorpus": true },
+    { "id": "E2", "category": "E", "question": "What were my action items from the last meeting?", "mode": "rag", "webMode": "auto", "expectSearch": false, "needsCorpus": true },
+    { "id": "E3", "category": "E", "question": "Summarize the risks raised in our recent meetings.", "mode": "rag", "webMode": "auto", "expectSearch": false, "needsCorpus": true },
+    { "id": "E4", "category": "E", "question": "Who owns the payment webhook work?", "mode": "rag", "webMode": "auto", "expectSearch": false, "needsCorpus": true },
+    { "id": "E5", "category": "E", "question": "What does our architecture document say about memory?", "mode": "rag", "webMode": "auto", "expectSearch": false, "needsCorpus": true },
+
+    { "id": "F1", "category": "F", "question": "How does the retrieval design we discussed compare with current practice?", "mode": "rag", "webMode": "auto", "expectSearch": true, "expectInternalCitation": true, "needsCorpus": true },
+    { "id": "F2", "category": "F", "question": "We chose SQLite — is that still a reasonable choice given the latest alternatives?", "mode": "rag", "webMode": "auto", "expectSearch": true, "expectInternalCitation": true, "needsCorpus": true },
+    { "id": "F3", "category": "F", "question": "Are the library versions we settled on still current?", "mode": "rag", "webMode": "auto", "expectSearch": true, "expectInternalCitation": true, "needsCorpus": true },
+    { "id": "F4", "category": "F", "question": "Compare the approach in our uploaded spec with what the official docs now recommend.", "mode": "rag", "webMode": "auto", "expectSearch": true, "expectInternalCitation": true, "needsCorpus": true },
+
+    { "id": "X1", "category": "A", "question": "What is the latest stable release of Node.js?", "mode": "direct", "webMode": "never", "expectSearch": false, "note": "Control: the same question as B1 with the tool withheld. A search here would mean webMode is not being enforced structurally." },
+    { "id": "X2", "category": "D", "question": "What is gradient descent?", "mode": "direct", "webMode": "always", "expectSearch": true, "note": "Control: the same question as A1 with the tool forced. No search here would mean tool_choice is not taking effect." }
+  ]
+}

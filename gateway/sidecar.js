@@ -144,7 +144,7 @@ async function main() {
     },
     commands
   );
-  shutdown = createShutdown({ session, providerCloser: manager });
+  shutdown = createShutdown({ session, providerCloser: manager, transcriptFlusher: pipeline });
 
   // --- Event wiring -----------------------------------------------------------
   manager.on('status', ({ provider, state }) => {
