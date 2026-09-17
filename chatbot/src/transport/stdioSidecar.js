@@ -29,7 +29,15 @@
  *             {"type":"ChatReply","threadId":"ask","payload":{...}}
  *             ChatReply.payload additionally carries webMode, usedWebSearch
  *             and webSearchCount, and its sources may contain
- *             sourceType:'web' cards with a title and url.
+ *             sourceType:'web' cards with a title and url. It also carries
+ *             guardrail: '' | 'greeting' | 'help' | 'ack' | 'gibberish' |
+ *             'empty' — which zero-LLM guardrail class (see
+ *             application/guardrail/triage.js) intercepted this turn before
+ *             it ever reached the LLM, or '' when it was not intercepted.
+ *             A UI can use this to skip the "thinking" state for an
+ *             instantly-answered turn, though route === 'small_talk' already
+ *             tells you the turn was intercepted; guardrail additionally
+ *             names WHICH class, the way route names WHICH RAG terminal.
  *             {"type":"DocumentProgress","docId":"…","phase":"parse|chunk|embed|store","done":128,"total":200}
  *             {"type":"DocumentReady","docId":"…","fileName":"spec.pdf","chunkCount":200,"pageCount":42}
  *             {"type":"DocumentList","docs":[{…}]}

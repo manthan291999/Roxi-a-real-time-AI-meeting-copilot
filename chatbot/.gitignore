@@ -5,3 +5,9 @@ data/*.db-shm
 
 # Local env overrides (never commit keys)
 .env
+
+# Eval harness reports (bin/eval-web-search.js, bin/eval-guardrail.js) —
+# default output paths. These can carry real logged question text, so they
+# are opt-in to commit, never automatic: `git add -f` a specific report when
+# you deliberately want it as a baseline (see each script's own doc comment).
+/*-eval.json

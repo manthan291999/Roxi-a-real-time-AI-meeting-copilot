@@ -8,6 +8,7 @@ import { TranscriptProvider } from '../features/transcript';
 import { SuggestAnswersProvider } from '../features/suggest';
 import { HistoryPane } from '../features/history';
 import { ProjectLibrary } from '../features/library/ProjectLibrary';
+import { SettingsPane } from '../features/settings';
 import { AppView } from '../shared/types/ui';
 
 /**
@@ -20,7 +21,7 @@ import { AppView } from '../shared/types/ui';
  * sides read from it.
  */
 const AppContent: React.FC<{ capture: ReturnType<typeof useCaptureFlow> }> = ({ capture }) => {
-  const { status, blackholeMissing, isCollectingContext, isStopping, sessionId, lastError, requestContext, cancelContext, confirmContext, stopCapture } =
+  const { status, provider, blackholeMissing, isCollectingContext, isStopping, sessionId, lastError, requestContext, cancelContext, confirmContext, stopCapture } =
     capture;
   const [activeView, setActiveView] = useState<AppView>('session');
   const { askQuestion } = useChatThreadContext('ask');
@@ -34,6 +35,8 @@ const AppContent: React.FC<{ capture: ReturnType<typeof useCaptureFlow> }> = ({ 
     await stopCapture();
   }, [stopCapture]);
 
+  const goLive = React.useCallback(() => setActiveView('session'), []);
+
   return (
     <AppShell>
       <WidgetHeader
@@ -41,12 +44,15 @@ const AppContent: React.FC<{ capture: ReturnType<typeof useCaptureFlow> }> = ({ 
         isConnecting={status === 'connecting'}
         isStopping={isStopping}
         sessionId={sessionId}
+        activeView={activeView}
         onStop={handleStop}
         onHistory={() => setActiveView(activeView === 'history' ? 'session' : 'history')}
         onLibrary={() => setActiveView(activeView === 'library' ? 'session' : 'library')}
+        onSettings={() => setActiveView(activeView === 'settings' ? 'session' : 'settings')}
+        onGoLive={goLive}
       />
 
-      {status === 'idle' && activeView !== 'history' && activeView !== 'library' ? (
+      {status === 'idle' && activeView !== 'history' && activeView !== 'library' && activeView !== 'settings' ? (
         <>
           <IdleScreen
             onStart={requestContext}
@@ -65,8 +71,16 @@ const AppContent: React.FC<{ capture: ReturnType<typeof useCaptureFlow> }> = ({ 
         </div>
       ) : activeView === 'history' ? (
         <div className="flex-1 overflow-y-auto px-5 pt-4 relative custom-scrollbar flex flex-col gap-4 animate-fade-in">
-          <HistoryPane />
+          <HistoryPane isLive={status === 'live'} onGoLive={goLive} />
         </div>
+      ) : activeView === 'settings' ? (
+        <SettingsPane
+          isLive={status === 'live'}
+          isConnecting={status === 'connecting'}
+          provider={provider}
+          sessionId={sessionId}
+          blackholeMissing={blackholeMissing}
+        />
       ) : (
         <LiveSessionDashboard
           isLive={status === 'live'}

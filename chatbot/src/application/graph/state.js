@@ -86,6 +86,21 @@ const GraphState = Annotation.Root({
   webSearchCount: Annotation({ reducer: lastWrite, default: () => 0 }),
   /** @type {string} non-fatal internal error note (degraded paths) */
   degradedNote: Annotation({ reducer: lastWrite, default: () => '' }),
+  /**
+   * @type {''|'greeting'|'help'|'ack'|'gibberish'|'empty'} which guardrail
+   * class intercepted this turn (application/guardrail/triage.js), or '' on
+   * any turn the guardrail did not intercept. Set only by smallTalkNode.
+   *
+   * AnswerQuestionUseCase's own `finalState` is built from the per-node
+   * update STREAM for the CURRENT invocation only (streamMode:'updates'),
+   * not a full state read — so unlike `route`, which nodes read the full
+   * checkpointed value of (pendingClarification.js's signal 1 relies on
+   * exactly that), this channel's persistence across turns in the
+   * checkpointer is harmless: nothing reads a PRIOR turn's guardrail kind,
+   * and the payload this becomes (AnswerQuestionUseCase's `guardrail`
+   * field) only ever reflects what ran in the current turn.
+   */
+  guardrail: Annotation({ reducer: lastWrite, default: () => '' }),
 });
 
 module.exports = { GraphState, lastWrite };

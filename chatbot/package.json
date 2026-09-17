@@ -13,7 +13,8 @@
     "test": "node --test \"test/*.test.js\"",
     "test:ci": "node --test --reporter=tap \"test/*.test.js\"",
     "lint": "eslint . --ext .js --max-warnings=0",
-    "eval:web": "node bin/eval-web-search.js"
+    "eval:web": "node bin/eval-web-search.js",
+    "eval:guardrail": "node bin/eval-guardrail.js"
   },
   "dependencies": {
     "@langchain/core": "^0.3.0",

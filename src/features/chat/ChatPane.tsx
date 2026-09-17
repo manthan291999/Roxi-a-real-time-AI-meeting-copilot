@@ -84,10 +84,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       </div>
 
       <div className="flex flex-col shrink-0 w-full relative z-10">
-        <DocumentTray 
-          documents={documents} 
-          progressMap={progressMap} 
-          onDelete={deleteDocument} 
+        <DocumentTray
+          documents={documents}
+          progressMap={progressMap}
+          onDelete={deleteDocument}
         />
         {/* Disabled while a question is in flight: the answer on its way was
             asked in the mode shown here, and letting the switch drift mid-ask
@@ -100,8 +100,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             label="Knowledge"
             hint={
               isDirect
-                ? 'Model only — meetings and documents are not searched'
-                : 'Answers from your meetings and documents'
+                ? 'Use the AI model only - meetings and documents won\'t be searched'
+                : 'Search your meetings and documents for relevant answers'
             }
             disabled={isLoading}
           />

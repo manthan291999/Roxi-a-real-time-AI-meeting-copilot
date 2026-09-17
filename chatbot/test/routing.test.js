@@ -4,10 +4,19 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 
-const { decideRoute, decideEntry } = require('../src/application/graph/routing');
+const { decideRoute, decideEntry, decideEntryByMode } = require('../src/application/graph/routing');
 const { ROUTES, MODES, MAX_RETRIEVAL_ATTEMPTS, WEB_MODES } = require('../src/application/graph/constants');
 
 const EVIDENCE = [{ meetingId: 1, text: 'x' }];
+
+// A real-shaped question, held constant across the mode/webMode-axis tests
+// below — the same way EVIDENCE and attempt are held constant while varying
+// webMode in the decideRoute tests further down. decideEntry now checks the
+// guardrail (triage()) before it ever looks at mode/webMode, so every one of
+// those tests needs a question that will not itself be intercepted, or it
+// would stop testing the axis it says it tests. See "decideEntry: the
+// guardrail axis" below for the guardrail's own tests.
+const QUESTION = 'what did we discuss about the release';
 
 test('no evidence + attempts left -> rewrite', () => {
   assert.strictEqual(decideRoute({ evidence: [], attempt: 0 }), ROUTES.REWRITE);
@@ -33,23 +42,25 @@ test('missing fields are treated as empty/false', () => {
 });
 
 // --- decideEntry: the Knowledge switch ---------------------------------
+// Every state below carries the constant QUESTION so these tests exercise
+// only the mode axis, exactly as before — see the QUESTION comment above.
 
 test('mode "direct" -> direct entry', () => {
-  assert.strictEqual(decideEntry({ mode: MODES.DIRECT }), MODES.DIRECT);
+  assert.strictEqual(decideEntry({ question: QUESTION, mode: MODES.DIRECT }), MODES.DIRECT);
 });
 
 test('mode "rag" -> retrieval entry', () => {
-  assert.strictEqual(decideEntry({ mode: MODES.RAG }), MODES.RAG);
+  assert.strictEqual(decideEntry({ question: QUESTION, mode: MODES.RAG }), MODES.RAG);
 });
 
 test('absent or unrecognised mode -> retrieval entry', () => {
   // Retrieval is the safe default: a typo or an older client must never
   // silently answer without evidence.
-  assert.strictEqual(decideEntry({}), MODES.RAG);
-  assert.strictEqual(decideEntry({ mode: undefined }), MODES.RAG);
-  assert.strictEqual(decideEntry({ mode: null }), MODES.RAG);
-  assert.strictEqual(decideEntry({ mode: 'DIRECT' }), MODES.RAG);
-  assert.strictEqual(decideEntry({ mode: 'nonsense' }), MODES.RAG);
+  assert.strictEqual(decideEntry({ question: QUESTION }), MODES.RAG);
+  assert.strictEqual(decideEntry({ question: QUESTION, mode: undefined }), MODES.RAG);
+  assert.strictEqual(decideEntry({ question: QUESTION, mode: null }), MODES.RAG);
+  assert.strictEqual(decideEntry({ question: QUESTION, mode: 'DIRECT' }), MODES.RAG);
+  assert.strictEqual(decideEntry({ question: QUESTION, mode: 'nonsense' }), MODES.RAG);
 });
 
 
@@ -58,23 +69,74 @@ test('absent or unrecognised mode -> retrieval entry', () => {
 test('decideEntry: the Web switch only matters when Knowledge is off', () => {
   // Knowledge on: the web changes which TERMINAL is reached (decideRoute's
   // job), never whether retrieval runs.
-  assert.strictEqual(decideEntry({ mode: MODES.RAG, webMode: WEB_MODES.AUTO }), MODES.RAG);
-  assert.strictEqual(decideEntry({ mode: MODES.RAG, webMode: WEB_MODES.ALWAYS }), MODES.RAG);
+  assert.strictEqual(decideEntry({ question: QUESTION, mode: MODES.RAG, webMode: WEB_MODES.AUTO }), MODES.RAG);
+  assert.strictEqual(decideEntry({ question: QUESTION, mode: MODES.RAG, webMode: WEB_MODES.ALWAYS }), MODES.RAG);
 });
 
 test('decideEntry: Knowledge off + Web on -> web_direct', () => {
-  assert.strictEqual(decideEntry({ mode: MODES.DIRECT, webMode: WEB_MODES.AUTO }), MODES.WEB_DIRECT);
-  assert.strictEqual(decideEntry({ mode: MODES.DIRECT, webMode: WEB_MODES.ALWAYS }), MODES.WEB_DIRECT);
+  assert.strictEqual(
+    decideEntry({ question: QUESTION, mode: MODES.DIRECT, webMode: WEB_MODES.AUTO }),
+    MODES.WEB_DIRECT,
+  );
+  assert.strictEqual(
+    decideEntry({ question: QUESTION, mode: MODES.DIRECT, webMode: WEB_MODES.ALWAYS }),
+    MODES.WEB_DIRECT,
+  );
 });
 
 test('decideEntry: Knowledge off + Web off -> the classic direct leaf', () => {
-  assert.strictEqual(decideEntry({ mode: MODES.DIRECT, webMode: WEB_MODES.NEVER }), MODES.DIRECT);
+  assert.strictEqual(
+    decideEntry({ question: QUESTION, mode: MODES.DIRECT, webMode: WEB_MODES.NEVER }),
+    MODES.DIRECT,
+  );
   // An absent or unrecognised webMode is OFF — this is the property that
   // keeps every assertion above this comment identical to before the
   // feature landed.
-  assert.strictEqual(decideEntry({ mode: MODES.DIRECT }), MODES.DIRECT);
-  assert.strictEqual(decideEntry({ mode: MODES.DIRECT, webMode: 'AUTO' }), MODES.DIRECT);
-  assert.strictEqual(decideEntry({ mode: MODES.DIRECT, webMode: 'nonsense' }), MODES.DIRECT);
+  assert.strictEqual(decideEntry({ question: QUESTION, mode: MODES.DIRECT }), MODES.DIRECT);
+  assert.strictEqual(decideEntry({ question: QUESTION, mode: MODES.DIRECT, webMode: 'AUTO' }), MODES.DIRECT);
+  assert.strictEqual(decideEntry({ question: QUESTION, mode: MODES.DIRECT, webMode: 'nonsense' }), MODES.DIRECT);
+});
+
+// --- decideEntry: the guardrail axis, checked before mode/webMode -------
+
+test('a greeting -> small_talk, regardless of mode', () => {
+  assert.strictEqual(decideEntry({ question: 'hi' }), MODES.SMALL_TALK);
+  assert.strictEqual(decideEntry({ question: 'hi', mode: MODES.RAG }), MODES.SMALL_TALK);
+  // The guardrail beats the Knowledge switch: a caller in 'direct' mode
+  // still gets the instant reply, not a wasted direct_answer LLM call.
+  assert.strictEqual(decideEntry({ question: 'hi', mode: MODES.DIRECT }), MODES.SMALL_TALK);
+  assert.strictEqual(
+    decideEntry({ question: 'hi', mode: MODES.DIRECT, webMode: WEB_MODES.ALWAYS }),
+    MODES.SMALL_TALK,
+  );
+});
+
+test('THE WHOLE-MESSAGE RULE holds at the routing layer too', () => {
+  // A real question from this app's own logs that starts with a greeting
+  // token must still reach retrieval — see tokens.js's own header comment.
+  assert.strictEqual(decideEntry({ question: 'hi what is the ML', mode: MODES.RAG }), MODES.RAG);
+});
+
+test('a blank or entirely absent question collapses to the guardrail\'s empty class', () => {
+  // AnswerQuestionUseCase rejects a blank question with INVALID_INPUT before
+  // the graph ever runs (see that use case's own validation), so this state
+  // shape does not occur in production — but decideEntry is a pure function
+  // and must have a well-defined answer for it regardless of caller.
+  assert.strictEqual(decideEntry({ question: '' }), MODES.SMALL_TALK);
+  assert.strictEqual(decideEntry({}), MODES.SMALL_TALK);
+});
+
+test('decideEntryByMode has no guardrail check — it is the mode/webMode axis alone', () => {
+  // This is exactly the function buildChatGraph falls back to when the
+  // guardrail is not wired (CHATBOT_GUARDRAIL=off), so it must never itself
+  // return MODES.SMALL_TALK, no matter what the question looks like.
+  assert.strictEqual(decideEntryByMode({ question: 'hi' }), MODES.RAG);
+  assert.strictEqual(decideEntryByMode({ question: 'hi', mode: MODES.DIRECT }), MODES.DIRECT);
+  assert.strictEqual(
+    decideEntryByMode({ question: 'hi', mode: MODES.DIRECT, webMode: WEB_MODES.AUTO }),
+    MODES.WEB_DIRECT,
+  );
+  assert.strictEqual(decideEntryByMode({}), MODES.RAG);
 });
 
 // --- decideRoute with the web enabled ----------------------------------

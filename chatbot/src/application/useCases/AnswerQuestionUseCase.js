@@ -37,7 +37,7 @@ class AnswerQuestionUseCase {
    * @param {'auto'|'always'|'never'} [input.webMode] may this turn reach the
    *   web. Omit to use the configured default; an unrecognised value is off.
    * @param {(nodeName:string)=>void} [input.onNode] progress callback per node
-   * @returns {Promise<{answer:string, sources:Array, clarifyingQuestion:string, followUps:Array, route:string, attempts:number, degradedNote:string, mode:string, webMode:string, usedWebSearch:boolean, webSearchCount:number}>}
+   * @returns {Promise<{answer:string, sources:Array, clarifyingQuestion:string, followUps:Array, route:string, attempts:number, degradedNote:string, mode:string, webMode:string, usedWebSearch:boolean, webSearchCount:number, guardrail:string}>}
    */
   async run({
     question, threadId = 'default', history = [], liveContext = '',
@@ -106,6 +106,12 @@ class AnswerQuestionUseCase {
       // measurement behind "is 'auto' tuned right".
       usedWebSearch: Boolean(finalState.usedWebSearch),
       webSearchCount: finalState.webSearchCount || 0,
+      // Which guardrail class intercepted this turn ('greeting'|'help'|
+      // 'ack'|'gibberish'|'empty'), or '' when it was not intercepted — see
+      // state.js's own `guardrail` channel doc comment. Lets a UI skip the
+      // "thinking" spinner for an instantly-answered turn without having to
+      // infer that from route === 'small_talk' itself.
+      guardrail: finalState.guardrail || '',
     };
 
     this.logger.info('use_case', 'question_answered', {
@@ -115,6 +121,7 @@ class AnswerQuestionUseCase {
       usedWebSearch: payload.usedWebSearch,
       webSearchCount: payload.webSearchCount,
       route: payload.route,
+      guardrail: payload.guardrail,
       sources: payload.sources.length,
       durationMs: Date.now() - started,
     });

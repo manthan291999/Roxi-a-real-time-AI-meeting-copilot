@@ -1,1 +1,1 @@
-export type AppView = 'session' | 'history' | 'library';
+export type AppView = 'session' | 'history' | 'library' | 'settings';

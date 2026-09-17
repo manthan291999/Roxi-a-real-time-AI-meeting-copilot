@@ -64,6 +64,21 @@ function loadConfig() {
     model: envStr('CHATBOT_MODEL', 'gpt-5.6-luna'),
     /** 'openai' (direct SDK, quirk-safe) or 'langchain' (ChatOpenAI). */
     llmAdapter: envStr('CHATBOT_LLM_ADAPTER', 'openai'),
+    /**
+     * Zero-LLM pre-router (application/guardrail/) — intercepts a greeting,
+     * a help request, or a blank/punctuation-only turn before it ever
+     * reaches analyze_query, direct_answer or web_answer. 'on' is the
+     * default. Unlike CHATBOT_WEB_SEARCH_MODE, where an unrecognised value
+     * must resolve to the safe direction of NOT reaching outside, here 'off'
+     * is the safe direction: falling through to the full pipeline can never
+     * produce a WRONG answer, only a slower one — so a typo in .env disables
+     * the guardrail rather than silently strengthening it. See
+     * composition/container.js, which wires no smallTalk node at all when
+     * this is 'off', and buildChatGraph.js, which then degrades every turn
+     * to exactly the routing it would have gotten before this feature
+     * existed (never a fixed node regardless of mode).
+     */
+    guardrail: envEnum('CHATBOT_GUARDRAIL', ['on', 'off'], 'on'),
     /** Meeting database owned by the capture pipeline (READ-ONLY here). */
     meetingDbPath: envStr(
       'CHATBOT_MEETING_DB',

@@ -26,6 +26,7 @@ const { createRespondNoDataNode } = require('../src/application/nodes/respondNoD
 const { createDirectAnswerNode } = require('../src/application/nodes/directAnswerNode');
 const { createWebAnswerNode } = require('../src/application/nodes/webAnswerNode');
 const { createGenerateWebNode } = require('../src/application/nodes/generateWebNode');
+const { createSmallTalkNode } = require('../src/application/nodes/smallTalkNode');
 const { JsonLineLogger } = require('../src/infrastructure/logging/JsonLineLogger');
 
 /** Scripted LlmGateway double — canned JSON per tag, records calls. */
@@ -90,12 +91,22 @@ after(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-function makeUseCase(llm, evidenceSource = null, web = null, defaultWebMode = undefined) {
+/**
+ * @param {{guardrail?: boolean}} [opts] guardrail: wire the zero-LLM
+ *   small_talk node, mirroring container.js's CHATBOT_GUARDRAIL='on' path.
+ *   Every pre-existing test below calls makeUseCase without this — matching
+ *   a container built with the guardrail off — so those tests double as the
+ *   "capability not configured behaves exactly as before" proof: none of
+ *   them ask a greeting, but every one of them exercises decideEntry/
+ *   decideEntryByMode's fallback path on ordinary questions.
+ */
+function makeUseCase(llm, evidenceSource = null, web = null, defaultWebMode = undefined, { guardrail = false } = {}) {
   const directAnswer = createDirectAnswerNode({ llm, logger: silentLogger });
   const generate = createGenerateNode({ llm, logger: silentLogger });
   const respondNoData = createRespondNoDataNode({ logger: silentLogger, retriever });
 
   const graph = buildChatGraph({
+    ...(guardrail ? { smallTalk: createSmallTalkNode({ logger: silentLogger }) } : {}),
     analyzeQuery: createAnalyzeQueryNode({ llm, logger: silentLogger }),
     retrieve: createRetrieveNode({
       evidenceSource: evidenceSource || new FtsEvidenceSource(retriever),
@@ -334,6 +345,178 @@ test('rejects empty question', async () => {
   await assert.rejects(() => useCase.run({ question: '   ', threadId: 't-bad' }), /non-empty/);
 });
 
+
+// --- small_talk: the zero-LLM guardrail ---------------------------------
+
+test('small_talk: a greeting costs zero LLM calls', async () => {
+  // The exact regression guard the pre-router plan exists to make cheap:
+  // FakeLlm.calls records every tag passed to complete(); this proves none
+  // ever fires for "hi", where the pre-guardrail pipeline cost 9 real API
+  // calls (analyze_query, 2x embed_query, 2x grade_documents, rewrite_query,
+  // generate — see the pre-router plan §02).
+  const llm = new FakeLlm({
+    analyze_query: { searchKeywords: ['SHOULD NOT RUN'], isAmbiguous: false, ambiguityNote: '' },
+  });
+  const nodes = [];
+  const payload = await makeUseCase(llm, null, null, undefined, { guardrail: true }).run({
+    question: 'hi',
+    threadId: 't-small-talk',
+    onNode: (n) => nodes.push(n),
+  });
+
+  assert.deepStrictEqual(llm.calls, []);
+  assert.deepStrictEqual(nodes, ['small_talk']);
+  assert.strictEqual(payload.route, 'small_talk');
+  assert.deepStrictEqual(payload.sources, []);
+  assert.ok(payload.answer.length > 0);
+});
+
+test('small_talk: a real question that starts with a greeting still runs the full pipeline', async () => {
+  // The whole-message rule (tokens.js's header comment), proven end to end
+  // through AnswerQuestionUseCase rather than just at triage()/decideEntry —
+  // "webhook" matches this suite's seeded transcripts (see `before`), so a
+  // real 'generate' route is reachable, not just "some pipeline ran".
+  const llm = new FakeLlm({
+    analyze_query: { searchKeywords: ['webhook'], isAmbiguous: false, ambiguityNote: '' },
+    grade_documents: allRelevant,
+    generate: { answer: 'The webhook times out in production [M1].', citedMeetingIds: [1], followUps: [] },
+  });
+  const nodes = [];
+  const payload = await makeUseCase(llm, null, null, undefined, { guardrail: true }).run({
+    question: 'hi why does the payment webhook fail',
+    threadId: 't-small-talk-real',
+    onNode: (n) => nodes.push(n),
+  });
+
+  assert.ok(llm.calls.includes('analyze_query'));
+  assert.ok(nodes.includes('analyze_query'));
+  assert.ok(!nodes.includes('small_talk'));
+  assert.strictEqual(payload.route, 'generate');
+});
+
+test('small_talk: intercepts regardless of mode — direct mode gets the same instant reply', async () => {
+  const llm = new FakeLlm({
+    direct_answer: { answer: 'SHOULD NOT RUN', followUps: [] },
+  });
+  const payload = await makeUseCase(llm, null, null, undefined, { guardrail: true }).run({
+    question: 'hello',
+    threadId: 't-small-talk-direct',
+    mode: 'direct',
+  });
+
+  assert.deepStrictEqual(llm.calls, []);
+  assert.strictEqual(payload.route, 'small_talk');
+  // Direct mode consults no corpus, so no meeting-shaped follow-ups either.
+  assert.deepStrictEqual(payload.followUps, []);
+});
+
+test('small_talk: guardrail not wired -> a greeting in direct mode still falls through to direct_answer, not analyze_query', async () => {
+  // This is the correctness property buildChatGraph's optional-dependency
+  // degradation exists for: a disabled guardrail must re-derive the SAME
+  // destination decideEntryByMode would have picked, not one fixed node
+  // regardless of mode — routing a direct-mode turn through analyze_query
+  // would incorrectly consult the corpus after the user turned it off.
+  const llm = new FakeLlm({
+    direct_answer: { answer: 'Answered directly.', followUps: [] },
+  });
+  const nodes = [];
+  const payload = await makeUseCase(llm, null, null, undefined, { guardrail: false }).run({
+    question: 'hi',
+    threadId: 't-small-talk-disabled',
+    mode: 'direct',
+    onNode: (n) => nodes.push(n),
+  });
+
+  assert.deepStrictEqual(llm.calls, ['direct_answer']);
+  assert.deepStrictEqual(nodes, ['direct_answer']);
+  assert.strictEqual(payload.route, 'direct');
+  assert.strictEqual(payload.answer, 'Answered directly.');
+});
+
+test('small_talk: guardrail not wired -> a greeting in rag mode still runs full retrieval', async () => {
+  // "hi" has no match in this suite's seeded content (SQLite/webhook/retry),
+  // so the corrective loop correctly exhausts and lands on no_data — the
+  // point is that it exhausts a REAL retrieval loop rather than being
+  // intercepted, which analyze_query/rewrite_query both firing proves.
+  const llm = new FakeLlm({
+    analyze_query: { searchKeywords: ['hi'], isAmbiguous: false, ambiguityNote: '' },
+    rewrite_query: { searchKeywords: ['hi'] },
+  });
+  const payload = await makeUseCase(llm, null, null, undefined, { guardrail: false }).run({
+    question: 'hi',
+    threadId: 't-small-talk-disabled-rag',
+  });
+
+  assert.ok(llm.calls.includes('analyze_query'));
+  assert.ok(llm.calls.includes('rewrite_query'));
+  assert.strictEqual(payload.route, 'no_data');
+});
+
+
+// --- small_talk: ack + the clarification stand-down (phase 4) -----------
+
+test('ack: a bare "yes" with nothing pending is intercepted, zero LLM calls', async () => {
+  const llm = new FakeLlm({
+    analyze_query: { searchKeywords: ['SHOULD NOT RUN'], isAmbiguous: false, ambiguityNote: '' },
+  });
+  const payload = await makeUseCase(llm, null, null, undefined, { guardrail: true }).run({
+    question: 'yes',
+    threadId: 't-ack-fresh',
+  });
+
+  assert.deepStrictEqual(llm.calls, []);
+  assert.strictEqual(payload.route, 'small_talk');
+  assert.ok(payload.answer.length > 0);
+});
+
+test('THE TRAP, end to end: a clarifying question, then "yes" — the guardrail must not swallow the answer', async () => {
+  // Turn 1: an ambiguous question with evidence lands on clarify (same
+  // script shape as the pre-existing "clarify route" test above) and writes
+  // route: 'clarify' into this thread's checkpointed state. Turn 2's "yes"
+  // must reach analyze_query too, so analyze_query is scripted as a
+  // function that tells the two calls apart by the question it was actually
+  // asked with — a static canned response would answer both turns
+  // identically and mask exactly the distinction this test exists to prove.
+  const llm = new FakeLlm({
+    analyze_query: (tag, messages) => {
+      const isFollowUp = messages[1].content.includes('User question: yes');
+      return {
+        searchKeywords: ['webhook'],
+        isAmbiguous: !isFollowUp,
+        ambiguityNote: isFollowUp ? '' : 'which aspect is unclear',
+      };
+    },
+    grade_documents: allRelevant,
+    clarify: {
+      summaryOfWhatWasFound: 'Webhook issues were discussed in 2 meetings.',
+      clarifyingQuestion: 'Do you want the cause or the fix?',
+      options: ['What caused the timeouts?', 'What fix was planned?'],
+    },
+    // Turn 2 must reach this real RAG path, not the guardrail.
+    generate: { answer: 'The cause was a slow downstream service [M1].', citedMeetingIds: [1], followUps: [] },
+  });
+  const useCase = makeUseCase(llm, null, null, undefined, { guardrail: true });
+  const threadId = 't-trap-clarify-then-yes';
+
+  const first = await useCase.run({ question: 'tell me about the webhook thing', threadId });
+  assert.strictEqual(first.route, 'clarify');
+
+  // Turn 2: the checkpointer carries route:'clarify' forward (lastWrite
+  // ignores the absent `route` in this turn's own input — see state.js and
+  // pendingClarification.js), so triage() must stand down even though "yes"
+  // is an exact AFFIRMATIVE_TOKENS member.
+  const nodes = [];
+  const second = await useCase.run({
+    question: 'yes',
+    threadId,
+    onNode: (n) => nodes.push(n),
+  });
+
+  assert.ok(!nodes.includes('small_talk'), 'the guardrail must not have intercepted this turn');
+  assert.ok(llm.calls.includes('generate'), '"yes" must have reached the real pipeline');
+  assert.strictEqual(second.route, 'generate');
+  assert.ok(second.answer.includes('slow downstream service'));
+});
 
 /**
  * EvidenceSource double returning one meeting hit and one document hit, in the

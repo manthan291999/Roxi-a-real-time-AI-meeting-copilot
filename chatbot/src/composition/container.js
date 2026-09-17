@@ -9,6 +9,7 @@ const { JsonLineLogger } = require('../infrastructure/logging/JsonLineLogger');
 const { SqliteMeetingStore } = require('../infrastructure/persistence/SqliteMeetingStore');
 const { FtsIndexBuilder } = require('../infrastructure/persistence/FtsIndexBuilder');
 const { FtsRetriever } = require('../infrastructure/persistence/FtsRetriever');
+const { FtsCorpusProbe } = require('../infrastructure/persistence/FtsCorpusProbe');
 const { CallCountBudgetGuard } = require('../infrastructure/budget/CallCountBudgetGuard');
 const { OpenAiLlmGateway } = require('../infrastructure/llm/OpenAiLlmGateway');
 const { LangchainLlmGateway } = require('../infrastructure/llm/LangchainLlmGateway');
@@ -40,6 +41,7 @@ const { createRespondNoDataNode } = require('../application/nodes/respondNoDataN
 const { createDirectAnswerNode } = require('../application/nodes/directAnswerNode');
 const { createWebAnswerNode } = require('../application/nodes/webAnswerNode');
 const { createGenerateWebNode } = require('../application/nodes/generateWebNode');
+const { createSmallTalkNode } = require('../application/nodes/smallTalkNode');
 const { buildChatGraph } = require('../application/graph/buildChatGraph');
 const { AnswerQuestionUseCase } = require('../application/useCases/AnswerQuestionUseCase');
 const { IndexDocumentUseCase } = require('../application/useCases/IndexDocumentUseCase');
@@ -84,6 +86,7 @@ function buildContainer(overrides = {}) {
   let purgeEpisodicMemory = null;
   let webGateway = null;
   let webBudget = null;
+  let corpusProbe = null;
 
   if (!overrides.skipLlm) {
     budget = new CallCountBudgetGuard({
@@ -227,7 +230,34 @@ function buildContainer(overrides = {}) {
     const generate = createGenerateNode({ llm, logger, store });
     const respondNoData = createRespondNoDataNode({ logger, retriever });
 
+    // Zero-LLM pre-router. 'off' means passing no smallTalk dependency at
+    // all — the sole kill switch — rather than an internal enabled flag, so
+    // that buildChatGraph's own optional-dependency degradation (never a
+    // fixed fallback node regardless of mode; see that file's header
+    // comment) is the only place "disabled" is decided.
+    //
+    // corpusProbe backs the guardrail's gibberish gate. Only constructed
+    // when the guardrail itself is wired: with it off, decideEntry's own
+    // triage() call short-circuits on `enabled:false` before the gibberish
+    // check ever runs (see routing.js), so corpusProbe would never actually
+    // be consulted either — building one would just open a database handle
+    // nobody queries. Safe to construct before the index necessarily exists
+    // on disk: like FtsRetriever, FtsCorpusProbe opens its database handle
+    // lazily on first .has() call, not in its constructor, and by the time
+    // any real turn reaches it the caller (stdioSidecar.js's Ready-gating
+    // rebuild, or bin/ask.js's own pre-rebuild) has already ensured the
+    // index is current — and if it somehow still is not, FtsCorpusProbe
+    // fails open rather than throwing (see that class's own header comment).
+    corpusProbe = config.guardrail === 'on'
+      ? new FtsCorpusProbe(config.indexDbPath, logger)
+      : undefined;
+    const smallTalk = config.guardrail === 'on'
+      ? createSmallTalkNode({ logger, corpusProbe })
+      : undefined;
+
     const graph = buildChatGraph({
+      smallTalk,
+      corpusProbe,
       analyzeQuery: createAnalyzeQueryNode({ llm, logger }),
       retrieve: createRetrieveNode({ evidenceSource, logger }),
       gradeDocuments: createGradeDocumentsNode({ llm, logger }),
@@ -284,6 +314,7 @@ function buildContainer(overrides = {}) {
     usageRecorder?.close();
     chunkStore?.close();
     syncState?.close();
+    corpusProbe?.close();
   };
 
   return {
@@ -299,6 +330,7 @@ function buildContainer(overrides = {}) {
     webBudget,
     llm,
     webGateway,
+    corpusProbe,
     useCase,
     parsers,
     indexDocument,

@@ -69,6 +69,11 @@ module.exports = Object.freeze({
     WEB_ANSWER: 'web_answer',
     /** Web tool alongside retrieved evidence (Knowledge on + Web on). */
     GENERATE_WEB: 'generate_web',
+    /**
+     * Zero-LLM guardrail terminal (application/guardrail/triage.js). Reached
+     * before ANALYZE, RETRIEVE, DIRECT or WEB_ANSWER ever run — see MODES.SMALL_TALK.
+     */
+    SMALL_TALK: 'small_talk',
   }),
   /** Routing decisions (conditional-edge vocabulary). */
   ROUTES: Object.freeze({
@@ -79,11 +84,19 @@ module.exports = Object.freeze({
     DIRECT: 'direct',
     WEB: 'web',
     GENERATE_WEB: 'generate_web',
+    /** Value smallTalkNode writes into state.route — see NODES.SMALL_TALK. */
+    SMALL_TALK: 'small_talk',
   }),
   /**
-   * Ask modes — the entry-edge vocabulary, chosen by the caller rather than
-   * by the graph. 'rag' consults every evidence source; 'direct' talks to the
-   * model alone (no FTS, no documents, no vectors, no live transcript).
+   * Ask modes — the entry-edge vocabulary. RAG/DIRECT/WEB_DIRECT are chosen
+   * by the caller; SMALL_TALK is the one exception — decideEntry chooses it
+   * itself, by consulting the zero-LLM guardrail (triage()) on every turn
+   * BEFORE looking at the caller-supplied `mode` at all. That ordering is
+   * deliberate: a greeting is a greeting whether or not Knowledge is on, so
+   * the guardrail must not be reachable only from one entry branch.
+   *
+   * 'rag' consults every evidence source; 'direct' talks to the model alone
+   * (no FTS, no documents, no vectors, no live transcript).
    */
   MODES: Object.freeze({
     RAG: 'rag',
@@ -94,6 +107,12 @@ module.exports = Object.freeze({
      * flag on 'direct' so the graph edge stays a pure lookup.
      */
     WEB_DIRECT: 'web_direct',
+    /**
+     * A greeting, a help request, or a blank/punctuation-only message — see
+     * guardrail/triage.js. Zero LLM calls, zero retrieval, regardless of
+     * what `mode` the caller sent.
+     */
+    SMALL_TALK: 'small_talk',
   }),
   /**
    * Web-search modes — the second, INDEPENDENT axis beside MODES.

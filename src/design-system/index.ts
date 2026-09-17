@@ -3,6 +3,7 @@ export * from './tagPalette';
 export * from './icons';
 
 export * from './components/Badge';
+export * from './components/LiveBadge';
 export * from './components/TagChip';
 export * from './components/SelectableChip';
 export * from './components/GlassCard';
