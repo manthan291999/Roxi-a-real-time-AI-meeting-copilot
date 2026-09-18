@@ -1,11 +1,42 @@
 use chrono::Utc;
 use rusqlite::{params, Connection};
 use serde_json::json;
+use std::collections::HashMap;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 const REQUEST_MESSAGES_MAX: usize = 16000;
 const RESPONSE_PREVIEW_MAX: usize = 2000;
 const ERROR_MESSAGE_MAX: usize = 500;
+
+/// Single source of truth for per-model pricing, shared with
+/// dashboard/lib/schema.js and chatbot's UsageRecorder.js — see
+/// packages/pricing/README.md. Embedded at compile time rather than read at
+/// runtime: this is the only one of the three readers that isn't already a
+/// Node process paying a `require()` at startup, and a missing/relocated
+/// file should be a build-time failure here, not a runtime one mid-meeting.
+const PRICING_JSON: &str = include_str!("../../../../packages/pricing/model-prices.json");
+
+#[derive(serde::Deserialize)]
+struct ModelPrice {
+    input: f64,
+    output: f64,
+}
+
+#[derive(serde::Deserialize)]
+struct PricingFile {
+    #[serde(rename = "pricePerMillionTokensUsd")]
+    prices: HashMap<String, ModelPrice>,
+}
+
+fn price_table() -> &'static HashMap<String, ModelPrice> {
+    static TABLE: OnceLock<HashMap<String, ModelPrice>> = OnceLock::new();
+    TABLE.get_or_init(|| {
+        let parsed: PricingFile = serde_json::from_str(PRICING_JSON)
+            .expect("packages/pricing/model-prices.json must be valid JSON");
+        parsed.prices
+    })
+}
 
 const SCHEMA_TABLE: &str = "
 CREATE TABLE IF NOT EXISTS llm_requests (
@@ -147,23 +178,14 @@ impl UsageStore {
     }
 
     fn calculate_cost(model: &str, prompt_tokens: i64, completion_tokens: i64) -> f64 {
-        let (input_rate, output_rate) = match model {
-            "gpt-5.6-luna" => (0.15, 0.60),
-            "openai/gpt-oss-20b" => (0.20, 0.60),
-            "openai/gpt-oss-120b" => (0.90, 0.90),
-            "llama-3.3-70b-versatile" => (0.59, 0.79),
-            "gemma2-9b-it" => (0.20, 0.20),
-            "gpt-4o-mini" => (0.15, 0.60),
-            "gpt-4o" => (2.50, 10.00),
-            // Embeddings are input-only, so the output rate is 0. Keep in sync
-            // with chatbot/src/infrastructure/usage/UsageRecorder.js and
-            // dashboard/lib/schema.js.
-            "text-embedding-3-small" => (0.02, 0.0),
-            _ => (0.50, 0.50), // default fallback per 1M tokens
-        };
+        let table = price_table();
+        let prices = table
+            .get(model)
+            .or_else(|| table.get("default"))
+            .expect("packages/pricing/model-prices.json must define a \"default\" entry");
 
-        ((prompt_tokens as f64) / 1_000_000.0) * input_rate
-            + ((completion_tokens as f64) / 1_000_000.0) * output_rate
+        ((prompt_tokens as f64) / 1_000_000.0) * prices.input
+            + ((completion_tokens as f64) / 1_000_000.0) * prices.output
     }
 
     fn truncate(s: &str, max: usize) -> String {

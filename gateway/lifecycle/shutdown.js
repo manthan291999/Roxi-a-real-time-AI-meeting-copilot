@@ -44,7 +44,7 @@ function createShutdown({ session, providerCloser, transcriptFlusher }) {
 
     let summary = '';
     try {
-      summary = buildFallbackSummary(session.meetings.getAggregates());
+      summary = buildFallbackSummary(session.artifacts.getAggregates());
       emitMeetingSummary(summary);
     } catch (err) {
       log('error', 'sidecar', 'summary_failed', { message: (err.message || '').slice(0, 200) });

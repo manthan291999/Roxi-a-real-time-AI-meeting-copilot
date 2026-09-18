@@ -106,3 +106,10 @@ Thumbs.db
 .git_disabled/
 src-tauri/gen/schemas/
 gateway/qdrant_storage/
+
+# =============================================================================
+# Vendored native binaries — fetched via scripts/fetch-qdrant.sh, never
+# committed. See vendor/qdrant/README.md.
+# =============================================================================
+vendor/qdrant/qdrant
+vendor/qdrant/qdrant-*

@@ -241,7 +241,7 @@ test('a turn that survives the sanitizer withdraws nothing', () => {
 test('persistChunk writes through to the meeting repository', () => {
   const calls = [];
   const handler = new CommandHandler({
-    meetings: {
+    artifacts: {
       saveAnalyzedChunk: (chunk, artifacts) => { calls.push({ chunk, artifacts }); return 1; },
       saveTechnicalAnalysis: () => {},
       saveSuggestedReply: () => {},
@@ -265,7 +265,7 @@ test('persistChunk writes through to the meeting repository', () => {
 test('chunk sequence numbers increment across calls', () => {
   const seqs = [];
   const handler = new CommandHandler({
-    meetings: {
+    artifacts: {
       saveAnalyzedChunk: (chunk) => { seqs.push(chunk.seq); return 1; },
       saveTechnicalAnalysis: () => {}, saveSuggestedReply: () => {},
       upsertGlossary: () => {}, upsertSpeakerProfile: () => {},
@@ -281,7 +281,7 @@ test('chunk sequence numbers increment across calls', () => {
 test('an invalid chunk envelope is rejected, not written', () => {
   let wrote = false;
   const handler = new CommandHandler({
-    meetings: { saveAnalyzedChunk: () => { wrote = true; return 1; } },
+    artifacts: { saveAnalyzedChunk: () => { wrote = true; return 1; } },
     diarization: { rename: () => true },
   });
   handler.handle({ command: 'persistChunk', chunk: { text: '   ' } });
@@ -291,7 +291,7 @@ test('an invalid chunk envelope is rejected, not written', () => {
 test('renameSpeaker delegates to the diarization layer', () => {
   const renames = [];
   const handler = new CommandHandler({
-    meetings: {},
+    artifacts: {},
     diarization: { rename: (l, n) => { renames.push([l, n]); return true; } },
   });
   handler.handle({ command: 'renameSpeaker', sttLabel: 'Speaker A', displayName: 'Alice' });
@@ -299,7 +299,7 @@ test('renameSpeaker delegates to the diarization layer', () => {
 });
 
 test('unknown and malformed commands are ignored safely', () => {
-  const handler = new CommandHandler({ meetings: {}, diarization: {} });
+  const handler = new CommandHandler({ artifacts: {}, diarization: {} });
   assert.doesNotThrow(() => {
     handler.handle({ command: 'nonsense' });
     handler.handle({});
@@ -312,7 +312,7 @@ test('the detached lane attaches artifacts to the chunk the first wave created',
   const created = [];
   const attached = [];
   const handler = new CommandHandler({
-    meetings: {
+    artifacts: {
       saveAnalyzedChunk: (chunk) => { created.push(chunk); return 42; },
       saveArtifacts: (chunkId, artifacts) => attached.push({ chunkId, artifacts }),
       saveTechnicalAnalysis: () => {}, saveSuggestedReply: () => {},
@@ -342,7 +342,7 @@ test('the detached lane attaches artifacts to the chunk the first wave created',
 test('artifacts for an unknown chunk are dropped, not mis-attached', () => {
   let attached = 0;
   const handler = new CommandHandler({
-    meetings: { saveArtifacts: () => { attached++; } },
+    artifacts: { saveArtifacts: () => { attached++; } },
     diarization: { rename: () => true },
   });
   handler.handle({ command: 'persistArtifacts', chunkRef: 'never-seen', artifacts: { risks: [] } });
@@ -351,7 +351,7 @@ test('artifacts for an unknown chunk are dropped, not mis-attached', () => {
 
 test('the chunkRef map is bounded', () => {
   const handler = new CommandHandler({
-    meetings: {
+    artifacts: {
       saveAnalyzedChunk: () => 1, saveArtifacts: () => {},
       saveTechnicalAnalysis: () => {}, saveSuggestedReply: () => {},
       upsertGlossary: () => {}, upsertSpeakerProfile: () => {},
@@ -371,7 +371,7 @@ test('the chunkRef map is bounded', () => {
 test('artifacts are validated before being attached', () => {
   const attached = [];
   const handler = new CommandHandler({
-    meetings: {
+    artifacts: {
       saveAnalyzedChunk: () => 42, saveArtifacts: (id, a) => attached.push(a),
       saveTechnicalAnalysis: () => {}, saveSuggestedReply: () => {},
       upsertGlossary: () => {}, upsertSpeakerProfile: () => {},

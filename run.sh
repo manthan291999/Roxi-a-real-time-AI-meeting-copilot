@@ -52,13 +52,13 @@ inspect_qdrant() {
   if curl -sf -o /dev/null "$qdrant_url/readyz" --max-time 2; then
     ok "Qdrant already running at $qdrant_url — using it as-is"
   else
-    if [ ! -f "qdrant" ] && ! command -v qdrant >/dev/null 2>&1; then
-      fatal "No qdrant binary found. Run ./run.sh once first (it downloads one), or place a 'qdrant' binary at the repo root."
+    if [ ! -f "vendor/qdrant/qdrant" ] && ! command -v qdrant >/dev/null 2>&1; then
+      fatal "No qdrant binary found. Run ./run.sh once first (it downloads one), or place a 'qdrant' binary at vendor/qdrant/qdrant."
     fi
     ok "Starting a temporary Qdrant instance against $storage_dir"
     QDRANT__SERVICE__HOST=127.0.0.1 QDRANT__SERVICE__PORT=6333 \
       QDRANT__STORAGE__STORAGE_PATH="$storage_dir" \
-      ./qdrant >/tmp/roxi_qdrant_inspect.log 2>&1 &
+      ./vendor/qdrant/qdrant >/tmp/roxi_qdrant_inspect.log 2>&1 &
     local qdrant_pid=$!
     BACKGROUND_PIDS+=("$qdrant_pid")
     we_started_it=1
@@ -143,10 +143,11 @@ ok "cargo $(cargo --version | awk '{print $2}')"
 
 # ─── Qdrant Dependency Check ────────────────────────────────────────────────
 step "Checking Qdrant binary"
-if [ ! -f "qdrant" ] && ! command -v qdrant >/dev/null 2>&1; then
+if [ ! -f "vendor/qdrant/qdrant" ] && ! command -v qdrant >/dev/null 2>&1; then
   warn "Qdrant binary not found locally or in PATH. Downloading for macOS (Apple Silicon)..."
-  curl -L "https://github.com/qdrant/qdrant/releases/latest/download/qdrant-aarch64-apple-darwin.tar.gz" | tar -xz
-  ok "Downloaded Qdrant binary"
+  mkdir -p vendor/qdrant
+  curl -L "https://github.com/qdrant/qdrant/releases/latest/download/qdrant-aarch64-apple-darwin.tar.gz" | tar -xz -C vendor/qdrant
+  ok "Downloaded Qdrant binary to vendor/qdrant/"
 else
   ok "Qdrant binary is present"
 fi

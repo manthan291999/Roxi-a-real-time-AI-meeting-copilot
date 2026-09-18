@@ -145,7 +145,8 @@ commands/         capture.rs, db.rs, chat.rs, audio_devices.rs, overlay.rs — #
 domain/           meeting.rs, audio.rs — core models
 ports/            audio_capture.rs, db.rs, gateway.rs, chat_gateway.rs — traits the adapters implement
 sidecar/          events.rs (SidecarEvent + payload structs), event_router.rs (JSON → domain → Tauri events),
-                 chat_events.rs
+                 pipeline_slots.rs (the two admission-control semaphores, extracted out of
+                 event_router.rs so that file stays a pure dispatcher), chat_events.rs
 streaming.rs      PCM1 framing sink (Rust → gateway stdin)
 resample.rs       FFT resampler to 16kHz mono
 macos_overlay.rs  NSStatusWindowLevel + CanJoinAllSpaces FFI (macOS-only fullscreen float)
@@ -285,18 +286,24 @@ npm run tauri build      # production native bundle (.dmg/.msi/.deb/.AppImage)
 
 # tests
 npm test                 # chatbot tests only (npm --prefix chatbot test)
-npm run test:all          # chatbot + gateway
+npm run test:frontend     # vitest run — frontend unit tests (hooks/mappers), added alongside the CI gate
+npm run test:all          # frontend + chatbot + gateway
 cd chatbot && node --test test/routing.test.js     # single chatbot test file
 cd chatbot && node --test --reporter=tap "test/*.test.js"   # CI-style
 cd chatbot && node --test "test/web-*.test.js"   # web-search unit tests
-cd gateway && npm test    # 83 tests: db, deframer, diarization/pipeline, protocol,
+cd gateway && npm test    # 99 tests: db, deframer, diarization/pipeline, protocol,
                           # provider-manager, STT provider contract, AssemblyAI context hints
                           # (TEST-001 in audit/CODE-AUDIT-REPORT.md is stale — these now exist)
 
 # Rust — cargo is at ~/.cargo/bin/cargo, not always on PATH
 cd src-tauri && cargo build
-cd src-tauri && cargo test               # only orchestrator::routing has #[test]s today
+cd src-tauri && cargo test               # 72 tests today, spread across domain/application/agents —
+                                          # not just orchestrator::routing (that was stale)
 cd src-tauri && cargo test routing::      # just that module
+
+# CI: .gitlab-ci.yml runs frontend (lint + test:frontend + build), chatbot
+# tests, gateway tests, and cargo test on every push/MR. Before this only SAST
+# + secret-detection ran — a broken build could merge with a green pipeline.
 
 # LLM usage dashboard (reads llm_usage.db)
 npm run dashboard         # http://localhost:3300

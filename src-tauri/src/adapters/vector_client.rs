@@ -32,17 +32,21 @@ impl QdrantVectorStore {
     /// same observation for the other adapters), so a plain
     /// `current_dir.join("qdrant")` never resolved to anything real.
     ///
-    /// The repo-root `./qdrant` copy is checked FIRST, ahead of the
-    /// target-triple-named sidecar under `src-tauri/bin/` — verified the hard
-    /// way: `src-tauri/bin/qdrant-<arch>-apple-darwin` is a materially older
-    /// Qdrant build (dated Jan 2024) than the repo-root copy (1.19.1), and
-    /// pointed at the same storage directory it panics on startup trying to
-    /// parse a collection config the newer engine wrote (`invalid type: null,
-    /// expected usize` — a field that became optional in a later schema
-    /// version). Whichever binary WRITES a collection has to be the one that
-    /// reads it back; until `src-tauri/bin/` is refreshed to match (or the
-    /// packaging plan's `externalBin` wiring replaces this manual resolution
-    /// entirely, §11), the repo-root copy is the one that must win.
+    /// Both binaries now live under `vendor/qdrant/` (moved out of the repo
+    /// root and `src-tauri/bin/` respectively — folder-structure cleanup,
+    /// same files). `vendor/qdrant/qdrant` is checked FIRST, ahead of the
+    /// target-triple-named build — verified the hard way: the triple-named
+    /// build is a materially older Qdrant build (dated Jan 2024) than the
+    /// unqualified one (1.19.1), and pointed at the same storage directory it
+    /// panics on startup trying to parse a collection config the newer engine
+    /// wrote (`invalid type: null, expected usize` — a field that became
+    /// optional in a later schema version). Whichever binary WRITES a
+    /// collection has to be the one that reads it back; until the
+    /// triple-named build is refreshed to match (or the packaging plan's
+    /// `externalBin` wiring replaces this manual resolution entirely, §11),
+    /// `vendor/qdrant/qdrant` is the one that must win. The old repo-root/
+    /// `src-tauri/bin/` locations are kept as fallback candidates so a
+    /// checkout that hasn't picked up the move still resolves.
     fn resolve_qdrant_binary(current_dir: &std::path::Path) -> Option<std::path::PathBuf> {
         let repo_root = if current_dir.ends_with("src-tauri") {
             current_dir
@@ -55,6 +59,11 @@ impl QdrantVectorStore {
 
         let target_suffix = format!("{}-apple-darwin", std::env::consts::ARCH);
         let candidates = [
+            repo_root.join("vendor").join("qdrant").join("qdrant"),
+            repo_root
+                .join("vendor")
+                .join("qdrant")
+                .join(format!("qdrant-{target_suffix}")),
             repo_root.join("qdrant"),
             current_dir.join("qdrant"),
             repo_root

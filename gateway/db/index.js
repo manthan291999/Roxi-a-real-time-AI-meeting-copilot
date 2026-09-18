@@ -18,6 +18,7 @@
 
 const { open } = require('./connection.js');
 const { MeetingRepository } = require('./meeting-repository.js');
+const { ArtifactRepository } = require('./artifact-repository.js');
 const { TranscriptRepository } = require('./transcript-repository.js');
 const { SpeakerRepository } = require('./speaker-repository.js');
 
@@ -25,9 +26,10 @@ const { SpeakerRepository } = require('./speaker-repository.js');
  * One open database plus the repositories scoped to one meeting.
  */
 class MeetingSession {
-  constructor(db, meetings, transcripts, speakers) {
+  constructor(db, meetings, artifacts, transcripts, speakers) {
     this.db = db;
     this.meetings = meetings;
+    this.artifacts = artifacts;
     this.transcripts = transcripts;
     this.speakers = speakers;
     this.closed = false;
@@ -61,6 +63,7 @@ class MeetingSession {
     this.closed = true;
 
     this.transcripts.close();
+    this.artifacts.close();
     this.meetings.end(summary, status, kind);
 
     try {
@@ -88,6 +91,7 @@ function startSession(dbPath, meetingContext = '', projectSelection = {}, meetin
   return new MeetingSession(
     db,
     meetings,
+    new ArtifactRepository(db, meetings.meetingId),
     new TranscriptRepository(db, meetings.meetingId),
     new SpeakerRepository(db)
   );

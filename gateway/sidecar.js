@@ -132,7 +132,7 @@ async function main() {
     transcripts: session.transcripts,
     protocol,
   });
-  const commands = new CommandHandler({ meetings: session.meetings, diarization, protocol });
+  const commands = new CommandHandler({ artifacts: session.artifacts, diarization, protocol });
   const deframer = new PcmDeframer(
     {
       // Audio fans out to both STT and diarization; the latter buffers it for

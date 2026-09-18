@@ -78,7 +78,7 @@ test('transcripts are sanitized and defaulted', () => {
 
 test('saveAnalyzedChunk persists the chunk and its artifacts atomically', () => {
   const s = session();
-  const chunkId = s.meetings.saveAnalyzedChunk(
+  const chunkId = s.artifacts.saveAnalyzedChunk(
     {
       seq: 0,
       speaker: 'Alice',
@@ -111,7 +111,7 @@ test('saveAnalyzedChunk persists the chunk and its artifacts atomically', () => 
 
 test('getAggregates reflects what was written', () => {
   const s = session();
-  s.meetings.saveAnalyzedChunk(
+  s.artifacts.saveAnalyzedChunk(
     {
       seq: 0,
       speaker: 'Alice',
@@ -121,9 +121,9 @@ test('getAggregates reflects what was written', () => {
     },
     { decisions: [{ text: 'ship on friday', confidence: null }], actionItems: [], risks: [] }
   );
-  s.meetings.upsertSpeakerProfile('Alice', 'release', 'high');
+  s.artifacts.upsertSpeakerProfile('Alice', 'release', 'high');
 
-  const agg = s.meetings.getAggregates();
+  const agg = s.artifacts.getAggregates();
   assert.deepStrictEqual(agg.decisions, ['ship on friday']);
   assert.strictEqual(agg.chunkCount, 1);
   assert.strictEqual(agg.topic, 'release');
@@ -167,10 +167,10 @@ test('meeting end records status and summary', () => {
 test('repositories never throw on bad input', () => {
   const s = session();
   assert.doesNotThrow(() => {
-    s.meetings.saveAnalyzedChunk({ seq: 0, speaker: null, text: null }, null);
-    s.meetings.upsertGlossary(null);
-    s.meetings.upsertSpeakerProfile(null, null, null);
-    s.meetings.saveSuggestedReply(undefined);
+    s.artifacts.saveAnalyzedChunk({ seq: 0, speaker: null, text: null }, null);
+    s.artifacts.upsertGlossary(null);
+    s.artifacts.upsertSpeakerProfile(null, null, null);
+    s.artifacts.saveSuggestedReply(undefined);
     s.transcripts.save(undefined, undefined);
   });
   s.close('', 'ended');

@@ -32,12 +32,12 @@ const MAX_TRACKED_CHUNKS = 200;
 class CommandHandler {
   /**
    * @param {Object} deps
-   * @param {Object} deps.meetings     MeetingRepository
+   * @param {Object} deps.artifacts    ArtifactRepository
    * @param {Object} deps.diarization  DiarizationLayer
    * @param {Object} deps.protocol     StdoutProtocol (optional)
    */
-  constructor({ meetings, diarization, protocol }) {
-    this.meetings = meetings;
+  constructor({ artifacts, diarization, protocol }) {
+    this.artifacts = artifacts;
     this.diarization = diarization;
     this.protocol = protocol;
     this.chunkSeq = 0;
@@ -84,7 +84,7 @@ class CommandHandler {
     const artifacts = validateArtifacts(message.artifacts);
     const seq = this.chunkSeq++;
 
-    const chunkId = this.meetings.saveAnalyzedChunk(
+    const chunkId = this.artifacts.saveAnalyzedChunk(
       {
         seq,
         speaker: chunk.speaker,
@@ -101,15 +101,15 @@ class CommandHandler {
 
     // Secondary artifacts, each independent of the chunk row.
     if (message.technicalAnalysis) {
-      this.meetings.saveTechnicalAnalysis(message.technicalAnalysis);
+      this.artifacts.saveTechnicalAnalysis(message.technicalAnalysis);
     }
     if (message.suggestedReply) {
-      this.meetings.saveSuggestedReply(message.suggestedReply);
+      this.artifacts.saveSuggestedReply(message.suggestedReply);
     }
     if (message.glossary) {
-      this.meetings.upsertGlossary(message.glossary);
+      this.artifacts.upsertGlossary(message.glossary);
     }
-    this.meetings.upsertSpeakerProfile(chunk.speaker, chunk.topic, chunk.significance);
+    this.artifacts.upsertSpeakerProfile(chunk.speaker, chunk.topic, chunk.significance);
 
     if (this.protocol && this.protocol.emitChunkPersisted) {
       this.protocol.emitChunkPersisted(chunkId);
@@ -139,7 +139,7 @@ class CommandHandler {
     }
 
     const artifacts = validateArtifacts(message.artifacts);
-    this.meetings.saveArtifacts(chunkId, artifacts);
+    this.artifacts.saveArtifacts(chunkId, artifacts);
 
     log('info', 'control', 'artifacts_persisted', {
       chunkRef: message.chunkRef,

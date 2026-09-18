@@ -1,11 +1,11 @@
 use tauri::{AppHandle, Emitter, Manager};
 use super::events::{AudioLevelPayload, SidecarEvent, TranscriptPayload, ExplanationPayload, ResponsePayload};
 use super::persistence;
+use super::pipeline_slots;
 use crate::agents::orchestrator::chunk_graph::ChunkGraph;
 use crate::application::capture_usecase::CaptureUseCase;
 use crate::application::session_registry::SessionRegistry;
 use std::sync::Arc;
-use tokio::sync::Semaphore;
 
 /// Ask the gateway to persist something. Best-effort: if no session is running,
 /// or the pipe rejects the write, the UI is unaffected.
@@ -28,40 +28,6 @@ fn send_control(app: &AppHandle, command: &serde_json::Value) {
 /// still enters the rolling context window the next substantive chunk is
 /// analysed against. Only its own analysis is skipped.
 const MIN_CHUNK_WORDS: usize = 4;
-
-/// Caps concurrent LLM pipeline work at 3, which is ~15-24s of LLM budget in
-/// parallel — enough for real-time meetings without saturating the OpenAI rate
-/// limit.
-///
-/// The permit is acquired INSIDE the spawned task, not before it. That is
-/// deliberate: route_sidecar_event runs on the gateway's stdout reader thread
-/// (adapters/gateway_client.rs), and blocking there would stall
-/// transcript_partial delivery and visibly freeze the live caption UI.
-/// Concurrent API calls are therefore capped, but the task queue itself is
-/// unbounded. Accepted: one speaker produces a final turn every ~3-8s and three
-/// pipelines drain at ~5-8s each, so the queue does not grow in practice.
-static PIPELINE_SEMAPHORE: std::sync::OnceLock<Arc<Semaphore>> = std::sync::OnceLock::new();
-
-fn get_semaphore() -> Arc<Semaphore> {
-    PIPELINE_SEMAPHORE
-        .get_or_init(|| Arc::new(Semaphore::new(3)))
-        .clone()
-}
-
-/// Separate budget for the detached slow lane (risk / analyst). These run off the
-/// reply path, so they must not hold a reply-path permit — but they still call the
-/// API and still need a ceiling.
-///
-/// Unlike the reply path this lane SHEDS rather than queues: risks and decisions are
-/// ambient enrichments, and a stale one arriving two minutes late is worth less than
-/// not spending the call. `try_acquire_owned` drops the work when the lane is full.
-static DETACHED_SEMAPHORE: std::sync::OnceLock<Arc<Semaphore>> = std::sync::OnceLock::new();
-
-fn get_detached_semaphore() -> Arc<Semaphore> {
-    DETACHED_SEMAPHORE
-        .get_or_init(|| Arc::new(Semaphore::new(4)))
-        .clone()
-}
 
 pub fn route_sidecar_event(app: &AppHandle, text: &str) {
     if let Ok(event) = serde_json::from_str::<SidecarEvent>(text) {
@@ -154,10 +120,9 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                         return;
                     }
 
-                    // 3. Run the Rust Native ChunkGraph. See PIPELINE_SEMAPHORE above
+                    // 3. Run the Rust Native ChunkGraph. See pipeline_slots::acquire_reply_slot
                     //    for why the permit is taken inside the task rather than here.
                     let app_clone = app.clone();
-                    let sem = get_semaphore();
 
                     // Minted here, before the task is spawned, so refs follow the order
                     // turns were spoken rather than the order pipelines happened to
@@ -166,12 +131,9 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
 
                     tauri::async_runtime::spawn(async move {
                         // Acquire permit — auto-released when `_permit` is dropped at end of scope
-                        let _permit = match sem.acquire_owned().await {
-                            Ok(p) => p,
-                            Err(_) => {
-                                tracing::warn!("[event_router] Semaphore closed — dropping chunk for speaker {}", s);
-                                return;
-                            }
+                        let Some(_permit) = pipeline_slots::acquire_reply_slot().await else {
+                            tracing::warn!("[event_router] Semaphore closed — dropping chunk for speaker {}", s);
+                            return;
                         };
                         tracing::debug!("[event_router] Pipeline slot acquired for speaker={}", s);
 
@@ -199,7 +161,7 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                                     let speaker_detached = s.clone();
                                     let chunk_ref_detached = chunk_ref.clone();
                                     tauri::async_runtime::spawn(async move {
-                                        let Ok(_slot) = get_detached_semaphore().try_acquire_owned() else {
+                                        let Some(_slot) = pipeline_slots::try_acquire_detached_slot() else {
                                             tracing::warn!(
                                                 "[event_router] Detached lane saturated — shedding risk/analyst for speaker {}",
                                                 speaker_detached

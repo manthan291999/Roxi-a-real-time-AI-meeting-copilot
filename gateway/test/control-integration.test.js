@@ -34,7 +34,7 @@ function harness() {
     extractMFCC: () => null,
     cosineSimilarity: () => 0,
   });
-  const handler = new CommandHandler({ meetings: session.meetings, diarization });
+  const handler = new CommandHandler({ artifacts: session.artifacts, diarization });
   const deframer = new PcmDeframer({ sendAudio: () => {} }, handler);
   return { session, deframer, diarization };
 }
@@ -144,7 +144,7 @@ test('audio and control frames interleaved in one write both arrive', () => {
   const diar = new DiarizationLayer(session.speakers, {
     extractMFCC: () => null, cosineSimilarity: () => 0,
   });
-  const handler = new CommandHandler({ meetings: session.meetings, diarization: diar });
+  const handler = new CommandHandler({ artifacts: session.artifacts, diarization: diar });
   const deframer = new PcmDeframer({ sendAudio: (p) => audio.push(p) }, handler);
 
   const pcm = Buffer.alloc(8);
