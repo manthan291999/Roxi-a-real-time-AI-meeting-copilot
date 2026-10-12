@@ -68,7 +68,13 @@ for (const secret of ['OPENAI_API_KEY', 'ASSEMBLYAI_API_KEY', 'SPEECHMATICS_API_
 }
 
 function run(command, args, options = {}) {
-  execFileSync(command, args, { stdio: 'inherit', ...options });
+  execFileSync(command, args, {
+    stdio: 'inherit',
+    // Windows command shims such as npm.cmd are batch files, not PE
+    // executables, and require cmd.exe when launched from Node.
+    shell: process.platform === 'win32',
+    ...options,
+  });
 }
 
 function copyRuntime(name) {

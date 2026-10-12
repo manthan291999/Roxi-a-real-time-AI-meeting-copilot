@@ -17,6 +17,11 @@ release:windows:
   tags: [saas-windows-medium-amd64]
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+  before_script:
+    - Invoke-WebRequest https://nodejs.org/dist/v22.20.0/node-v22.20.0-win-x64.zip -OutFile node22.zip
+    - Expand-Archive -LiteralPath node22.zip -DestinationPath .node22 -Force
+    - $env:Path = "$PWD\.node22\node-v22.20.0-win-x64;$env:Path"
+    - node --version
   script:
     - npm ci
     - npm run release:windows
@@ -31,6 +36,8 @@ release:linux:
   stage: test
   image: rust:1-bookworm
   tags: [saas-linux-small-amd64]
+  variables:
+    APPIMAGE_EXTRACT_AND_RUN: "1"
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
   before_script:
