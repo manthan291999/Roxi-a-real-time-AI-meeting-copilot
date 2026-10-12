@@ -1,5 +1,5 @@
 release:macos:
-  stage: package
+  stage: test
   tags: [saas-macos-medium-m1]
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
@@ -13,7 +13,7 @@ release:macos:
     expire_in: never
 
 release:windows:
-  stage: package
+  stage: test
   tags: [saas-windows-medium-amd64]
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
@@ -28,7 +28,7 @@ release:windows:
     expire_in: never
 
 release:linux:
-  stage: package
+  stage: test
   image: rust:1-bookworm
   tags: [saas-linux-small-amd64]
   rules:
@@ -58,6 +58,7 @@ release:assemble:
       artifacts: true
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+      when: always
   script:
     - npm run release:assemble -- --version "$CI_COMMIT_TAG"
   artifacts:
