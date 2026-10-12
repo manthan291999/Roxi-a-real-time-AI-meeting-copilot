@@ -154,10 +154,12 @@ class AssemblyAIProvider extends EventEmitter {
    * @param {string}   [options.context]         the meeting context from the intake modal
    * @param {?string}  [options.role]            the user's role in this meeting
    */
-  constructor(apiKey, languages = ['en'], options = {}) {
+  constructor(credential, languages = ['en'], options = {}) {
     super();
     this.name = 'assemblyai';
-    this.apiKey = apiKey;
+    if (typeof credential === 'string') credential = { kind: 'apiKey', value: credential };
+    this.apiKey = credential?.kind === 'apiKey' ? credential.value : null;
+    this.token = credential?.kind === 'token' ? credential.value : null;
     this.languages = languages;
     this.isConnected = false;
     this.lastKnownSpeaker = "Speaker A";
@@ -178,7 +180,7 @@ class AssemblyAIProvider extends EventEmitter {
   }
 
   async connect() {
-    const client = new AssemblyAI({ apiKey: this.apiKey });
+    const client = new AssemblyAI({ apiKey: this.apiKey || '' });
     // Universal-3.5-Pro notes (see the Universal -> U3.5-Pro migration guide):
     //   - `formatTurns` is gone: formatting is always on, and the model emits a
     //     single already-formatted turn per end_of_turn rather than the
@@ -187,6 +189,7 @@ class AssemblyAIProvider extends EventEmitter {
     //     punctuation-based, not confidence-based.
     // Both were still being sent and silently ignored by the server.
     const rt = client.streaming.transcriber({
+      ...(this.token && { token: this.token }),
       sampleRate: SAMPLE_RATE,
       encoding: 'pcm_s16le',
       speechModel: 'universal-3-5-pro',

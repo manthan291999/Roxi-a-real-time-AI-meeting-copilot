@@ -161,6 +161,25 @@ class SqliteMeetingStore {
     }));
   }
 
+  /**
+   * Ids of the meetings one account owns. Empty on a database the gateway
+   * has not yet given an owner column (M011): then no meeting has an owner.
+   * @param {string} accountId
+   * @returns {number[]}
+   */
+  meetingIdsOwnedBy(accountId) {
+    const db = this._open();
+    if (!db) return [];
+    try {
+      const hasOwner = db.prepare('PRAGMA table_info(meetings)').all().some((c) => c.name === 'account_id');
+      if (!hasOwner) return [];
+      return db.prepare('SELECT id FROM meetings WHERE account_id = ? ORDER BY id').all(accountId).map((r) => r.id);
+    } catch (err) {
+      this.logger?.warn('store', 'meeting_ids_owned_by_failed', { message: err.message });
+      return [];
+    }
+  }
+
   getMeetingRole(meetingId) {
     if (!meetingId) return null;
     const db = this._open();

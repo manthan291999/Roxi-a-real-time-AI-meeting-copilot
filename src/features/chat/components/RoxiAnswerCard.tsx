@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ChatMessage } from '../../../shared/types';
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { openExternalUrl } from '../../../services/externalLinks';
 import { tokens, radius, ChevronDownIcon, Markdown } from '../../../design-system';
 import { ChatSource } from '../../../shared/types';
 import { SourceChip } from './SourceChip';
@@ -79,7 +79,7 @@ function renderCitedLine(
         <button
           key={`${keyPrefix}-${i}`}
           type="button"
-          onClick={() => { void openUrl(hit.url!).catch(() => {}); }}
+          onClick={() => openExternalUrl(hit.url)}
           title={hit.label}
           aria-label={`Source ${ref}: ${hit.label}`}
           className="align-super mx-[1px] px-[4px] text-[9px] font-semibold leading-[1.5] hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1"
@@ -147,7 +147,7 @@ export const RoxiAnswerCard: React.FC<Props> = ({ message, onFollowUpClick }) =>
             className="text-[14px]"
             source={message.content}
             renderText={(text, key) => renderCitedLine(text, citations, key)}
-            onLinkClick={(href) => { void openUrl(href).catch(() => {}); }}
+            onLinkClick={openExternalUrl}
           />
 
           {checkedWeb && (

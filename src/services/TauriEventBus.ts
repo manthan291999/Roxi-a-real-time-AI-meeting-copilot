@@ -15,7 +15,8 @@ import {
   DocumentReady,
   UploadedDocument,
   DocumentDeleted,
-  AudioLevel
+  AudioLevel,
+  TrialStatus
 } from '../shared/types';
 import { AudioLevelWire, SpeakerRevisionWire, SuggestAnswerWire, TranscriptWire } from './wire';
 import { toSpeakerRevisions, toSuggestCard, toTxLine } from './mappers';
@@ -131,6 +132,10 @@ export class TauriEventBus implements IEventBus {
 
   onCaptureError(cb: (err: string) => void) {
     return this.subscribe<string>('capture_error', cb);
+  }
+
+  onTrialEnded(cb: (status: TrialStatus) => void) {
+    return this.subscribe<TrialStatus>('trial_ended', cb);
   }
 
   onApiHealth(cb: (health: any) => void) {

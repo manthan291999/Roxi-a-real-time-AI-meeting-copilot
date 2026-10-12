@@ -10,9 +10,9 @@ use crate::agents::domain::chunk_state::{ChunkState, Complexity};
 
 pub struct RouteDecision {
     pub run_explanation: bool,
-    pub run_technical:   bool,
-    pub run_risk:        bool,
-    pub run_analyst:     bool,
+    pub run_technical: bool,
+    pub run_risk: bool,
+    pub run_analyst: bool,
 }
 
 /// Decision table (LLM calls, and how many are on the reply's critical path):
@@ -23,21 +23,21 @@ pub fn decide(state: &ChunkState) -> RouteDecision {
     match state.complexity {
         Complexity::Low => RouteDecision {
             run_explanation: true,
-            run_technical:   false,
-            run_risk:        false,
-            run_analyst:     false,
+            run_technical: false,
+            run_risk: false,
+            run_analyst: false,
         },
         Complexity::Medium => RouteDecision {
             run_explanation: true,
-            run_technical:   false,
-            run_risk:        true,
-            run_analyst:     false,
+            run_technical: false,
+            run_risk: true,
+            run_analyst: false,
         },
         Complexity::High => RouteDecision {
             run_explanation: true,
-            run_technical:   true,
-            run_risk:        true,
-            run_analyst:     true,
+            run_technical: true,
+            run_risk: true,
+            run_analyst: true,
         },
     }
 }
@@ -49,7 +49,10 @@ mod tests {
 
     #[test]
     fn low_runs_only_explanation() {
-        let s = ChunkState { complexity: Complexity::Low, ..Default::default() };
+        let s = ChunkState {
+            complexity: Complexity::Low,
+            ..Default::default()
+        };
         let r = decide(&s);
         assert!(r.run_explanation);
         assert!(!r.run_technical && !r.run_risk && !r.run_analyst);
@@ -57,7 +60,10 @@ mod tests {
 
     #[test]
     fn medium_runs_explanation_and_risk() {
-        let s = ChunkState { complexity: Complexity::Medium, ..Default::default() };
+        let s = ChunkState {
+            complexity: Complexity::Medium,
+            ..Default::default()
+        };
         let r = decide(&s);
         assert!(r.run_explanation && r.run_risk);
         assert!(!r.run_technical && !r.run_analyst);
@@ -65,14 +71,17 @@ mod tests {
 
     #[test]
     fn high_runs_all() {
-        let s = ChunkState { complexity: Complexity::High, ..Default::default() };
+        let s = ChunkState {
+            complexity: Complexity::High,
+            ..Default::default()
+        };
         let r = decide(&s);
         assert!(r.run_explanation && r.run_technical && r.run_risk && r.run_analyst);
     }
 
     #[test]
     fn default_complexity_is_medium_safe_fallback() {
-        let s = ChunkState::default();   // complexity defaults to Medium
+        let s = ChunkState::default(); // complexity defaults to Medium
         let r = decide(&s);
         assert!(r.run_explanation && r.run_risk);
         assert!(!r.run_technical);

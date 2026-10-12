@@ -1,11 +1,14 @@
+pub mod account_scope;
 pub mod audio_capture;
 pub mod audio_meter;
+pub mod auth;
 pub mod brief_source;
 pub mod chat_gateway;
 pub mod control;
 pub mod db;
 pub mod document_source;
 pub mod embedding;
+pub mod federated_auth;
 pub mod gateway;
 pub mod project_repository;
 pub mod usage;

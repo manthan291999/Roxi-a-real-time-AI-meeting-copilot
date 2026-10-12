@@ -229,7 +229,11 @@ mod tests {
         let input = tone(440.0, 0.5, 1500);
         meter.write_samples(&input).unwrap();
 
-        assert_eq!(*received.lock().unwrap(), input, "the sink must be transparent");
+        assert_eq!(
+            *received.lock().unwrap(),
+            input,
+            "the sink must be transparent"
+        );
     }
 
     #[test]
@@ -295,12 +299,16 @@ mod tests {
     fn bands_separate_by_frequency() {
         let (low_obs, low_seen) = collector();
         let mut low_meter = MeterSink::new(Box::new(SpySink::default()), low_obs);
-        low_meter.write_samples(&tone(120.0, 0.5, WINDOW * 2)).unwrap();
+        low_meter
+            .write_samples(&tone(120.0, 0.5, WINDOW * 2))
+            .unwrap();
         let bass = low_seen.lock().unwrap()[1];
 
         let (high_obs, high_seen) = collector();
         let mut high_meter = MeterSink::new(Box::new(SpySink::default()), high_obs);
-        high_meter.write_samples(&tone(6000.0, 0.5, WINDOW * 2)).unwrap();
+        high_meter
+            .write_samples(&tone(6000.0, 0.5, WINDOW * 2))
+            .unwrap();
         let treble = high_seen.lock().unwrap()[1];
 
         assert!(bass.low > bass.high, "120 Hz belongs in the low band");
@@ -319,7 +327,10 @@ mod tests {
 
         meter.finalize().unwrap();
 
-        assert!(*finalized.lock().unwrap(), "the wrapped sink must still be finalized");
+        assert!(
+            *finalized.lock().unwrap(),
+            "the wrapped sink must still be finalized"
+        );
         assert_eq!(seen.lock().unwrap().last(), Some(&AudioLevel::SILENT));
     }
 }

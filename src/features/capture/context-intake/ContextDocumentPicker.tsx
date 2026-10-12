@@ -1,9 +1,13 @@
 import React from 'react';
 import { UploadedDocument, DocumentProgress } from '../../../shared/types';
-import { tokens } from '../../../design-system';
-import { FieldLabel } from './FieldLabel';
+import { tokens, radius, CheckIcon, PlusIcon } from '../../../design-system';
+import { IntakeSection } from './IntakeSection';
+
+/** How many documents one meeting can be grounded on. */
+const MAX_DOCS = 3;
 
 interface ContextDocumentPickerProps {
+  step: number;
   documents: UploadedDocument[];
   selectedDocIds: string[];
   progressMap: Record<string, DocumentProgress>;
@@ -18,12 +22,11 @@ const IconFileText = () => (
     <polyline points="14 2 14 8 20 8"/>
     <line x1="16" y1="13" x2="8" y2="13"/>
     <line x1="16" y1="17" x2="8" y2="17"/>
-    <polyline points="10 9 9 9 8 9"/>
   </svg>
 );
 
 const IconUpload = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
     <polyline points="17 8 12 3 7 8"/>
     <line x1="12" y1="3" x2="12" y2="15"/>
@@ -36,15 +39,10 @@ const IconSpinner = () => (
   </svg>
 );
 
-const IconCheck = () => (
-  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 6 9 17 4 12"/>
-  </svg>
-);
-
-export const ContextDocumentPicker: React.FC<ContextDocumentPickerProps> = ({ 
-  documents, 
-  selectedDocIds, 
+export const ContextDocumentPicker: React.FC<ContextDocumentPickerProps> = ({
+  step,
+  documents,
+  selectedDocIds,
   progressMap,
   onToggle,
   onUpload,
@@ -53,52 +51,63 @@ export const ContextDocumentPicker: React.FC<ContextDocumentPickerProps> = ({
   const processingDocs = documents.filter(d => d.status !== 'ready');
   const allDocs = [...readyDocs, ...processingDocs];
 
-  return (
-    <section className="flex shrink-0 flex-col gap-3">
-      {/* Header row: label + upload button */}
-      <div className="flex items-center justify-between">
-        <FieldLabel>
-          Attach reference documents{' '}
-          <span style={{ color: tokens.muteDim, fontWeight: 'normal' }}>(max 3)</span>
-        </FieldLabel>
+  const aside = (
+    <div className="flex items-center gap-2">
+      <span
+        className="text-[11px] font-semibold tabular-nums px-1.5 py-0.5 rounded-full"
+        style={{
+          background: selectedDocIds.length > 0 ? tokens.signalDim : tokens.panelRaised,
+          color: selectedDocIds.length > 0 ? tokens.signal : tokens.muteDim,
+        }}
+      >
+        {selectedDocIds.length}/{MAX_DOCS}
+      </span>
+      {allDocs.length > 0 && (
         <button
           type="button"
           onClick={onUpload}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all hover:opacity-80 active:scale-95"
-          style={{
-            backgroundColor: tokens.overlay,
-            color: tokens.mute,
-            border: `1px solid ${tokens.hairline}`,
-          }}
+          className="h-7 flex items-center gap-1 px-2.5 rounded-full border text-[12px] font-medium transition-colors hover:bg-[var(--t-overlay-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-focus-ring)]"
+          style={{ background: tokens.card, borderColor: tokens.hairline, color: tokens.paper }}
           title="Upload a PDF, TXT, DOCX, or MD file"
         >
-          <IconUpload />
+          <PlusIcon className="w-3 h-3" />
           Upload
         </button>
-      </div>
+      )}
+    </div>
+  );
 
-      {/* Document list */}
+  return (
+    <IntakeSection step={step} title="Reference documents" aside={aside}>
       {allDocs.length === 0 ? (
         <button
           type="button"
           onClick={onUpload}
-          className="flex flex-col items-center justify-center gap-2 py-5 rounded-md w-full transition-all hover:opacity-80 border-dashed"
-          style={{
-            backgroundColor: tokens.panel,
-            border: `1.5px dashed ${tokens.hairline}`,
-            color: tokens.muteDim,
-          }}
+          className="group w-full flex items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-[var(--t-overlay-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-focus-ring)]"
+          style={{ borderRadius: radius.card, border: `1.5px dashed ${tokens.hairline}` }}
         >
-          <IconUpload />
-          <span className="text-xs">Click to upload your first document</span>
-          <span className="text-[10px] opacity-60">PDF · TXT · DOCX · MD</span>
+          <span
+            aria-hidden="true"
+            className="w-9 h-9 shrink-0 rounded-[10px] flex items-center justify-center transition-transform group-hover:-translate-y-0.5"
+            style={{ background: tokens.signalDim, color: tokens.signal }}
+          >
+            <IconUpload />
+          </span>
+          <span className="flex flex-col min-w-0">
+            <span className="text-[13px] font-medium" style={{ color: tokens.paper }}>
+              Upload a spec, agenda or brief
+            </span>
+            <span className="text-[12px]" style={{ color: tokens.muteDim }}>
+              PDF · TXT · DOCX · MD — Roxi grounds its answers in them
+            </span>
+          </span>
         </button>
       ) : (
-        <div className="flex flex-col gap-2 max-h-[160px] overflow-y-auto custom-scrollbar pr-1">
+        <div className="flex flex-col gap-1.5 max-h-[160px] overflow-y-auto custom-scrollbar pr-1">
           {allDocs.map(doc => {
             const isReady    = doc.status === 'ready';
             const isSelected = isReady && selectedDocIds.includes(doc.docId);
-            const isDisabled = !isSelected && selectedDocIds.length >= 3;
+            const isDisabled = !isSelected && selectedDocIds.length >= MAX_DOCS;
             const progress   = progressMap[doc.docId];
             const pct        = progress?.total ? Math.round((progress.done / progress.total) * 100) : null;
 
@@ -106,56 +115,56 @@ export const ContextDocumentPicker: React.FC<ContextDocumentPickerProps> = ({
               <label
                 key={doc.docId}
                 className={[
-                  'flex items-center gap-3 p-2 rounded-md transition-all select-none',
-                  !isReady           ? 'cursor-default opacity-70' :
-                  isDisabled         ? 'opacity-50 cursor-not-allowed' :
-                                       'cursor-pointer hover:bg-white/5',
+                  'h-10 flex items-center gap-3 px-3 border transition-colors select-none',
+                  !isReady   ? 'cursor-default opacity-70' :
+                  isDisabled ? 'opacity-50 cursor-not-allowed' :
+                               'cursor-pointer hover:bg-[var(--t-overlay-hover)]',
                 ].join(' ')}
                 style={{
-                  border: `1px solid ${isSelected ? tokens.signal : tokens.hairline}`,
-                  backgroundColor: isSelected ? 'rgba(88, 101, 242, 0.08)' : tokens.panel,
+                  borderRadius: radius.control,
+                  borderColor: isSelected ? tokens.signalLine : tokens.hairline,
+                  background: isSelected ? tokens.signalDim : tokens.card,
                 }}
               >
                 <input
                   type="checkbox"
-                  className="hidden"
+                  className="sr-only"
                   checked={isSelected}
                   disabled={!isReady || isDisabled}
                   onChange={() => isReady && onToggle(doc.docId)}
                 />
 
                 {/* Checkbox indicator */}
-                <div
-                  className="flex items-center justify-center w-4 h-4 rounded-sm shrink-0"
+                <span
+                  aria-hidden="true"
+                  className="flex items-center justify-center w-4 h-4 rounded-[5px] shrink-0 transition-colors"
                   style={{
                     border: `1px solid ${isSelected ? tokens.signal : tokens.muteDim}`,
-                    backgroundColor: isSelected ? tokens.signal : 'transparent',
+                    background: isSelected ? tokens.signal : 'transparent',
+                    color: tokens.onSignal,
                   }}
                 >
-                  {isSelected && <IconCheck />}
-                </div>
+                  {isSelected && <CheckIcon className="w-2.5 h-2.5" />}
+                </span>
 
                 {/* File info */}
-                <div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0" style={{ color: isSelected ? tokens.paper : tokens.mute }}>
+                <span className="flex items-center gap-2 overflow-hidden flex-1 min-w-0" style={{ color: isSelected ? tokens.paper : tokens.mute }}>
                   <span className="shrink-0"><IconFileText /></span>
-                  <span className="truncate text-sm">{doc.fileName}</span>
-                </div>
+                  <span className="truncate text-[13px]">{doc.fileName}</span>
+                </span>
 
                 {/* Status badge */}
-                <div className="shrink-0 ml-auto">
-                  {!isReady && (
-                    <span className="flex items-center gap-1 text-[10px]" style={{ color: tokens.muteDim }}>
-                      <IconSpinner />
-                      {pct !== null ? `${pct}%` : 'Processing…'}
-                    </span>
-                  )}
-                </div>
+                {!isReady && (
+                  <span className="shrink-0 flex items-center gap-1 text-[11px]" style={{ color: tokens.muteDim }}>
+                    <IconSpinner />
+                    {pct !== null ? `${pct}%` : 'Processing…'}
+                  </span>
+                )}
               </label>
             );
           })}
         </div>
       )}
-    </section>
+    </IntakeSection>
   );
 };
-

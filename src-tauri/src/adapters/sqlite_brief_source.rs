@@ -12,28 +12,38 @@
 //! migration.
 
 use crate::adapters::db_paths;
+use crate::adapters::meeting_scope::apply_meeting_scope;
 use crate::adapters::sqlite_schema::{has_table, meetings_are_project_scoped};
-use crate::agents::brief::model::{GlossaryTerm, MeetingDigest, OpenItem, OpenItemKind, Participant};
+use crate::agents::brief::model::{
+    GlossaryTerm, MeetingDigest, OpenItem, OpenItemKind, Participant,
+};
 use crate::domain::project::ProjectId;
+use crate::ports::account_scope::CurrentAccount;
 use crate::ports::brief_source::BriefSource;
 use anyhow::Result;
 use rusqlite::Connection;
+use std::sync::Arc;
 use std::time::Duration;
 
 /// Decisions quoted per prior meeting. The digest is a reminder, not a record —
 /// the full history is a query away in Ask Roxi.
 const DECISIONS_PER_DIGEST: usize = 3;
 
-pub struct SqliteBriefSource;
+/// Past meetings ground the live agents, so they come only from the
+/// signed-in account's own history.
+pub struct SqliteBriefSource {
+    account: Arc<dyn CurrentAccount>,
+}
 
 impl SqliteBriefSource {
-    pub fn new() -> Self {
-        Self
+    pub fn new(account: Arc<dyn CurrentAccount>) -> Self {
+        Self { account }
     }
 
     fn open(&self) -> Result<Connection> {
         let conn = Connection::open(db_paths::meeting_history_db())?;
         conn.busy_timeout(Duration::from_secs(5))?;
+        apply_meeting_scope(&conn, &self.account.meeting_scope())?;
         Ok(conn)
     }
 

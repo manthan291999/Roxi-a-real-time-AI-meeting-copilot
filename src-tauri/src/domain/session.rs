@@ -99,7 +99,8 @@ impl TranscriptWindow {
         if self.turns.len() == self.capacity {
             self.turns.pop_front();
         }
-        self.turns.push_back(format!("{}: {}", speaker, truncate(text, MAX_TURN_CHARS)));
+        self.turns
+            .push_back(format!("{}: {}", speaker, truncate(text, MAX_TURN_CHARS)));
     }
 
     /// Render oldest-first, which is how the turns were spoken.

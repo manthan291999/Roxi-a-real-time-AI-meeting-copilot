@@ -154,3 +154,50 @@ export const CheckIcon: React.FC<IconProps> = ({ className = '', style }) => (
     <path d="M5 12.5 10 17.5 19 7" />
   </svg>
 );
+
+const strokeIcon = (strokeWidth: string, paths: React.ReactNode): React.FC<IconProps> => {
+  const Icon: React.FC<IconProps> = ({ className = '', style }) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className} style={style} aria-hidden="true">
+      {paths}
+    </svg>
+  );
+  return Icon;
+};
+
+export const MailIcon = strokeIcon('1.7', <><rect x="3" y="5" width="18" height="14" rx="2.5" /><path d="m4 7 8 6 8-6" /></>);
+
+export const KeyIcon = strokeIcon('1.7', <><circle cx="8" cy="15" r="4" /><path d="m11 12 9-9M17 6l3 3M15 8l2 2" /></>);
+
+export const LockIcon = strokeIcon('1.8', <><rect x="4" y="10" width="16" height="11" rx="2.5" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></>);
+
+export const ShieldCheckIcon = strokeIcon('1.8', <><path d="M12 3 5 6v5c0 4.4 3 8.3 7 10 4-1.7 7-5.6 7-10V6z" /><path d="m9 12 2 2 4-4" /></>);
+
+export const LaptopIcon = strokeIcon('1.8', <><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></>);
+
+export const EyeIcon = strokeIcon('1.8', <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></>);
+
+export const EyeOffIcon = strokeIcon('1.8', <><path d="M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.2M6.6 6.6C3.7 8.4 2 12 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18" /></>);
+
+export const ChevronLeftIcon = strokeIcon('2', <path d="M15 18l-6-6 6-6" />);
+
+export const MicIcon = strokeIcon('1.8', <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></>);
+
+export const SpeakerWaveIcon = strokeIcon('1.8', <><path d="M11 5 6 9H3v6h3l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" /></>);
+
+export const WaveformIcon = strokeIcon('2', <path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2" />);
+
+export const ChevronRightIcon = strokeIcon('2', <path d="m9 6 6 6-6 6" />);
+
+export const SearchIcon = strokeIcon('2', <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>);
+
+export const ArrowUpIcon = strokeIcon('2.2', <path d="M12 19V5M5 12l7-7 7 7" />);
+
+export const PaperclipIcon = strokeIcon('1.8', <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />);
+
+export const UserCircleIcon = strokeIcon('1.8', <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="10" r="3" /><path d="M6.2 18.4a6.5 6.5 0 0 1 11.6 0" /></>);
+
+export const KeyboardIcon = strokeIcon('1.8', <><rect x="2.5" y="6" width="19" height="12" rx="2.5" /><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M7.5 14h9" /></>);
+
+export const SlidersIcon = strokeIcon('1.8', <><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></>);
+
+export const ChatBubbleIcon = strokeIcon('1.8', <path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z" />);

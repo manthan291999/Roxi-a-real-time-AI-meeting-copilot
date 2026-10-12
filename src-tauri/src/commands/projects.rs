@@ -38,14 +38,12 @@ pub async fn create_project(
                 // Return the full row, not the narrow reference: the picker
                 // renders `meeting_count` and `description`, and a second
                 // round-trip to fetch them would flash an incomplete row.
-                Ok(repository
-                    .get(reference.id)?
-                    .unwrap_or_else(|| Project {
-                        reference,
-                        description: None,
-                        meeting_count: 0,
-                        last_used_at: None,
-                    }))
+                Ok(repository.get(reference.id)?.unwrap_or_else(|| Project {
+                    reference,
+                    description: None,
+                    meeting_count: 0,
+                    last_used_at: None,
+                }))
             })
     })
     .await

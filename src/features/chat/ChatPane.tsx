@@ -5,7 +5,7 @@ import { ChatInput } from './ChatInput';
 import { RoxiAnswerCard } from './components/RoxiAnswerCard';
 import { ThinkingIndicator } from './components/ThinkingIndicator';
 import { UserBubble } from './components/UserBubble';
-import { tokens, Toggle } from '../../design-system';
+import { tokens, radius, Toggle, SparkleIcon, ArrowRightIcon } from '../../design-system';
 import { useDocumentLibrary } from '../library/useDocumentLibrary';
 import { DocumentTray } from './components/documents/DocumentTray';
 
@@ -19,6 +19,8 @@ interface ChatPaneProps {
    * about a past meeting, where "what's happening right now" doesn't apply.
    */
   getLiveContext?: () => string;
+  /** Starter questions shown as buttons while the thread is empty. Each is sent as written. */
+  suggestions?: string[];
 }
 
 /**
@@ -30,12 +32,15 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   threadId,
   emptyHint = 'Ask a question about the meeting…',
   getLiveContext,
+  suggestions = [],
 }) => {
   const { messages, isLoading, thinkingNode, askQuestion, mode, setMode } =
     useChatThreadContext(threadId);
   const isDirect = mode === 'direct';
   const { documents, progressMap, addDocument, deleteDocument } = useDocumentLibrary(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const hasDocuments = documents.length > 0 || Object.keys(progressMap).length > 0;
 
   const send = (question: string) => askQuestion(question, getLiveContext?.());
 
@@ -44,29 +49,50 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   }, [messages, isLoading, thinkingNode, documents, progressMap]);
 
   return (
-    <div className="flex flex-col h-full" style={{ background: tokens.panel }}>
+    <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 custom-scrollbar">
         {messages.length === 0 ? (
-          <div
-            className="h-full flex flex-col items-center justify-center italic text-[14px] text-center"
-            style={{ color: tokens.muteDim }}
-          >
-            {isDirect
-              ? 'Ask anything. Your meetings are not being searched.'
-              : documents.length > 0 || Object.keys(progressMap).length > 0
-                ? 'Ask a question about your uploaded documents or the meeting…'
-                : emptyHint}
-            <br />
-            {isDirect ? (
-              <span className="text-xs mt-2 opacity-80 not-italic">
-                Turn Knowledge back on to answer from your meetings and documents.
-              </span>
-            ) : (
-              documents.length === 0 && Object.keys(progressMap).length === 0 && (
-                <span className="text-xs mt-2 opacity-80 not-italic">
-                  Add context from a PDF or TXT file using the attachment button to get better answers.
-                </span>
-              )
+          <div className="m-auto w-full max-w-[420px] flex flex-col items-center gap-2 py-6 text-center">
+            <span
+              aria-hidden="true"
+              className="w-11 h-11 mb-1 rounded-[12px] flex items-center justify-center border"
+              style={{ background: tokens.card, borderColor: tokens.hairline, boxShadow: tokens.cardInset }}
+            >
+              <SparkleIcon className="w-5 h-5" />
+            </span>
+            <p className="text-[15px] font-semibold" style={{ color: tokens.paper }}>
+              {isDirect
+                ? 'Ask anything'
+                : hasDocuments
+                  ? 'Ask about your documents or meetings'
+                  : emptyHint}
+            </p>
+            <p className="text-[13px] leading-relaxed" style={{ color: tokens.mute }}>
+              {isDirect
+                ? 'Knowledge is off, so your meetings and documents are not searched. Turn it back on to answer from them.'
+                : hasDocuments
+                  ? 'Roxi answers from your transcripts and the files you attached, and cites where each answer came from.'
+                  : 'Roxi answers from your transcripts and cites the meeting each answer came from. Attach a PDF or TXT with the paperclip for extra context.'}
+            </p>
+            {suggestions.length > 0 && (
+              <div className="mt-3 w-full flex flex-col gap-1.5">
+                {suggestions.map((question) => (
+                  <button
+                    key={question}
+                    type="button"
+                    onClick={() => send(question)}
+                    disabled={isLoading}
+                    className="group h-10 w-full flex items-center gap-2 px-3.5 border text-left text-[13px] transition-[background-color,transform] duration-150 hover:enabled:bg-[var(--t-overlay-hover)] active:enabled:scale-[0.98] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-focus-ring)]"
+                    style={{ borderRadius: radius.control, background: tokens.card, borderColor: tokens.hairline, color: tokens.paper }}
+                  >
+                    <span className="flex-1 truncate">{question}</span>
+                    <ArrowRightIcon
+                      className="w-3.5 h-3.5 shrink-0 transition-transform group-hover:translate-x-0.5"
+                      style={{ color: tokens.mute }}
+                    />
+                  </button>
+                ))}
+              </div>
             )}
           </div>
         ) : (

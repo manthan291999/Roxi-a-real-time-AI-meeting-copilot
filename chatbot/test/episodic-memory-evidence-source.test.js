@@ -108,7 +108,24 @@ test('EpisodicMemoryEvidenceSource', async (t) => {
 
     await source.search({ question: 'q', projectId: 7 });
     assert.strictEqual(vectorIndex.searchCalls[0].opts.minSimilarity, 0.42);
-    assert.deepStrictEqual(vectorIndex.searchCalls[0].opts.filter, { projectId: 7 });
+    assert.deepStrictEqual(vectorIndex.searchCalls[0].opts.filter, { projectId: 7, meetingIds: null });
+  });
+
+  await t.test('limits the vector search to the signed-in account\'s meetings', async () => {
+    const vectorIndex = fakeVectorIndex([]);
+    const source = new EpisodicMemoryEvidenceSource({
+      vectorIndex,
+      embeddings: fakeEmbeddings(),
+      chunkStore: fakeChunkStore(new Map()),
+      scoring: SCORING,
+    });
+
+    await source.search({ question: 'q', meetingIds: [3, 5] });
+    assert.deepStrictEqual(vectorIndex.searchCalls[0].opts.filter, { projectId: null, meetingIds: [3, 5] });
+
+    // An account that owns no meetings never reaches the index at all.
+    await source.search({ question: 'q', meetingIds: [] });
+    assert.strictEqual(vectorIndex.searchCalls.length, 1);
   });
 
   await t.test('maps hits to the shared EvidenceHit shape — sourceType meeting, groupKey meeting:{id}', async () => {

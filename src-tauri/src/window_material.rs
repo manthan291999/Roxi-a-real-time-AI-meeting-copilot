@@ -39,7 +39,9 @@ pub fn apply<R: tauri::Runtime>(win: &tauri::WebviewWindow<R>) -> anyhow::Result
     // SAFETY: `ns_window()` hands back a live NSWindow owned by tauri/wry,
     // and it is only dereferenced on the main thread during setup.
     unsafe {
-        let ptr = win.ns_window().map_err(|e| anyhow::anyhow!("ns_window: {e}"))? as *const NSWindow;
+        let ptr = win
+            .ns_window()
+            .map_err(|e| anyhow::anyhow!("ns_window: {e}"))? as *const NSWindow;
         if let Some(aqua) = NSAppearance::appearanceNamed(NSAppearanceNameAqua) {
             (*ptr).setAppearance(Some(&aqua));
         }

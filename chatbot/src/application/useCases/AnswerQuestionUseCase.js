@@ -9,6 +9,7 @@
 const { ChatbotError } = require('../../domain/errors');
 const { MODES, WEB_MODES } = require('../graph/constants');
 const { normalizeWebMode } = require('../graph/webPolicy');
+const { resolveMeetingScope } = require('../meetingScope');
 
 class AnswerQuestionUseCase {
   /**
@@ -21,10 +22,12 @@ class AnswerQuestionUseCase {
    *   to 'never' here so a caller that predates web search (a test, a script,
    *   an older transport) behaves exactly as it did before.
    */
-  constructor({ graph, logger, defaultWebMode = WEB_MODES.NEVER }) {
+  constructor({ graph, logger, defaultWebMode = WEB_MODES.NEVER, meetingOwners = null }) {
     this.graph = graph;
     this.logger = logger;
     this.defaultWebMode = defaultWebMode;
+    /** Resolves an account to the meetings it owns (SqliteMeetingStore). */
+    this.meetingOwners = meetingOwners;
   }
 
   /**
@@ -36,12 +39,14 @@ class AnswerQuestionUseCase {
    * @param {'rag'|'direct'} [input.mode] 'direct' answers from the model alone (no retrieval)
    * @param {'auto'|'always'|'never'} [input.webMode] may this turn reach the
    *   web. Omit to use the configured default; an unrecognised value is off.
+   * @param {{kind:string, accountId?:string}} [input.scope] whose past meetings
+   *   may be searched; see meetingScope.js. Absent = a host without accounts.
    * @param {(nodeName:string)=>void} [input.onNode] progress callback per node
    * @returns {Promise<{answer:string, sources:Array, clarifyingQuestion:string, followUps:Array, route:string, attempts:number, degradedNote:string, mode:string, webMode:string, usedWebSearch:boolean, webSearchCount:number, guardrail:string}>}
    */
   async run({
     question, threadId = 'default', history = [], liveContext = '',
-    mode = MODES.RAG, webMode = undefined, onNode = null,
+    mode = MODES.RAG, webMode = undefined, scope = undefined, onNode = null,
   }) {
     if (!question || typeof question !== 'string' || !question.trim()) {
       throw new ChatbotError('Question must be a non-empty string', 'INVALID_INPUT');
@@ -61,6 +66,12 @@ class AnswerQuestionUseCase {
       ? normalizeWebMode(this.defaultWebMode)
       : normalizeWebMode(webMode);
 
+    // Resolved per turn, never inherited: the same thread may be continued
+    // after a different account signs in.
+    const meetingScope = scope && !this.meetingOwners
+      ? resolveMeetingScope({ kind: 'nobody' }, null)
+      : resolveMeetingScope(scope, this.meetingOwners);
+
     const config = { configurable: { thread_id: String(threadId) } };
     const started = Date.now();
 
@@ -76,6 +87,7 @@ class AnswerQuestionUseCase {
         liveContext: askMode === MODES.DIRECT ? '' : liveContext,
         mode: askMode,
         webMode: askWebMode,
+        meetingScope,
       },
       { ...config, streamMode: 'updates' }
     );

@@ -118,10 +118,43 @@ export const tokens = {
   /** Fallback accent for a tag the UI has no styling for. */
   neutralBg: 'var(--t-neutral-bg)',
   neutralLine: 'var(--t-neutral-line)',
+
+  /** Primary button recipe: hover step, depth, and the text on the fill. */
+  signalStrong: 'var(--t-signal-strong)',
+  signalBevel: 'var(--t-signal-bevel)',
+  onSignal: 'var(--t-on-signal)',
+} as const;
+
+/**
+ * The sign-in brand panel — the only dark, opaque surface, shown before the
+ * app opens. Kept apart from `tokens` so nothing inside the app reaches for
+ * a dark-ground colour by accident.
+ */
+export const brandTokens = {
+  ink: 'var(--t-brand-ink)',
+  text: 'var(--t-brand-text)',
+  textMute: 'var(--t-brand-text-mute)',
+  textDim: 'var(--t-brand-text-dim)',
+  accent: 'var(--t-brand-accent)',
+  surface: 'var(--t-brand-surface)',
+  line: 'var(--t-brand-line)',
+  orbit: 'var(--t-brand-orbit)',
+  live: 'var(--t-brand-live)',
+  meaning: 'var(--t-brand-meaning)',
+  meaningBg: 'var(--t-brand-meaning-bg)',
+  action: 'var(--t-brand-action)',
+  actionBg: 'var(--t-brand-action-bg)',
+  risk: 'var(--t-brand-risk)',
+  riskBg: 'var(--t-brand-risk-bg)',
+  markBevel: 'var(--t-brand-mark-bevel)',
+  markTop: 'var(--t-brand-mark-top)',
+  markBottom: 'var(--t-brand-mark-bottom)',
 } as const;
 
 export const radius = {
   chip: 8,
+  /** Text fields and buttons on the sign-in screens. */
+  control: 10,
   card: 14,
   panel: 20,
   shell: 24,
@@ -168,6 +201,14 @@ export const typeScale = {
  * for a structural heading; that would dilute it into a second body face.
  */
 export const signatureSerif = '"New York", "Georgia", ui-serif, serif';
+
+/**
+ * Headline face for the screens shown BEFORE the app opens (sign-in, sign-up,
+ * the brand panel). Same native stack as `signatureSerif`, but a separate
+ * name so the rule above still holds inside the app: no serif headings there.
+ * New York ships with macOS, so nothing is fetched at launch.
+ */
+export const authDisplaySerif = signatureSerif;
 
 /**
  * Elevation ladder. A raised surface picks one of these instead of writing

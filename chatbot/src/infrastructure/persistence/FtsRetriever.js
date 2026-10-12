@@ -35,11 +35,14 @@ class FtsRetriever {
 
   /**
    * @param {string[]} matchExprs sanitized FTS5 MATCH expressions
-   * @param {{limit?: number}} [opts]
+   * @param {{limit?: number, meetingIds?: number[]|null}} [opts]
+   *   meetingIds: only these meetings (the signed-in account's); null = all
    * @returns {import('../../domain/ports/Retriever').EvidenceHit[]}
    */
-  search(matchExprs, { limit = 24 } = {}) {
+  search(matchExprs, { limit = 24, meetingIds = null } = {}) {
     if (!Array.isArray(matchExprs) || matchExprs.length === 0) return [];
+    if (Array.isArray(meetingIds) && meetingIds.length === 0) return [];
+    const allowed = Array.isArray(meetingIds) ? JSON.stringify(meetingIds) : null;
     const db = this._open();
 
     const stmt = db.prepare(`
@@ -54,6 +57,7 @@ class FtsRetriever {
       FROM chat_fts AS f
       LEFT JOIN meetings_ref AS m ON m.id = f.meeting_id
       WHERE chat_fts MATCH ?
+        AND (? IS NULL OR f.meeting_id IN (SELECT value FROM json_each(?)))
       ORDER BY bm25(chat_fts)
       LIMIT ?
     `);
@@ -62,7 +66,7 @@ class FtsRetriever {
     for (const expr of matchExprs) {
       let rows;
       try {
-        rows = stmt.all(expr, limit);
+        rows = stmt.all(expr, allowed, allowed, limit);
       } catch (err) {
         // Malformed expression (should not happen post-sanitize) — skip it.
         this.logger?.warn('retriever', 'match_failed', { expr: String(expr).slice(0, 120), message: err.message });
@@ -97,9 +101,12 @@ class FtsRetriever {
    * Latest meetings that have summaries, most recent first.
    * Used to offer concrete options when a vague question matches nothing.
    * @param {number} [limit=5]
+   * @param {{meetingIds?: number[]|null}} [opts] null = all meetings
    * @returns {Array<{meetingId:number, meetingDate:string, topic:string}>}
    */
-  recentTopics(limit = 5) {
+  recentTopics(limit = 5, { meetingIds = null } = {}) {
+    if (Array.isArray(meetingIds) && meetingIds.length === 0) return [];
+    const allowed = Array.isArray(meetingIds) ? JSON.stringify(meetingIds) : null;
     const db = this._open();
     try {
       return db
@@ -110,10 +117,11 @@ class FtsRetriever {
           FROM chat_fts AS f
           LEFT JOIN meetings_ref AS m ON m.id = f.meeting_id
           WHERE f.source_table = 'summaries'
+            AND (? IS NULL OR f.meeting_id IN (SELECT value FROM json_each(?)))
           ORDER BY f.meeting_id DESC
           LIMIT ?
         `)
-        .all(limit)
+        .all(allowed, allowed, limit)
         .map((r) => ({
           meetingId: r.meetingId,
           meetingDate: r.meetingDate || '',

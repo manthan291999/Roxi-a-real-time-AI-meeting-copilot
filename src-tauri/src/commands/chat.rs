@@ -1,3 +1,4 @@
+use crate::ports::account_scope::{CurrentAccount, MeetingScope};
 use crate::ports::chat_gateway::ChatGatewayClient;
 use crate::sidecar::chat_events;
 use serde::{Deserialize, Serialize};
@@ -30,6 +31,7 @@ pub struct ChatMessage {
 pub async fn ask_chat(
     app: AppHandle,
     chat: State<'_, Arc<dyn ChatGatewayClient>>,
+    account: State<'_, Arc<dyn CurrentAccount>>,
     question: String,
     thread_id: Option<String>,
     history: Option<Vec<ChatMessage>>,
@@ -51,9 +53,41 @@ pub async fn ask_chat(
         "liveContext": live_context.unwrap_or_default(),
         "mode": mode.unwrap_or_else(|| "rag".into()),
         "webMode": web_mode,
+        // Ask Roxi searches only the meetings this account owns.
+        "scope": scope_json(&account.meeting_scope()),
     });
 
     chat.send(payload.to_string()).map_err(|e| e.to_string())
+}
+
+/// The wire form the chat sidecar reads (`chatbot/src/application/meetingScope.js`).
+fn scope_json(scope: &MeetingScope) -> serde_json::Value {
+    match scope {
+        MeetingScope::Everyone => serde_json::json!({ "kind": "everyone" }),
+        MeetingScope::Account(id) => serde_json::json!({ "kind": "account", "accountId": id }),
+        MeetingScope::Nobody => serde_json::json!({ "kind": "nobody" }),
+    }
+}
+
+#[cfg(test)]
+mod scope_tests {
+    use super::*;
+
+    #[test]
+    fn sends_the_scope_the_sidecar_expects() {
+        assert_eq!(
+            scope_json(&MeetingScope::Everyone),
+            serde_json::json!({ "kind": "everyone" })
+        );
+        assert_eq!(
+            scope_json(&MeetingScope::Account("u1".into())),
+            serde_json::json!({ "kind": "account", "accountId": "u1" })
+        );
+        assert_eq!(
+            scope_json(&MeetingScope::Nobody),
+            serde_json::json!({ "kind": "nobody" })
+        );
+    }
 }
 
 /// Stop the chat sidecar (called when the chat panel closes / app exits).

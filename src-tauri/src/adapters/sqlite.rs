@@ -1,21 +1,29 @@
+use crate::adapters::meeting_scope::apply_meeting_scope;
 use crate::domain::meeting::{
-    ActionItem, Decision, Meeting, MeetingDetails, SuggestedReply, TechnicalAnalysis, TranscriptLine,
+    ActionItem, Decision, Meeting, MeetingDetails, SuggestedReply, TechnicalAnalysis,
+    TranscriptLine,
 };
+use crate::ports::account_scope::CurrentAccount;
 use crate::ports::db::Database;
 use anyhow::Result;
 use rusqlite::Connection;
+use std::sync::Arc;
 use std::time::Duration;
 
-pub struct SqliteDatabase;
+/// History for the UI: only the signed-in account's meetings.
+pub struct SqliteDatabase {
+    account: Arc<dyn CurrentAccount>,
+}
 
 impl SqliteDatabase {
-    pub fn new() -> Self {
-        Self
+    pub fn new(account: Arc<dyn CurrentAccount>) -> Self {
+        Self { account }
     }
 
     fn open_db(&self) -> Result<Connection> {
         let conn = Connection::open(crate::adapters::db_paths::meeting_history_db())?;
         conn.busy_timeout(Duration::from_secs(5))?;
+        apply_meeting_scope(&conn, &self.account.meeting_scope())?;
         Ok(conn)
     }
 }
@@ -23,18 +31,13 @@ impl SqliteDatabase {
 impl Database for SqliteDatabase {
     fn get_meetings(&self) -> Result<Vec<Meeting>> {
         let conn = self.open_db()?;
-        let count: i64 = conn.query_row(
-            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='meetings'",
-            [],
-            |row| row.get(0),
-        )?;
-
-        if count == 0 {
+        if !crate::adapters::sqlite_schema::has_table(&conn, "meetings") {
             return Ok(Vec::new());
         }
 
-        let mut stmt = conn
-            .prepare("SELECT id, start_time, summary, name FROM meetings ORDER BY start_time DESC")?;
+        let mut stmt = conn.prepare(
+            "SELECT id, start_time, summary, name FROM meetings ORDER BY start_time DESC",
+        )?;
         let meeting_iter = stmt.query_map([], |row| {
             Ok(Meeting {
                 id: row.get(0)?,
@@ -85,7 +88,9 @@ impl Database for SqliteDatabase {
             .filter_map(Result::ok)
             .collect();
 
-        let mut stmt = conn.prepare("SELECT description FROM decisions WHERE meeting_id = ?1 ORDER BY timestamp ASC")?;
+        let mut stmt = conn.prepare(
+            "SELECT description FROM decisions WHERE meeting_id = ?1 ORDER BY timestamp ASC",
+        )?;
         let decisions: Vec<Decision> = stmt
             .query_map([meeting_id], |row| {
                 Ok(Decision {
@@ -116,13 +121,11 @@ impl Database for SqliteDatabase {
             .filter_map(Result::ok)
             .collect();
 
-        let mut stmt = conn.prepare("SELECT text FROM suggested_replies WHERE meeting_id = ?1 ORDER BY timestamp ASC")?;
+        let mut stmt = conn.prepare(
+            "SELECT text FROM suggested_replies WHERE meeting_id = ?1 ORDER BY timestamp ASC",
+        )?;
         let suggested_replies: Vec<SuggestedReply> = stmt
-            .query_map([meeting_id], |row| {
-                Ok(SuggestedReply {
-                    text: row.get(0)?,
-                })
-            })?
+            .query_map([meeting_id], |row| Ok(SuggestedReply { text: row.get(0)? }))?
             .filter_map(Result::ok)
             .collect();
 

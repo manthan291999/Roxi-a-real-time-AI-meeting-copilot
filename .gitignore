@@ -53,6 +53,7 @@ chatbot/.env.*
 *.sqlite3
 meeting_history.db
 src-tauri/meeting_history.db
+gateway/trial.json
 
 # =============================================================================
 # Audio Recordings & Debug Dumps
@@ -113,3 +114,16 @@ gateway/qdrant_storage/
 # =============================================================================
 vendor/qdrant/qdrant
 vendor/qdrant/qdrant-*
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+
+# /brag render workspace (only the final clips in src/assets/motion are kept)
+brag-output/
+brag-output-*/
+
+# Generated packaged-app staging (public runtime config, sidecars, and native
+# binaries), cached runtimes, and assembled installers.
+src-tauri/resources-bundle/
+vendor/node/
+/release/

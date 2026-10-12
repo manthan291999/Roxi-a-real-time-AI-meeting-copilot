@@ -30,8 +30,8 @@ impl Agent for RiskDetectorAgent {
     }
 
     async fn run(&self, state: &ChunkState) -> anyhow::Result<ChunkState> {
-        let built = prompt::build(ROLE_CONTRACT, self.name(), state)
-            .with("Speaker", &state.speaker);
+        let built =
+            prompt::build(ROLE_CONTRACT, self.name(), state).with("Speaker", &state.speaker);
 
         let json = self
             .llm
@@ -39,7 +39,7 @@ impl Agent for RiskDetectorAgent {
             .await?;
 
         let mut next = state.clone();
-        
+
         if let Some(risks) = json.get("risks").and_then(|v| v.as_array()) {
             for r in risks {
                 if let Ok(risk) = serde_json::from_value::<Risk>(r.clone()) {
@@ -47,7 +47,7 @@ impl Agent for RiskDetectorAgent {
                 }
             }
         }
-        
+
         Ok(next)
     }
 }

@@ -31,8 +31,8 @@ impl Agent for AnalystAgent {
     }
 
     async fn run(&self, state: &ChunkState) -> anyhow::Result<ChunkState> {
-        let built = prompt::build(ROLE_CONTRACT, self.name(), state)
-            .with("Speaker", &state.speaker);
+        let built =
+            prompt::build(ROLE_CONTRACT, self.name(), state).with("Speaker", &state.speaker);
 
         let json = self
             .llm
@@ -40,7 +40,7 @@ impl Agent for AnalystAgent {
             .await?;
 
         let mut next = state.clone();
-        
+
         if let Some(decisions) = json.get("decisions").and_then(|v| v.as_array()) {
             for d in decisions {
                 if let Ok(decision) = serde_json::from_value::<Decision>(d.clone()) {
@@ -48,7 +48,7 @@ impl Agent for AnalystAgent {
                 }
             }
         }
-        
+
         if let Some(items) = json.get("action_items").and_then(|v| v.as_array()) {
             for i in items {
                 if let Ok(item) = serde_json::from_value::<ActionItem>(i.clone()) {
@@ -56,7 +56,7 @@ impl Agent for AnalystAgent {
                 }
             }
         }
-        
+
         Ok(next)
     }
 }

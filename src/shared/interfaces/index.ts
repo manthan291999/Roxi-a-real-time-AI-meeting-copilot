@@ -6,3 +6,6 @@ export type { ISpeakerRepository } from './ISpeakerRepository';
 export type { IProjectRepository } from './IProjectRepository';
 export type { IDocumentService } from './IDocumentService';
 export type { IUsageRepository } from './IUsageRepository';
+export type { IAccountService } from './IAccountService';
+export type { IFederatedSignInService } from './IFederatedSignInService';
+export type { IBillingService } from './IBillingService';

@@ -13,7 +13,8 @@ import {
   DocumentReady,
   UploadedDocument,
   DocumentDeleted,
-  AudioLevel
+  AudioLevel,
+  TrialStatus
 } from '../types';
 
 export interface ProviderStatus {
@@ -49,6 +50,8 @@ export interface IEventBus {
   onProviderStatus(cb: (status: ProviderStatus) => void): () => void;
   onCircuitBreaker(cb: () => void): () => void;
   onCaptureError(cb: (err: string) => void): () => void;
+  /** The free trial ran out mid-capture; the backend has already stopped it. */
+  onTrialEnded(cb: (status: TrialStatus) => void): () => void;
   onApiHealth(cb: (health: any) => void): () => void;
   onChatReply(cb: (reply: ChatReplyEvent) => void): () => void;
   onChatThinking(cb: (event: ChatThinkingEvent | string) => void): () => void;

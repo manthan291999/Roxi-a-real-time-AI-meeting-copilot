@@ -72,7 +72,7 @@ impl Agent for ResponseAgent {
             .await?;
 
         let mut next = state.clone();
-        
+
         if let Some(resp) = json.get("suggested_response").and_then(|v| v.as_str()) {
             next.suggested_response = Some(resp.to_string());
         }
@@ -80,7 +80,9 @@ impl Agent for ResponseAgent {
             next.suggested_response_type = Some(t.to_string());
         }
         if let Some(items) = json.get("context_items").and_then(|v| v.as_array()) {
-            match serde_json::from_value::<Vec<crate::agents::domain::context_item::ContextItem>>(serde_json::Value::Array(items.clone())) {
+            match serde_json::from_value::<Vec<crate::agents::domain::context_item::ContextItem>>(
+                serde_json::Value::Array(items.clone()),
+            ) {
                 Ok(mut parsed_items) => {
                     for item in &mut parsed_items {
                         item.is_verbatim = item.match_confidence
@@ -93,10 +95,10 @@ impl Agent for ResponseAgent {
                 }
             }
         }
-        
+
         if let Some(bullets_val) = json.get("suggested_bullets").and_then(|v| v.as_array()) {
             match serde_json::from_value::<Vec<crate::agents::domain::chunk_state::ResponseBullet>>(
-                serde_json::Value::Array(bullets_val.clone())
+                serde_json::Value::Array(bullets_val.clone()),
             ) {
                 Ok(parsed) if !parsed.is_empty() => {
                     next.suggested_bullets = Some(parsed);
@@ -107,7 +109,7 @@ impl Agent for ResponseAgent {
                 }
             }
         }
-        
+
         Ok(next)
     }
 }

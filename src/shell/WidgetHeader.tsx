@@ -2,7 +2,8 @@ import React from 'react';
 import { tokens, typeScale } from '../design-system/tokens';
 import { IconButton } from '../design-system/components/IconButton';
 import { LiveBadge } from '../design-system/components/LiveBadge';
-import { SparkleIcon, ClockIcon, GearIcon, LibraryIcon } from '../design-system/icons';
+import { RoxiMark, RoxiWordmark } from '../design-system/components/RoxiMark';
+import { ClockIcon, GearIcon, LibraryIcon } from '../design-system/icons';
 import { StopButton } from '../shared/ui/StopButton';
 import { Spinner } from '../shared/ui/Spinner';
 import { UsagePill } from '../features/usage';
@@ -22,10 +23,12 @@ interface WidgetHeaderProps {
   onSettings?: () => void;
   /** Jumps straight back to the live session — wired to the header's Live/Connecting pill. */
   onGoLive?: () => void;
+  /** Sits before the usage pill, e.g. the free-trial countdown. */
+  trialBadge?: React.ReactNode;
 }
 
 
-export const WidgetHeader: React.FC<WidgetHeaderProps> = ({ isLive, isConnecting, isStopping, sessionId, activeView, onStop, onHistory, onLibrary, onSettings, onGoLive }) => {
+export const WidgetHeader: React.FC<WidgetHeaderProps> = ({ isLive, isConnecting, isStopping, sessionId, activeView, onStop, onHistory, onLibrary, onSettings, onGoLive, trialBadge }) => {
   // The header (and this pill) stays mounted across History/Library too, so
   // clicking it from there should jump back — but not while already on the
   // session view, where it's just a status readout and there's nowhere to go.
@@ -34,18 +37,11 @@ export const WidgetHeader: React.FC<WidgetHeaderProps> = ({ isLive, isConnecting
   return (
     <div className="roxi-header flex items-center justify-between shrink-0" style={{ zIndex: 20, position: 'relative' }}>
       <div className="flex items-center gap-3 min-w-0">
-        <SparkleIcon className="w-5 h-5 shrink-0" />
-        <span
-          className="roxi-header-title-text truncate"
-          style={{
-            color: tokens.paper,
-            fontSize: typeScale.title.fontSize,
-            fontWeight: typeScale.title.fontWeight,
-            letterSpacing: typeScale.title.letterSpacing,
-          }}
-        >
-          Roxi
-        </span>
+        <RoxiMark size={26} className="shrink-0" />
+        <RoxiWordmark
+          className="roxi-header-title-text"
+          style={{ color: tokens.paper, fontSize: typeScale.title.fontSize }}
+        />
       </div>
       <div className="roxi-header-controls flex items-center shrink-0" style={{ zIndex: 20 }}>
         {(isLive || isConnecting) && (
@@ -89,6 +85,7 @@ export const WidgetHeader: React.FC<WidgetHeaderProps> = ({ isLive, isConnecting
         )}
         <IconButton icon={<ClockIcon />} onClick={onHistory} label="History" />
         <IconButton icon={<LibraryIcon />} onClick={onLibrary} label="Library" />
+        {trialBadge}
         <UsagePill sessionId={sessionId ?? null} isLive={isLive} />
         <IconButton icon={<GearIcon />} onClick={onSettings} label="Settings" active={activeView === 'settings'} />
       </div>

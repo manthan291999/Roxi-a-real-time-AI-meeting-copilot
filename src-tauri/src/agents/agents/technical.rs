@@ -27,8 +27,8 @@ impl Agent for TechnicalAgent {
     }
 
     async fn run(&self, state: &ChunkState) -> anyhow::Result<ChunkState> {
-        let built = prompt::build(ROLE_CONTRACT, self.name(), state)
-            .with("Speaker", &state.speaker);
+        let built =
+            prompt::build(ROLE_CONTRACT, self.name(), state).with("Speaker", &state.speaker);
 
         let json = self
             .llm

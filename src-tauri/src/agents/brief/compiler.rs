@@ -78,9 +78,15 @@ pub fn compile(
     // Sorted here rather than in SQL because the ordering is part of the prefix
     // contract, and a query's ORDER BY is too far from the invariant to defend.
     let mut glossary = inputs.glossary.clone();
-    glossary.sort_by(|a, b| a.term.cmp(&b.term).then_with(|| a.definition.cmp(&b.definition)));
+    glossary.sort_by(|a, b| {
+        a.term
+            .cmp(&b.term)
+            .then_with(|| a.definition.cmp(&b.definition))
+    });
     glossary.dedup_by(|a, b| a.term == b.term);
-    let (kept, cut) = take_within(&glossary, budget.glossary, |t| render_term(&t.term, &t.definition));
+    let (kept, cut) = take_within(&glossary, budget.glossary, |t| {
+        render_term(&t.term, &t.definition)
+    });
     if !kept.is_empty() {
         out.push_str("\n\n## Glossary\n");
         for t in &kept {
@@ -90,7 +96,9 @@ pub fn compile(
     included.glossary_terms = kept.len();
     if cut > 0 {
         dropped.glossary_terms = cut;
-        dropped.reasons.push(format!("{cut} glossary terms: over budget"));
+        dropped
+            .reasons
+            .push(format!("{cut} glossary terms: over budget"));
     }
 
     // --- roster ---------------------------------------------------------------
@@ -111,7 +119,9 @@ pub fn compile(
     included.participants = kept.len();
     if cut > 0 {
         dropped.participants = cut;
-        dropped.reasons.push(format!("{cut} participants: over budget"));
+        dropped
+            .reasons
+            .push(format!("{cut} participants: over budget"));
     }
 
     // --- prior meetings (caller-ranked newest first) ---------------------------
@@ -124,7 +134,9 @@ pub fn compile(
         }
     }
     if cut > 0 {
-        dropped.reasons.push(format!("{cut} older meetings: over budget"));
+        dropped
+            .reasons
+            .push(format!("{cut} older meetings: over budget"));
     }
 
     // --- open items -----------------------------------------------------------
@@ -145,7 +157,9 @@ pub fn compile(
     included.open_items = kept.len();
     if cut > 0 {
         dropped.open_items = cut;
-        dropped.reasons.push(format!("{cut} open items: over budget"));
+        dropped
+            .reasons
+            .push(format!("{cut} open items: over budget"));
     }
 
     // --- documents (caller-ranked best first) ----------------------------------
@@ -158,7 +172,9 @@ pub fn compile(
         }
     }
     if cut > 0 {
-        dropped.reasons.push(format!("{cut} document chunks: over budget"));
+        dropped
+            .reasons
+            .push(format!("{cut} document chunks: over budget"));
     }
 
     out.push('\n');
@@ -225,7 +241,12 @@ fn render_digest(m: &MeetingDigest) -> String {
 
 fn render_open_item(item: &OpenItem) -> String {
     match non_empty(item.owner.as_deref()) {
-        Some(owner) => format!("- [{}] {} — {}\n", item.kind.label(), item.text.trim(), owner),
+        Some(owner) => format!(
+            "- [{}] {} — {}\n",
+            item.kind.label(),
+            item.text.trim(),
+            owner
+        ),
         None => format!("- [{}] {}\n", item.kind.label(), item.text.trim()),
     }
 }
@@ -263,13 +284,28 @@ mod tests {
             user_context: Some("Weekly sync with the client about the SOW.".into()),
             user_role: Some("Technical Lead".into()),
             glossary: vec![
-                GlossaryTerm { term: "SOW".into(), definition: "Statement of Work".into() },
-                GlossaryTerm { term: "BlackHole".into(), definition: "macOS loopback driver".into() },
-                GlossaryTerm { term: "DER".into(), definition: "Diarization Error Rate".into() },
+                GlossaryTerm {
+                    term: "SOW".into(),
+                    definition: "Statement of Work".into(),
+                },
+                GlossaryTerm {
+                    term: "BlackHole".into(),
+                    definition: "macOS loopback driver".into(),
+                },
+                GlossaryTerm {
+                    term: "DER".into(),
+                    definition: "Diarization Error Rate".into(),
+                },
             ],
             roster: vec![
-                Participant { name: "Priya".into(), role: Some("Client PM".into()) },
-                Participant { name: "Alex".into(), role: None },
+                Participant {
+                    name: "Priya".into(),
+                    role: Some("Client PM".into()),
+                },
+                Participant {
+                    name: "Alex".into(),
+                    role: None,
+                },
             ],
             prior_meetings: vec![
                 MeetingDigest {
@@ -340,7 +376,9 @@ mod tests {
             compile(ROLE, &fixture_inputs(), &Budget::default())
                 .unwrap()
                 .prefix_hash,
-            compile(ROLE, &shuffled, &Budget::default()).unwrap().prefix_hash
+            compile(ROLE, &shuffled, &Budget::default())
+                .unwrap()
+                .prefix_hash
         );
     }
 
@@ -428,8 +466,18 @@ mod tests {
     #[test]
     fn different_agents_get_different_prefixes() {
         let inputs = fixture_inputs();
-        let a = compile("You are the Explanation Agent.", &inputs, &Budget::default()).unwrap();
-        let b = compile("You are the Risk Detector Agent.", &inputs, &Budget::default()).unwrap();
+        let a = compile(
+            "You are the Explanation Agent.",
+            &inputs,
+            &Budget::default(),
+        )
+        .unwrap();
+        let b = compile(
+            "You are the Risk Detector Agent.",
+            &inputs,
+            &Budget::default(),
+        )
+        .unwrap();
         assert_ne!(a.prefix_hash, b.prefix_hash);
     }
 }

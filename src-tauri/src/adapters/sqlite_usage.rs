@@ -55,7 +55,15 @@ fn query_usage(conn: &Connection, session_id: u64) -> Result<SessionUsage> {
                 MIN(ts)
          FROM llm_requests WHERE session_id = ?1",
         [session_id_i64],
-        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+        |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+            ))
+        },
     )?;
 
     let mut stmt = conn.prepare(

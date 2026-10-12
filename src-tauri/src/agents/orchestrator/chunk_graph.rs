@@ -74,29 +74,37 @@ async fn run_agent_timed(agent: Arc<dyn Agent>, state: ChunkState) -> (ChunkStat
 pub struct ChunkGraph {
     // Stage 1 — concurrent pair
     context_manager: Arc<dyn Agent>,
-    explanation:     Arc<dyn Agent>,
+    explanation: Arc<dyn Agent>,
     // Stage 2 — conditional (selected by routing::decide)
-    technical:       Arc<dyn Agent>,
-    risk:            Arc<dyn Agent>,
-    analyst:         Arc<dyn Agent>,
+    technical: Arc<dyn Agent>,
+    risk: Arc<dyn Agent>,
+    analyst: Arc<dyn Agent>,
     // Stage 3 — always sequential
-    response_agent:  Arc<dyn Agent>,
+    response_agent: Arc<dyn Agent>,
     /// The compiled prefixes for whatever captures are live. Shared with the
     /// brief use case, which fills it at `start_capture`.
-    briefs:          Arc<BriefStore>,
+    briefs: Arc<BriefStore>,
 }
 
 impl ChunkGraph {
     pub fn new(
         context_manager: Arc<dyn Agent>,
-        explanation:     Arc<dyn Agent>,
-        technical:       Arc<dyn Agent>,
-        risk:            Arc<dyn Agent>,
-        analyst:         Arc<dyn Agent>,
-        response_agent:  Arc<dyn Agent>,
-        briefs:          Arc<BriefStore>,
+        explanation: Arc<dyn Agent>,
+        technical: Arc<dyn Agent>,
+        risk: Arc<dyn Agent>,
+        analyst: Arc<dyn Agent>,
+        response_agent: Arc<dyn Agent>,
+        briefs: Arc<BriefStore>,
     ) -> Self {
-        Self { context_manager, explanation, technical, risk, analyst, response_agent, briefs }
+        Self {
+            context_manager,
+            explanation,
+            technical,
+            risk,
+            analyst,
+            response_agent,
+            briefs,
+        }
     }
 
     /// Every agent this graph dispatches, for the dev-build contract check.
@@ -194,11 +202,11 @@ impl ChunkGraph {
         // merging them would double up anything already present. It also does not
         // carry `complexity` at all (Complexity has no "unset" variant to guard on),
         // which is exactly the field stage 1 exists to produce.
-        state.current_topic        = ctx_state.current_topic;
+        state.current_topic = ctx_state.current_topic;
         state.conversation_summary = ctx_state.conversation_summary;
-        state.new_technical_terms  = ctx_state.new_technical_terms;
-        state.complexity           = ctx_state.complexity;
-        state.explanation          = expl_state.explanation;
+        state.new_technical_terms = ctx_state.new_technical_terms;
+        state.complexity = ctx_state.complexity;
+        state.explanation = expl_state.explanation;
 
         let mut trace = PipelineTrace::new(chunk, speaker, &state.complexity);
         trace.add_span("context_manager", 1, ctx_ms, &ctx_status);
@@ -240,12 +248,12 @@ impl ChunkGraph {
             None
         } else {
             Some(Box::pin(async move {
-                let futs = detached_agents.into_iter().map(|(agent, name, seeded)| {
-                    async move {
+                let futs = detached_agents
+                    .into_iter()
+                    .map(|(agent, name, seeded)| async move {
                         let (st, ms, status) = run_agent_timed(agent, seeded).await;
                         (st, name, ms, status)
-                    }
-                });
+                    });
                 let results = futures::future::join_all(futs).await;
 
                 let mut out = ChunkState::default();
@@ -290,9 +298,9 @@ impl ChunkGraph {
                 self.seed_for(&self.response_agent, &state),
             )
             .await;
-            state.suggested_response      = resp_state.suggested_response;
+            state.suggested_response = resp_state.suggested_response;
             state.suggested_response_type = resp_state.suggested_response_type;
-            state.context_items           = resp_state.context_items;
+            state.context_items = resp_state.context_items;
             trace.add_span("response_agent", 3, resp_ms, &resp_status);
         } else {
             trace.add_span("response_agent", 3, 0, "SKIPPED_LOW_COMPLEXITY");

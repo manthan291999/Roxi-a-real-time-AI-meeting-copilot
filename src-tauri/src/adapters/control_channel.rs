@@ -40,8 +40,12 @@ impl ControlSender for PipeControlChannel {
             .writer
             .lock()
             .map_err(|_| anyhow::anyhow!("Control writer mutex poisoned"))?;
-        guard.write_all(&header).context("Failed to write control header")?;
-        guard.write_all(&payload).context("Failed to write control payload")?;
+        guard
+            .write_all(&header)
+            .context("Failed to write control header")?;
+        guard
+            .write_all(&payload)
+            .context("Failed to write control payload")?;
         guard.flush().context("Failed to flush control frame")?;
         Ok(())
     }

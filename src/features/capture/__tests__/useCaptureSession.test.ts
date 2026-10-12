@@ -136,3 +136,32 @@ describe('useCaptureSession', () => {
     expect(result.current.sessionId).toBeNull();
   });
 });
+
+describe('useCaptureSession trial', () => {
+  it('returns to idle without an error when the trial ends mid-capture', async () => {
+    let statusCb: ((status: ProviderStatus) => void) | undefined;
+    let trialEnded: (() => void) | undefined;
+    const eventBus = createFakeEventBus({
+      onProviderStatus: (cb) => {
+        statusCb = cb;
+        return () => {};
+      },
+      onTrialEnded: (cb) => {
+        trialEnded = () => cb({ plan: 'free', unlimited: false, admin: false, limitSeconds: 300, usedSeconds: 300, remainingSeconds: 0 });
+        return () => {};
+      },
+    });
+    const { result } = renderWithServices(createFakeCaptureService(), eventBus);
+
+    await act(async () => {
+      await result.current.startCapture();
+    });
+    act(() => statusCb?.({ provider: 'assemblyai', state: 'active' }));
+    await waitFor(() => expect(result.current.status).toBe('live'));
+
+    act(() => trialEnded?.());
+    await waitFor(() => expect(result.current.status).toBe('idle'));
+    expect(result.current.sessionId).toBeNull();
+    expect(result.current.lastError).toBeNull();
+  });
+});

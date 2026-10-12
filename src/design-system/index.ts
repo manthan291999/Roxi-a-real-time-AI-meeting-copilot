@@ -19,6 +19,8 @@ export * from './components/ContextLegend';
 export * from './components/SectionLabel';
 export * from './components/Tooltip';
 export * from './components/Toggle';
+export * from './components/MotionClip';
+export * from './components/RoxiMark';
 
 /** Renders the light markdown model answers come back as. */
 export * from './markdown/Markdown';

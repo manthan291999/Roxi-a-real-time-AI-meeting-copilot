@@ -60,9 +60,9 @@ impl Agent for ComplexityAnalyzerAgent {
             .and_then(|v| v.as_str())
             .unwrap_or("medium")
         {
-            "low"  => Complexity::Low,
+            "low" => Complexity::Low,
             "high" => Complexity::High,
-            _      => Complexity::Medium,
+            _ => Complexity::Medium,
         };
 
         let mut next = state.clone();

@@ -57,6 +57,16 @@ impl QdrantVectorStore {
             current_dir.to_path_buf()
         };
 
+        // The packaged app ships its own binary (see bundle_env).
+        if let Some(bundled) = std::env::var("QDRANT_BIN")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .map(std::path::PathBuf::from)
+            .filter(|p| p.is_file())
+        {
+            return Some(bundled);
+        }
+
         let target_suffix = format!("{}-apple-darwin", std::env::consts::ARCH);
         let candidates = [
             repo_root.join("vendor").join("qdrant").join("qdrant"),
@@ -97,7 +107,9 @@ impl QdrantVectorStore {
             }
         }
 
-        Err(anyhow!("Qdrant sidecar failed to become healthy within 7.5 seconds"))
+        Err(anyhow!(
+            "Qdrant sidecar failed to become healthy within 7.5 seconds"
+        ))
     }
 
     /// Idempotent collection + payload-index bootstrap (Meeting Semantic
@@ -228,13 +240,26 @@ impl VectorStore for QdrantVectorStore {
             .env("QDRANT__SERVICE__HOST", "127.0.0.1")
             .env("QDRANT__SERVICE__PORT", "6333")
             .env("QDRANT__STORAGE__STORAGE_PATH", &qdrant_storage_dir)
+            // Qdrant writes snapshots relative to its working directory, which
+            // is `/` (read-only) for an app launched from Finder.
+            .env(
+                "QDRANT__STORAGE__SNAPSHOTS_PATH",
+                qdrant_storage_dir.join("snapshots"),
+            )
+            .current_dir(&qdrant_storage_dir)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|e| anyhow!("Failed to spawn Qdrant sidecar at {}: {}", qdrant_path.display(), e))?;
+            .map_err(|e| {
+                anyhow!(
+                    "Failed to spawn Qdrant sidecar at {}: {}",
+                    qdrant_path.display(),
+                    e
+                )
+            })?;
 
         self.is_running.store(true, Ordering::SeqCst);
-        
+
         if let Ok(mut child_guard) = self.child_tx.lock() {
             *child_guard = Some(child);
         }
@@ -255,7 +280,7 @@ impl VectorStore for QdrantVectorStore {
                 let _ = child.kill();
             }
         }
-        
+
         self.is_running.store(false, Ordering::SeqCst);
         Ok(())
     }

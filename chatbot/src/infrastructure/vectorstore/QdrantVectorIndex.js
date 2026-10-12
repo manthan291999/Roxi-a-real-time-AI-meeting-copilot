@@ -208,14 +208,23 @@ class QdrantVectorIndex {
 }
 
 /**
- * Only `projectId` is wired today — the one scope EvidenceSource's contract
- * currently names. Unscoped (null/omitted) means search everything, matching
- * how DocumentEvidenceSource treats an absent projectId.
+ * Unscoped (null/omitted) means search everything, matching how
+ * DocumentEvidenceSource treats an absent projectId.
+ *
+ * `meetingIds` limits hits to the signed-in account's meetings. Episodic
+ * points carry one `meeting_id`; semantic (glossary) points carry a
+ * `meeting_ids` array, and `match.any` matches either shape.
  * @private
  */
-function toQdrantFilter({ projectId } = {}) {
-  if (projectId === null || projectId === undefined) return null;
-  return { must: [{ key: 'project_id', match: { value: projectId } }] };
+function toQdrantFilter({ projectId, meetingIds, meetingIdsKey = 'meeting_id' } = {}) {
+  const must = [];
+  if (projectId !== null && projectId !== undefined) {
+    must.push({ key: 'project_id', match: { value: projectId } });
+  }
+  if (Array.isArray(meetingIds)) {
+    must.push({ key: meetingIdsKey, match: { any: meetingIds } });
+  }
+  return must.length > 0 ? { must } : null;
 }
 
-module.exports = { QdrantVectorIndex };
+module.exports = { QdrantVectorIndex, toQdrantFilter };

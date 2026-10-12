@@ -70,3 +70,12 @@ pub fn qdrant_storage_dir() -> PathBuf {
         repo_root().join("gateway").join("qdrant_storage")
     })
 }
+
+/// Seconds of free-trial capture this Mac has used. A small JSON file rather
+/// than a table: nothing else reads it, and it has to exist before any
+/// database has been created.
+pub fn trial_ledger() -> PathBuf {
+    from_env_or("ROXI_TRIAL_FILE", || {
+        repo_root().join("gateway").join("trial.json")
+    })
+}

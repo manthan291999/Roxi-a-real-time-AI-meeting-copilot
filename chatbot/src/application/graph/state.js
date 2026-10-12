@@ -20,6 +20,12 @@ const GraphState = Annotation.Root({
   /** @type {string} recent lines from the meeting currently being recorded, if any */
   liveContext: Annotation({ reducer: lastWrite, default: () => '' }),
   /**
+   * @type {{all: boolean, ids: number[]}} which past meetings retrieval may
+   * touch: everything, or only the signed-in account's (see meetingScope.js).
+   * Set by AnswerQuestionUseCase on every turn, never by a node.
+   */
+  meetingScope: Annotation({ reducer: lastWrite, default: () => ({ all: true, ids: [] }) }),
+  /**
    * @type {'rag'|'direct'} which entry path this turn takes.
    *
    * Set per question by the caller, never by a node. `lastWrite` ignores an

@@ -175,3 +175,28 @@ test('repositories never throw on bad input', () => {
   });
   s.close('', 'ended');
 });
+
+test('a meeting records the account that owns it, or none in local-only mode', () => {
+  const owned = startSession(':memory:', 'ctx', {}, null, 'Owned', 'user-123');
+  assert.strictEqual(owned.db.prepare('SELECT account_id FROM meetings WHERE id = ?').get(owned.meetingId).account_id, 'user-123');
+  owned.close('', 'ended');
+
+  const local = startSession(':memory:', 'ctx');
+  assert.strictEqual(local.db.prepare('SELECT account_id FROM meetings WHERE id = ?').get(local.meetingId).account_id, null);
+  local.close('', 'ended');
+});
+
+test('M011 tolerates an owner column the Rust host already added', () => {
+  const Database = require('better-sqlite3');
+  const { runMigrations } = require('../db/migrate.js');
+  const db = new Database(':memory:');
+  // A database at v10 whose meetings table Rust has already given account_id.
+  const { db: seeded } = open(':memory:');
+  db.exec(seeded.prepare("SELECT group_concat(sql, ';') AS s FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != 'schema_version'").get().s);
+  db.exec('CREATE TABLE schema_version (version INTEGER PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP, description TEXT)');
+  db.prepare('INSERT INTO schema_version (version, description) VALUES (10, ?)').run('seeded');
+  assert.ok(db.prepare('PRAGMA table_info(meetings)').all().some((c) => c.name === 'account_id'));
+
+  assert.strictEqual(runMigrations(db), 11);
+  assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'idx_meetings_account'").get());
+});

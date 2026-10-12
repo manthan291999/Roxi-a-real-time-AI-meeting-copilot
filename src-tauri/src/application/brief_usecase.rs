@@ -246,9 +246,11 @@ impl BriefUseCase {
                         return extracts;
                     }
                     Err(e) => {
-                        tracing::warn!("[brief] failed to fetch explicitly selected documents: {e:#}");
+                        tracing::warn!(
+                            "[brief] failed to fetch explicitly selected documents: {e:#}"
+                        );
                         // Fall through to embedding search or return empty?
-                        // If explicit fetch failed, embedding search might fail too. 
+                        // If explicit fetch failed, embedding search might fail too.
                         // But let's fallback to embedding just in case, or just return empty.
                         return Vec::new();
                     }

@@ -319,7 +319,7 @@ fn capture_to_sink_internal(
     let mixer_handle = std::thread::spawn(move || {
         let mut loopback_buf = VecDeque::new();
         let mut mic_buf = VecDeque::new();
-        
+
         while mixer_running.load(Ordering::SeqCst) {
             // PERF FIX #3: Block on the primary channel with a timeout instead of
             // spinning with sleep(20ms). This removes the 20ms artificial latency
@@ -338,7 +338,7 @@ fn capture_to_sink_internal(
             while let Ok(chunk) = mic_rx.try_recv() {
                 mic_buf.extend(chunk);
             }
-            
+
             // Drift guard: the two devices run on independent hardware clocks,
             // so one creeps ahead over a long meeting. Cap each buffer so a
             // lead costs one small discontinuity instead of growing latency.
@@ -376,13 +376,13 @@ fn capture_to_sink_internal(
                 for _ in 0..n {
                     let l = loopback_buf.pop_front().unwrap_or(0);
                     let m = mic_buf.pop_front().unwrap_or(0);
-                    
+
                     // Sum to mono: combine mic + loopback into single channel
                     let sum = (l as i32) + (m as i32);
                     let clamped = sum.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
                     mixed.push(clamped);
                 }
-                
+
                 if let Ok(mut s) = mixer_sink.lock() {
                     if let Err(e) = s.write_samples(&mixed) {
                         warn!("Sink write error: {}", e);
@@ -438,7 +438,7 @@ fn capture_to_sink_internal(
     // Stop streams and finalize sink.
     drop(loopback_stream);
     drop(mic_stream);
-    
+
     // Wait for mixer thread to finish sending remaining chunks
     let _ = mixer_handle.join();
 
@@ -449,10 +449,7 @@ fn capture_to_sink_internal(
         s.finalize().context("Failed to finalize sink")?;
     }
 
-    info!(
-        "✅ Captured {} samples ({:.2}s)",
-        total, duration_captured
-    );
+    info!("✅ Captured {} samples ({:.2}s)", total, duration_captured);
 
     Ok(())
 }
@@ -535,11 +532,14 @@ fn setup_mic_stream(
 
     let needs_resample = source_sample_rate != target_sample_rate;
     let resampler = if needs_resample {
-        Some(Arc::new(Mutex::new(Resampler::new(
-            source_sample_rate,
-            target_sample_rate,
-            source_channels as usize,
-        ).ok()?)))
+        Some(Arc::new(Mutex::new(
+            Resampler::new(
+                source_sample_rate,
+                target_sample_rate,
+                source_channels as usize,
+            )
+            .ok()?,
+        )))
     } else {
         None
     };
@@ -554,26 +554,47 @@ fn setup_mic_stream(
     let stream = match sample_format {
         SampleFormat::F32 => {
             let running = running.clone();
-            device.build_input_stream(
-                &stream_config,
-                move |data: &[f32], _| {
-                    process_and_send(data, &tx, &resampler, &total, source_channels as usize, target_channels as usize, &running);
-                },
-                err_callback,
-                None,
-            ).ok()?
+            device
+                .build_input_stream(
+                    &stream_config,
+                    move |data: &[f32], _| {
+                        process_and_send(
+                            data,
+                            &tx,
+                            &resampler,
+                            &total,
+                            source_channels as usize,
+                            target_channels as usize,
+                            &running,
+                        );
+                    },
+                    err_callback,
+                    None,
+                )
+                .ok()?
         }
         SampleFormat::I16 => {
             let running = running.clone();
-            device.build_input_stream(
-                &stream_config,
-                move |data: &[i16], _| {
-                    let float_data: Vec<f32> = data.iter().map(|&s| s as f32 / i16::MAX as f32).collect();
-                    process_and_send(&float_data, &tx, &resampler, &total, source_channels as usize, target_channels as usize, &running);
-                },
-                err_callback,
-                None,
-            ).ok()?
+            device
+                .build_input_stream(
+                    &stream_config,
+                    move |data: &[i16], _| {
+                        let float_data: Vec<f32> =
+                            data.iter().map(|&s| s as f32 / i16::MAX as f32).collect();
+                        process_and_send(
+                            &float_data,
+                            &tx,
+                            &resampler,
+                            &total,
+                            source_channels as usize,
+                            target_channels as usize,
+                            &running,
+                        );
+                    },
+                    err_callback,
+                    None,
+                )
+                .ok()?
         }
         _ => {
             warn!("Unsupported mic sample format: {:?}", sample_format);

@@ -85,6 +85,8 @@ function load({ env = process.env, argv = process.argv } = {}) {
     stt: Object.freeze({
       assemblyaiKey,
       speechmaticsKey,
+      roxiApiUrl: (resolved.ROXI_API_URL || '').replace(/\/$/, ''),
+      roxiAccessToken: resolved.ROXI_ACCESS_TOKEN || null,
       /** Array of supported language codes for Automatic Language Detection (ALD) */
       languages: resolved.STT_LANGUAGES 
         ? resolved.STT_LANGUAGES.split(',').map((s) => s.trim())
@@ -142,6 +144,13 @@ function load({ env = process.env, argv = process.argv } = {}) {
        * the row that the id resolves to.
        */
       projectId: toPositiveInt(readArg(argv, '--project-id')),
+
+      /**
+       * The signed-in account that owns this meeting (a Supabase user id).
+       * Absent in local-only mode, where the meeting belongs to no account
+       * and every meeting on this Mac is visible.
+       */
+      accountId: readArg(argv, '--account-id') || null,
       projectCode: readArg(argv, '--project-code') || null,
     }),
   });
@@ -153,8 +162,9 @@ function load({ env = process.env, argv = process.argv } = {}) {
  */
 function validate(config) {
   const missing = [];
-  if (!config.stt.assemblyaiKey && !config.stt.speechmaticsKey) {
-    missing.push('ASSEMBLYAI_API_KEY or SPEECHMATICS_API_KEY');
+  const serverBacked = config.stt.roxiApiUrl && config.stt.roxiAccessToken;
+  if (!config.stt.assemblyaiKey && !config.stt.speechmaticsKey && !serverBacked) {
+    missing.push('Roxi sign-in or a development STT provider key');
   }
   return missing.length > 0 ? { ok: false, missing } : { ok: true };
 }

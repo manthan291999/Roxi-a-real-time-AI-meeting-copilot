@@ -219,6 +219,39 @@
 
   /* Chrome that belongs to no token: the scrollbar. */
   --t-scrollbar-thumb: rgba(0, 0, 0, 0.22);
+
+  /* ---- Sign-in brand panel ---------------------------------------------
+     The one dark surface in a light-only palette, shown only before the app
+     opens (features/auth/layout/BrandPanel.tsx). It is opaque on purpose: it
+     is a brand ground, not glass, so the opacity budget does not apply and
+     the text on it is measured against --t-brand-ink alone.
+     White on #15133B is 16:1; --t-brand-text-mute (74% white) is ~10:1. */
+  --t-brand-ink: #15133B;
+  --t-brand-text: #FFFFFF;
+  --t-brand-text-mute: rgba(255, 255, 255, 0.74);
+  --t-brand-text-dim: rgba(255, 255, 255, 0.60);
+  --t-brand-accent: #A5B4FC;
+  --t-brand-surface: rgba(255, 255, 255, 0.06);
+  --t-brand-line: rgba(255, 255, 255, 0.12);
+  --t-brand-orbit: rgba(165, 180, 252, 0.16);
+  --t-brand-live: #F87171;
+  /* The three sample-card tags, echoing explanation / decision / risk. */
+  --t-brand-meaning: #C7D2FE;
+  --t-brand-meaning-bg: rgba(165, 180, 252, 0.16);
+  --t-brand-action: #A7F3D0;
+  --t-brand-action-bg: rgba(110, 231, 183, 0.14);
+  --t-brand-risk: #FDE68A;
+  --t-brand-risk-bg: rgba(252, 211, 77, 0.14);
+  --t-brand-mark-bevel: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  /* The Roxi mark tile (RoxiMark, app icon): top-lit indigo. Matches
+     src/assets/brand/roxi-app-icon.svg, so change both together. */
+  --t-brand-mark-top: #5A52E8;
+  --t-brand-mark-bottom: #3730A3;
+
+  /* Primary button: its hover step, its depth, and the text on its fill. */
+  --t-signal-strong: #312E81;
+  --t-signal-bevel: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 1px 2px rgba(67, 56, 202, 0.30);
+  --t-on-signal: #FFFFFF;
 }
 
 /* Without backdrop-filter there is no brightness() to guarantee legibility,
@@ -319,7 +352,7 @@
 /* Below ~460px of shell width the header can no longer afford the wordmark
    AND the full Live/Connecting pill text AND four icon buttons without
    crowding hit targets — so the least-important label (the wordmark repeats
-   information already carried by the sparkle icon) yields first. */
+   information already carried by the Roxi mark) yields first. */
 @container roxi-shell (max-width: 460px) {
   .roxi-header-title-text {
     display: none;
@@ -397,6 +430,23 @@
   }
 }
 
+/* Sign-in split (features/auth/layout/AuthLayout.tsx). The brand panel needs
+   ~440px and the form column ~420px; below their sum the panel yields and a
+   compact lockup takes its place above the form. */
+.auth-compact-brand {
+  display: none;
+}
+
+@container roxi-shell (max-width: 860px) {
+  .auth-brand-panel {
+    display: none;
+  }
+
+  .auth-compact-brand {
+    display: flex;
+  }
+}
+
 body {
   background-color: transparent; /* Needed for Tauri transparent windows */
   color: var(--t-paper);
@@ -415,4 +465,43 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--t-scrollbar-thumb);
   border-radius: 4px;
+}
+
+/* ── Split view: list column + content pane (History, Settings) ──────────
+   Two columns while the shell has room; at 720px and below it becomes one
+   column that swaps between the list and the content, and the content's
+   Back button appears. `data-view` is set by the owning pane, and
+   `--split-list-width` lets each pane size its own list column. */
+.roxi-split {
+  display: grid;
+  grid-template-columns: var(--split-list-width, 300px) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+.roxi-split-list {
+  min-height: 0;
+  border-right: 1px solid var(--t-hairline-soft);
+}
+.roxi-split-content {
+  min-width: 0;
+  min-height: 0;
+}
+.roxi-split-back {
+  display: none;
+}
+
+@container roxi-shell (max-width: 720px) {
+  .roxi-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .roxi-split-list {
+    border-right: none;
+  }
+  .roxi-split[data-view="content"] .roxi-split-list,
+  .roxi-split[data-view="list"] .roxi-split-content {
+    display: none;
+  }
+  .roxi-split-back {
+    display: inline-flex;
+  }
 }

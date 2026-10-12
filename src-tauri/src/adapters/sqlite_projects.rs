@@ -1,23 +1,30 @@
 //! `ProjectRepository` over `meeting_history.db`.
 
 use crate::adapters::db_paths;
+use crate::adapters::meeting_scope::apply_meeting_scope;
 use crate::adapters::sqlite_schema::{ensure_projects, meetings_are_project_scoped};
 use crate::domain::project::{
     derive_code, Project, ProjectId, ProjectRef, ProjectSelection, DEFAULT_PROJECT_CODE,
 };
+use crate::ports::account_scope::CurrentAccount;
 use crate::ports::project_repository::ProjectRepository;
 use anyhow::{anyhow, Result};
 use rusqlite::{Connection, OptionalExtension};
+use std::sync::Arc;
 use std::time::Duration;
 
 /// How many `-2`, `-3`… suffixes to try before giving up on a derived code.
 const MAX_CODE_ATTEMPTS: u32 = 50;
 
-pub struct SqliteProjectRepository;
+/// Projects are shared by every account on this Mac; the meeting counts and
+/// "last used" dates they show are the signed-in account's own.
+pub struct SqliteProjectRepository {
+    account: Arc<dyn CurrentAccount>,
+}
 
 impl SqliteProjectRepository {
-    pub fn new() -> Self {
-        Self
+    pub fn new(account: Arc<dyn CurrentAccount>) -> Self {
+        Self { account }
     }
 
     fn open(&self) -> Result<Connection> {
@@ -26,6 +33,7 @@ impl SqliteProjectRepository {
         // sets a timeout for the same reason.
         conn.busy_timeout(Duration::from_secs(5))?;
         ensure_projects(&conn)?;
+        apply_meeting_scope(&conn, &self.account.meeting_scope())?;
         Ok(conn)
     }
 
@@ -51,7 +59,9 @@ impl SqliteProjectRepository {
                 return Ok(candidate);
             }
         }
-        Err(anyhow!("could not derive a free project code from '{name}'"))
+        Err(anyhow!(
+            "could not derive a free project code from '{name}'"
+        ))
     }
 
     fn by_name(conn: &Connection, name: &str) -> Result<Option<ProjectRef>> {

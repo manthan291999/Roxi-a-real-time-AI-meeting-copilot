@@ -88,7 +88,10 @@ impl OpenAiAdapter {
             .map_err(|e| anyhow!("openai response unreadable: {e}"))?;
 
         if !status.is_success() {
-            return Err(anyhow!("openai returned {status}: {}", first_chars(&payload, 300)));
+            return Err(anyhow!(
+                "openai returned {status}: {}",
+                first_chars(&payload, 300)
+            ));
         }
 
         let parsed: ChatResponse = serde_json::from_str(&payload)

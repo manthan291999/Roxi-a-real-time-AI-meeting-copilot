@@ -1,11 +1,13 @@
-use tauri::{AppHandle, Emitter, Manager};
-use super::events::{AudioLevelPayload, SidecarEvent, TranscriptPayload, ExplanationPayload, ResponsePayload};
+use super::events::{
+    AudioLevelPayload, ExplanationPayload, ResponsePayload, SidecarEvent, TranscriptPayload,
+};
 use super::persistence;
 use super::pipeline_slots;
 use crate::agents::orchestrator::chunk_graph::ChunkGraph;
 use crate::application::capture_usecase::CaptureUseCase;
 use crate::application::session_registry::SessionRegistry;
 use std::sync::Arc;
+use tauri::{AppHandle, Emitter, Manager};
 
 /// Ask the gateway to persist something. Best-effort: if no session is running,
 /// or the pipe rejects the write, the UI is unaffected.
@@ -38,7 +40,15 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                 // so it must reach the webview like any other partial.
                 if let Some(t) = event.text {
                     let s = event.speaker.unwrap_or_else(|| "Speaker A".to_string());
-                    if let Err(e) = app.emit("transcript_partial", TranscriptPayload { text: t, speaker: s, stt_label: event.stt_label, turn_order: None }) {
+                    if let Err(e) = app.emit(
+                        "transcript_partial",
+                        TranscriptPayload {
+                            text: t,
+                            speaker: s,
+                            stt_label: event.stt_label,
+                            turn_order: None,
+                        },
+                    ) {
                         // Was `let _ =`. A partial vanishing between here and the
                         // webview looks exactly like an STT problem from the UI,
                         // so it needs to be visible in the log.
@@ -85,7 +95,15 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                 if let Some(t) = event.text {
                     let s = event.speaker.unwrap_or_else(|| "Speaker A".to_string());
                     // 1. Emit the final transcript instantly to the UI — never blocked by LLM
-                    let _ = app.emit("transcript_final", TranscriptPayload { text: t.clone(), speaker: s.clone(), stt_label: event.stt_label, turn_order: event.turn_order });
+                    let _ = app.emit(
+                        "transcript_final",
+                        TranscriptPayload {
+                            text: t.clone(),
+                            speaker: s.clone(),
+                            stt_label: event.stt_label,
+                            turn_order: event.turn_order,
+                        },
+                    );
 
                     // 2. Snapshot the session BEFORE recording this turn, so the
                     //    rolling window this chunk sees is the turns that
@@ -103,7 +121,9 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                         // No live capture. A transcript arriving now belongs to
                         // nothing, and analysing it would bill an LLM call
                         // against a session that has ended.
-                        tracing::debug!("[event_router] final transcript with no live session — not analysed");
+                        tracing::debug!(
+                            "[event_router] final transcript with no live session — not analysed"
+                        );
                         return;
                     };
                     if let Some(registry) = registry.as_ref() {
@@ -132,7 +152,10 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                     tauri::async_runtime::spawn(async move {
                         // Acquire permit — auto-released when `_permit` is dropped at end of scope
                         let Some(_permit) = pipeline_slots::acquire_reply_slot().await else {
-                            tracing::warn!("[event_router] Semaphore closed — dropping chunk for speaker {}", s);
+                            tracing::warn!(
+                                "[event_router] Semaphore closed — dropping chunk for speaker {}",
+                                s
+                            );
                             return;
                         };
                         tracing::debug!("[event_router] Pipeline slot acquired for speaker={}", s);
@@ -161,7 +184,9 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                                     let speaker_detached = s.clone();
                                     let chunk_ref_detached = chunk_ref.clone();
                                     tauri::async_runtime::spawn(async move {
-                                        let Some(_slot) = pipeline_slots::try_acquire_detached_slot() else {
+                                        let Some(_slot) =
+                                            pipeline_slots::try_acquire_detached_slot()
+                                        else {
                                             tracing::warn!(
                                                 "[event_router] Detached lane saturated — shedding risk/analyst for speaker {}",
                                                 speaker_detached
@@ -172,7 +197,9 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                                         for span in &outcome.spans {
                                             tracing::info!(
                                                 "[chunk_graph] detached {} → {} ({}ms)",
-                                                span.name, span.status, span.latency_ms
+                                                span.name,
+                                                span.status,
+                                                span.latency_ms
                                             );
                                         }
                                         // Persist first: the emits below move these vectors
@@ -186,13 +213,18 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                                         );
 
                                         if !outcome.state.decisions.is_empty() {
-                                            let _ = app_detached.emit("meeting_decisions", outcome.state.decisions);
+                                            let _ = app_detached
+                                                .emit("meeting_decisions", outcome.state.decisions);
                                         }
                                         if !outcome.state.action_items.is_empty() {
-                                            let _ = app_detached.emit("meeting_action_items", outcome.state.action_items);
+                                            let _ = app_detached.emit(
+                                                "meeting_action_items",
+                                                outcome.state.action_items,
+                                            );
                                         }
                                         if !outcome.state.risks.is_empty() {
-                                            let _ = app_detached.emit("meeting_risks", outcome.state.risks);
+                                            let _ = app_detached
+                                                .emit("meeting_risks", outcome.state.risks);
                                         }
                                     });
                                 }
@@ -202,10 +234,22 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
 
                                 // Emit the results of the Rust agents
                                 if let Some(expl) = state.explanation {
-                                    let _ = app_clone.emit("context_explanation", ExplanationPayload { text: expl, speaker: s.clone() });
+                                    let _ = app_clone.emit(
+                                        "context_explanation",
+                                        ExplanationPayload {
+                                            text: expl,
+                                            speaker: s.clone(),
+                                        },
+                                    );
                                 }
                                 if let Some(tech) = state.technical_explanation {
-                                    let _ = app_clone.emit("technical_explanation", ExplanationPayload { text: tech, speaker: s.clone() });
+                                    let _ = app_clone.emit(
+                                        "technical_explanation",
+                                        ExplanationPayload {
+                                            text: tech,
+                                            speaker: s.clone(),
+                                        },
+                                    );
                                 }
                                 // Kept as a safety net: today only the detached lane produces
                                 // these, so on the reply path they are always empty. If an agent
@@ -216,7 +260,8 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                                     let _ = app_clone.emit("meeting_decisions", state.decisions);
                                 }
                                 if !state.action_items.is_empty() {
-                                    let _ = app_clone.emit("meeting_action_items", state.action_items);
+                                    let _ =
+                                        app_clone.emit("meeting_action_items", state.action_items);
                                 }
                                 if !state.risks.is_empty() {
                                     let _ = app_clone.emit("meeting_risks", state.risks);
@@ -227,10 +272,14 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                                         speaker: s.clone(),
                                         reply_type: state.suggested_response_type,
                                         context_items: state.context_items,
-                                        bullets: state.suggested_bullets
+                                        bullets: state
+                                            .suggested_bullets
                                             .unwrap_or_default()
                                             .into_iter()
-                                            .map(|b| crate::sidecar::events::ResponseBulletWire { text: b.text, is_best: b.is_best })
+                                            .map(|b| crate::sidecar::events::ResponseBulletWire {
+                                                text: b.text,
+                                                is_best: b.is_best,
+                                            })
                                             .collect(),
                                     };
                                     // PERF FIX: Emit ONLY 'suggest_answer' — do NOT also emit
@@ -251,13 +300,25 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
             "Explanation" => {
                 if let Some(t) = event.text {
                     let s = event.speaker.unwrap_or_else(|| "Unknown".to_string());
-                    let _ = app.emit("context_explanation", ExplanationPayload { text: t, speaker: s });
+                    let _ = app.emit(
+                        "context_explanation",
+                        ExplanationPayload {
+                            text: t,
+                            speaker: s,
+                        },
+                    );
                 }
             }
             "TechnicalExplanation" => {
                 if let Some(t) = event.text {
                     let s = event.speaker.unwrap_or_else(|| "Unknown".to_string());
-                    let _ = app.emit("technical_explanation", ExplanationPayload { text: t, speaker: s });
+                    let _ = app.emit(
+                        "technical_explanation",
+                        ExplanationPayload {
+                            text: t,
+                            speaker: s,
+                        },
+                    );
                 }
             }
             "Significance" => {
@@ -283,13 +344,16 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
             "Response" => {
                 if let Some(t) = event.text {
                     let s = event.speaker.unwrap_or_else(|| "Unknown".to_string());
-                    let _ = app.emit("suggested_response", ResponsePayload {
-                        text: t,
-                        speaker: s,
-                        reply_type: event.reply_type,
-                        context_items: vec![],
-                        bullets: vec![],
-                    });
+                    let _ = app.emit(
+                        "suggested_response",
+                        ResponsePayload {
+                            text: t,
+                            speaker: s,
+                            reply_type: event.reply_type,
+                            context_items: vec![],
+                            bullets: vec![],
+                        },
+                    );
                 }
             }
             "CircuitBreaker" => {
@@ -336,7 +400,9 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                 // PUSH_SYNC_ENABLED to true once it's been verified live.
                 const PUSH_SYNC_ENABLED: bool = false;
                 if PUSH_SYNC_ENABLED {
-                    if let Some(chat_client) = app.try_state::<Arc<dyn crate::ports::chat_gateway::ChatGatewayClient>>() {
+                    if let Some(chat_client) =
+                        app.try_state::<Arc<dyn crate::ports::chat_gateway::ChatGatewayClient>>()
+                    {
                         // threadId is a sentinel no real chat thread is ever
                         // named — it exists so the chatbot echoes it back on
                         // whatever it replies (VectorsSynced, or an Error if
@@ -348,11 +414,14 @@ pub fn route_sidecar_event(app: &AppHandle, text: &str) {
                         // event to "whichever thread is waiting"), silently
                         // replacing a real in-flight Ask Roxi answer with an
                         // internal "sync already running" error.
-                        let _ = chat_client.send(serde_json::json!({
-                            "type": "SyncVectors",
-                            "force": false,
-                            "threadId": "__background_sync__"
-                        }).to_string());
+                        let _ = chat_client.send(
+                            serde_json::json!({
+                                "type": "SyncVectors",
+                                "force": false,
+                                "threadId": "__background_sync__"
+                            })
+                            .to_string(),
+                        );
                     }
                 }
             }

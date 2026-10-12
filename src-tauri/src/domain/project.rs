@@ -64,7 +64,9 @@ pub const DEFAULT_PROJECT_CODE: &str = "GEN";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectSelection {
     Existing(ProjectId),
-    New { name: String },
+    New {
+        name: String,
+    },
     /// "Skip this context" — file under `DEFAULT_PROJECT_CODE`.
     Unsorted,
 }

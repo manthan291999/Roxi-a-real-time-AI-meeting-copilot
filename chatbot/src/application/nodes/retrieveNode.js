@@ -11,6 +11,7 @@
  */
 
 const { MAX_HITS } = require('../graph/constants');
+const { allowedMeetingIds } = require('../meetingScope');
 
 /**
  * @param {{evidenceSource: import('../../domain/ports/EvidenceSource').EvidenceSource, logger: import('../../domain/ports/ChatLogger').ChatLogger}} deps
@@ -23,6 +24,8 @@ function createRetrieveNode({ evidenceSource, logger }) {
         matchExprs: state.searchQueries || [],
         liveContext: state.liveContext || '',
         limit: MAX_HITS,
+        // Only the signed-in account's own meetings. Every source honours it.
+        meetingIds: allowedMeetingIds(state.meetingScope),
       });
       logger.info('retrieve', 'search_done', {
         queries: (state.searchQueries || []).length,

@@ -35,10 +35,26 @@ impl GatewayClient for NodeGatewayClient {
         }
 
         let current_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-        let sidecar_path = current_dir.join("../gateway/sidecar.js");
+        let sidecar_path = std::env::var("GATEWAY_SIDECAR_PATH")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| current_dir.join("../gateway/sidecar.js"));
+        let sidecar_dir = sidecar_path
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| current_dir.join("../gateway"));
 
-        let mut cmd = Command::new("node");
+        let mut cmd = Command::new(crate::bundle_env::node_bin());
         cmd.arg(&sidecar_path);
+
+        if let Some(token) = request
+            .access_token
+            .as_deref()
+            .filter(|token| !token.trim().is_empty())
+        {
+            cmd.env("ROXI_ACCESS_TOKEN", token);
+        }
 
         if let Some(n) = request.name {
             if !n.trim().is_empty() {
@@ -66,8 +82,12 @@ impl GatewayClient for NodeGatewayClient {
             cmd.arg("--project-code").arg(project.code);
         }
 
+        if let Some(account_id) = request.account_id.filter(|id| !id.trim().is_empty()) {
+            cmd.arg("--account-id").arg(account_id);
+        }
+
         let mut sidecar_process = cmd
-            .current_dir(current_dir.join("../gateway"))
+            .current_dir(&sidecar_dir)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -109,7 +129,9 @@ impl GatewayClient for NodeGatewayClient {
             // frontend has no signal at all and the UI just freezes on
             // whatever status it last showed.
             if !stopping.load(Ordering::SeqCst) {
-                tracing::warn!("[sidecar] Stdout closed unexpectedly — sidecar process likely died.");
+                tracing::warn!(
+                    "[sidecar] Stdout closed unexpectedly — sidecar process likely died."
+                );
                 let synthetic = serde_json::json!({
                     "type": "Error",
                     "message": "Transcription process ended unexpectedly"

@@ -17,6 +17,7 @@ const protocol = require('./infrastructure/stdout-protocol.js');
 const mfcc = require('./infrastructure/mfcc.js');
 const { startSession } = require('./db/index.js');
 const { buildChain } = require('./stt/provider-registry.js');
+const { resolveServerBackedStt } = require('./stt/server-token.js');
 const { ProviderManager } = require('./stt/provider-manager.js');
 const { DiarizationLayer } = require('./stt/diarization-layer.js');
 const { TranscriptSanitizer } = require('./stt/transcript-sanitizer.js');
@@ -86,7 +87,15 @@ async function main() {
     return;
   }
 
-  const chain = buildChain(cfg.stt, cfg.meeting);
+  let stt;
+  try {
+    stt = await resolveServerBackedStt(cfg.stt);
+  } catch (err) {
+    protocol.emitError(`Could not start secure transcription: ${err.message}`);
+    exitAfterDrain(1);
+    return;
+  }
+  const chain = buildChain(stt, cfg.meeting);
   if (chain.length === 0) {
     protocol.emitError('No STT providers configured');
     exitAfterDrain(1);
@@ -101,7 +110,8 @@ async function main() {
       cfg.meeting.context,
       { id: cfg.meeting.projectId },
       cfg.meeting.role,
-      cfg.meeting.name
+      cfg.meeting.name,
+      cfg.meeting.accountId
     );
   } catch (err) {
     protocol.emitError(`Database init failed: ${err.message}`);

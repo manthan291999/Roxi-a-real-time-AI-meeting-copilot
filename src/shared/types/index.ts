@@ -7,3 +7,5 @@ export * from './analysis';
 export * from './project';
 export * from './document';
 export * from './usage';
+export * from './account';
+export * from './billing';

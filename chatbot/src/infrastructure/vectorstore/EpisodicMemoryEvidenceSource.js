@@ -51,17 +51,19 @@ class EpisodicMemoryEvidenceSource {
   }
 
   /**
-   * @param {{question: string, limit: number, projectId?: number|null}} query
+   * @param {{question: string, limit: number, projectId?: number|null, meetingIds?: number[]|null}} query
+   *   meetingIds: only these meetings (the signed-in account's); null = all
    * @returns {Promise<import('../../domain/ports/EvidenceSource').EvidenceHit[]>}
    */
-  async search({ question, limit = 24, projectId = null } = {}) {
+  async search({ question, limit = 24, projectId = null, meetingIds = null } = {}) {
     if (!question || !String(question).trim()) return [];
+    if (Array.isArray(meetingIds) && meetingIds.length === 0) return [];
 
     const vector = await this.embeddings.embedOne(question, { tag: 'embed_query' });
     const rawHits = await this.vectorIndex.search(vector, {
       limit,
       minSimilarity: this.minSimilarity,
-      filter: { projectId },
+      filter: { projectId, meetingIds },
     });
     if (rawHits.length === 0) return [];
 

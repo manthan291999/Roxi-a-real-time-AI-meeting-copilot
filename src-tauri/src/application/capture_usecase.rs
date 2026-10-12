@@ -1,10 +1,12 @@
 use crate::adapters::audio_meter::MeterSink;
 use crate::adapters::control_channel::{PipeControlChannel, SharedWriter};
+use crate::application::account_usecase::AccountUseCase;
 use crate::application::brief_usecase::{BriefUseCase, CaptureContext};
 use crate::application::session_registry::SessionRegistry;
 use crate::domain::audio_level::AudioLevel;
 use crate::domain::project::{ProjectRef, ProjectSelection};
 use crate::domain::session::SessionId;
+use crate::ports::account_scope::CurrentAccount;
 use crate::ports::audio_capture::AudioCapture;
 use crate::ports::control::ControlSender;
 use crate::ports::gateway::{GatewayClient, SessionRequest};
@@ -19,6 +21,9 @@ pub struct CaptureUseCase {
     projects: Arc<dyn ProjectRepository>,
     briefs: Arc<BriefUseCase>,
     sessions: Arc<SessionRegistry>,
+    /// Who the new meeting belongs to.
+    account: Arc<dyn CurrentAccount>,
+    accounts: Arc<AccountUseCase>,
     /// Live only while a session is running. The sidecar's stdin is shared
     /// between the audio sink and this channel, so control commands travel the
     /// same pipe as audio rather than needing a second transport.
@@ -32,6 +37,8 @@ impl CaptureUseCase {
         projects: Arc<dyn ProjectRepository>,
         briefs: Arc<BriefUseCase>,
         sessions: Arc<SessionRegistry>,
+        account: Arc<dyn CurrentAccount>,
+        accounts: Arc<AccountUseCase>,
     ) -> Self {
         Self {
             audio_capture,
@@ -39,6 +46,8 @@ impl CaptureUseCase {
             projects,
             briefs,
             sessions,
+            account,
+            accounts,
             control: Mutex::new(None),
         }
     }
@@ -105,12 +114,23 @@ impl CaptureUseCase {
         //    only CaptureUseCase's own signature needed to become Arc, so the
         //    same callback can also be handed to audio_capture below.
         let gateway_event = on_event.clone();
+        // Production sidecars exchange this Supabase token for a short-lived
+        // STT token at the Roxi API. Local-only development has no account and
+        // continues to use explicitly configured direct provider keys.
+        let access_token = self
+            .accounts
+            .access_token()
+            .await
+            .ok()
+            .map(|(token, _)| token);
         let writer = match self.gateway_client.start_session(
             SessionRequest {
                 name,
                 context,
                 role,
                 project,
+                account_id: self.account.meeting_scope().owner().map(str::to_string),
+                access_token,
             },
             Box::new(move |text| gateway_event(text)),
         ) {
@@ -217,7 +237,9 @@ impl CaptureUseCase {
     /// Never propagates a failure: control traffic is best-effort enrichment and
     /// must not disturb capture.
     pub fn send_control(&self, command: &serde_json::Value) {
-        let Some(channel) = self.control() else { return };
+        let Some(channel) = self.control() else {
+            return;
+        };
         if let Err(err) = channel.send(command) {
             tracing::warn!("[control] failed to send command: {}", err);
         }

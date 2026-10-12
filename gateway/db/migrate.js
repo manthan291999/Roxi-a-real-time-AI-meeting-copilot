@@ -157,7 +157,28 @@ const MIGRATIONS = [
     description: 'M010 persist meeting name, asked for at capture start',
     statements: ['ALTER TABLE meetings ADD COLUMN name TEXT'],
   },
+  {
+    version: 11,
+    description: 'M011 meeting owner account, so each signed-in account sees only its own history',
+    // The Rust host adds the same column at launch (sqlite_schema.rs
+    // ensure_meeting_owner) because it reads before any capture has run, so
+    // this step must tolerate the column already being there.
+    run: (db) => {
+      if (!hasColumn(db, 'meetings', 'account_id')) {
+        db.exec('ALTER TABLE meetings ADD COLUMN account_id TEXT');
+      }
+      db.exec('CREATE INDEX IF NOT EXISTS idx_meetings_account ON meetings (account_id, start_time DESC)');
+    },
+  },
 ];
+
+/**
+ * @param {import('better-sqlite3').Database} db
+ * @returns {boolean}
+ */
+function hasColumn(db, table, column) {
+  return db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+}
 
 /**
  * Apply all pending migrations.
@@ -178,7 +199,8 @@ function runMigrations(db) {
   for (const m of MIGRATIONS) {
     if (m.version <= current) continue;
     const apply = db.transaction(() => {
-      for (const sql of m.statements) db.exec(sql);
+      for (const sql of m.statements || []) db.exec(sql);
+      if (m.run) m.run(db);
       db.prepare('INSERT INTO schema_version (version, description) VALUES (?, ?)').run(m.version, m.description);
     });
     apply();

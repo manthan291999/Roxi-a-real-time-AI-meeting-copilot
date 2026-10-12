@@ -9,7 +9,9 @@ pub async fn get_meetings(db: State<'_, Arc<dyn Database>>) -> Result<Vec<Meetin
 }
 
 #[tauri::command]
-pub async fn get_meeting_details(id: i64, db: State<'_, Arc<dyn Database>>) -> Result<MeetingDetails, String> {
+pub async fn get_meeting_details(
+    id: i64,
+    db: State<'_, Arc<dyn Database>>,
+) -> Result<MeetingDetails, String> {
     db.get_meeting_details(id).map_err(|e| e.to_string())
 }
-

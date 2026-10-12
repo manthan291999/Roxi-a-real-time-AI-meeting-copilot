@@ -14,7 +14,13 @@
     "test:frontend": "vitest run",
     "test:all": "npm run test:frontend && npm run test && npm --prefix gateway test",
     "lint": "tsc --noEmit",
-    "audit:all": "npm audit && npm --prefix gateway audit && npm --prefix chatbot audit"
+    "audit:all": "npm audit && npm --prefix gateway audit && npm --prefix chatbot audit",
+    "stage:release": "node scripts/release/stage-resources.mjs",
+    "verify:release": "node scripts/release/verify-bundle.mjs",
+    "release:mac": "npm run stage:release && npm run verify:release && tauri build --bundles app,dmg --config src-tauri/config/release.base.json --config src-tauri/config/release.macos.json",
+    "release:windows": "npm run stage:release && npm run verify:release && tauri build --bundles nsis,msi --config src-tauri/config/release.base.json --config src-tauri/config/release.windows.json",
+    "release:linux": "npm run stage:release && npm run verify:release && tauri build --bundles appimage,deb --config src-tauri/config/release.base.json --config src-tauri/config/release.linux.json",
+    "release:assemble": "node scripts/release/assemble-release.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",

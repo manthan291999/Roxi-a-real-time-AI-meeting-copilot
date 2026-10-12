@@ -286,6 +286,8 @@ function buildContainer(overrides = {}) {
       // which knows nothing about web search is unaffected; this is where
       // 'auto' actually enters the system.
       defaultWebMode: config.webSearchMode,
+      // Ask Roxi searches only the signed-in account's meetings.
+      meetingOwners: store,
     });
 
     // Upload/list/delete. Deliberately built from the SAME documents

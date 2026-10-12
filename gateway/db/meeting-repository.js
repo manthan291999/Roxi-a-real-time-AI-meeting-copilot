@@ -51,12 +51,15 @@ class MeetingRepository {
    * @param {{id?: number|null}} [projectSelection] from the Rust host's argv
    * @param {string} [meetingRole]
    * @param {string} [meetingName] user-chosen title, collected at capture start
+   * @param {string|null} [accountId] the signed-in account that owns this
+   *   meeting; null in local-only mode, where every meeting is visible
    * @returns {MeetingRepository}
    */
-  static start(db, meetingContext = '', projectSelection = {}, meetingRole = null, meetingName = null) {
+  static start(db, meetingContext = '', projectSelection = {}, meetingRole = null, meetingName = null, accountId = null) {
     const context = sanitizeText(meetingContext, 2000);
     const role = sanitizeText(meetingRole, 100);
     const name = sanitizeText(meetingName, 200);
+    const owner = sanitizeText(accountId, 100) || null;
     const projects = new ProjectRepository(db);
     const project = projects.resolve(projectSelection);
 
@@ -67,8 +70,8 @@ class MeetingRepository {
         // the user is about to be in a meeting, and taxonomy is never worth
         // blocking capture on.
         const info = db
-          .prepare('INSERT INTO meetings (context, role, name) VALUES (?, ?, ?)')
-          .run(context || null, role || null, name || null);
+          .prepare('INSERT INTO meetings (context, role, name, account_id) VALUES (?, ?, ?, ?)')
+          .run(context || null, role || null, name || null, owner);
         return { meetingId: info.lastInsertRowid, displayId: null };
       }
 
@@ -76,9 +79,9 @@ class MeetingRepository {
       const displayId = formatDisplayId(project.code, seq);
       const info = db
         .prepare(
-          'INSERT INTO meetings (context, project_id, project_seq, display_id, role, name) VALUES (?, ?, ?, ?, ?, ?)'
+          'INSERT INTO meetings (context, project_id, project_seq, display_id, role, name, account_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
         )
-        .run(context || null, project.projectId, seq, displayId, role || null, name || null);
+        .run(context || null, project.projectId, seq, displayId, role || null, name || null, owner);
       return { meetingId: info.lastInsertRowid, displayId };
     });
 

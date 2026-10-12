@@ -35,27 +35,42 @@ futures = "0.3.30"
 chrono = { version = "0.4", features = ["serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1.0.86"
+rusqlite = { version = "0.31", features = ["bundled"] }
+rubato = "0.16.2"
+log = "0.4.21"
+dirs = "6"
 # Prefix hashing for the cached brief. The hash is only ever compared and
 # logged, never parsed back, so a hex string is the whole requirement.
 sha2 = "0.10"
 hex = "0.4"
-
+# Account sign-in. Errors carry a stable code for the UI (domain::account).
+thiserror = "2"
 [target.'cfg(target_os = "macos")'.dependencies]
 # NSAppearance is needed to pin the window to light mode; see window_material.rs.
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWindow", "NSAppearance", "NSResponder"] }
 # The native translucent material. macOS only, so it is not a plain dependency.
 window-vibrancy = "0.6"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-anyhow = "1.0.86"
-rusqlite = { version = "0.31", features = ["bundled"] }
 cpal = "0.15.3"
 hound = "3.5.1"
-rubato = "0.16.2"
 ctrlc = "3.4.4"
-log = "0.4.21"
 env_logger = "0.11.3"
+keyring = { version = "3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Persistent desktop credential storage through GNOME Keyring/KWallet.
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+
+# The strip tool in Xcode 27 writes Mach-O files dyld rejects ("mis-aligned
+# LINKEDIT string pool"), which breaks every proc-macro in a release build.
+[profile.release]
+strip = false

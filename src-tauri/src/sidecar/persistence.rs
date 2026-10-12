@@ -49,7 +49,12 @@ fn artifacts(state: &ChunkState) -> Value {
 }
 
 /// First wave: create the chunk row and store whatever the reply path produced.
-pub fn persist_chunk_command(chunk_ref: &str, text: &str, speaker: &str, state: &ChunkState) -> Value {
+pub fn persist_chunk_command(
+    chunk_ref: &str,
+    text: &str,
+    speaker: &str,
+    state: &ChunkState,
+) -> Value {
     json!({
         "command": "persistChunk",
         "chunkRef": chunk_ref,
@@ -92,7 +97,10 @@ mod tests {
         let mut state = ChunkState::default();
         state.complexity = Complexity::High;
         state.current_topic = Some("release".to_string());
-        state.decisions = vec![Decision { text: "ship friday".into(), confidence: 0.9 }];
+        state.decisions = vec![Decision {
+            text: "ship friday".into(),
+            confidence: 0.9,
+        }];
 
         let cmd = persist_chunk_command("c0", "we ship friday", "Alice", &state);
 

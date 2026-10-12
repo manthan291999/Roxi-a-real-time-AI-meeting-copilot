@@ -31,10 +31,21 @@ export function useCaptureSession() {
   /** Set when the previous session ended on its own rather than via Stop. */
   const [lastError, setLastError] = useState<string | null>(null);
 
-  useEffect(() => {
-    captureService.checkBlackholeInstalled().then((installed) => {
+  /**
+   * Re-probes the driver. Exposed so the setup card's "Check Again" can pick
+   * up a fresh install without the user having to relaunch the app.
+   */
+  const recheckBlackhole = useCallback(async () => {
+    try {
+      const installed = await captureService.checkBlackholeInstalled();
       setBlackholeMissing(!installed);
-    });
+    } catch (err) {
+      console.error('BlackHole check failed:', err);
+    }
+  }, [captureService]);
+
+  useEffect(() => {
+    void recheckBlackhole();
 
     const unlistenStatus = eventBus.onProviderStatus((s) => {
       setProvider(s.provider);
@@ -54,11 +65,19 @@ export function useCaptureSession() {
       setSessionId(null);
     });
 
+    // The backend has already stopped the capture; TrialProvider opens the
+    // plans, so no error notice here.
+    const unlistenTrial = eventBus.onTrialEnded(() => {
+      setStatus('idle');
+      setSessionId(null);
+    });
+
     return () => {
       unlistenStatus();
       unlistenError();
+      unlistenTrial();
     };
-  }, [captureService, eventBus]);
+  }, [captureService, eventBus, recheckBlackhole]);
 
   const startCapture = useCallback(async (context?: MeetingContext) => {
     if (blackholeMissing) return;
@@ -98,6 +117,7 @@ export function useCaptureSession() {
     status,
     provider,
     blackholeMissing,
+    recheckBlackhole,
     isStopping,
     sessionId,
     lastError,

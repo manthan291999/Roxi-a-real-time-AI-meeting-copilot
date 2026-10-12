@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::chunk_state::Complexity;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentSpan {
@@ -31,7 +31,8 @@ impl PipelineTrace {
             Complexity::Low => "LOW",
             Complexity::Medium => "MEDIUM",
             Complexity::High => "HIGH",
-        }.to_string();
+        }
+        .to_string();
 
         Self {
             chunk_preview,
@@ -67,16 +68,28 @@ impl PipelineTrace {
         // other line's format by default.
         if tracing::enabled!(tracing::Level::DEBUG) {
             let mut out = String::new();
-            out.push_str(&format!("┌─ CHUNK  speaker={}  complexity={} ──────────────────────────┐\n", self.speaker, self.complexity));
+            out.push_str(&format!(
+                "┌─ CHUNK  speaker={}  complexity={} ──────────────────────────┐\n",
+                self.speaker, self.complexity
+            ));
 
             for span in &self.spans {
-                let parallel = if span.stage == 2 && span.status == "OK" { " [parallel]" } else { "" };
-                let line = format!("│  Stage {}  {:<15} → {:<5} ({:3}ms){}\n",
-                    span.stage, span.name, span.status, span.latency_ms, parallel);
+                let parallel = if span.stage == 2 && span.status == "OK" {
+                    " [parallel]"
+                } else {
+                    ""
+                };
+                let line = format!(
+                    "│  Stage {}  {:<15} → {:<5} ({:3}ms){}\n",
+                    span.stage, span.name, span.status, span.latency_ms, parallel
+                );
                 out.push_str(&line);
             }
 
-            out.push_str(&format!("└─ DONE  {agents_run} agents  {}ms ─────────────────────────────────────┘", self.total_ms));
+            out.push_str(&format!(
+                "└─ DONE  {agents_run} agents  {}ms ─────────────────────────────────────┘",
+                self.total_ms
+            ));
 
             tracing::debug!("\n{}", out);
         }

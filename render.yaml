@@ -1,0 +1,28 @@
+# Render blueprint for the Roxi cloud API (server/).
+# Secrets use `sync: false`: Render asks for them when the blueprint is first
+# applied and never reads them from this file.
+services:
+  - type: web
+    name: roxi-api
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    # Starter or above: free instances sleep when idle, which would drop the
+    # first request of every meeting after a quiet period.
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - server/**
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: ASSEMBLYAI_API_KEY
+        sync: false
+      - key: RUST_LOG
+        value: info,tower_http=info

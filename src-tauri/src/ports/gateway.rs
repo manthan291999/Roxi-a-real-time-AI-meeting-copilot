@@ -19,6 +19,13 @@ pub struct SessionRequest {
     /// The resolved project. The gateway assigns `project_seq` and `display_id`
     /// from this, inside the same transaction as the meeting insert.
     pub project: Option<ProjectRef>,
+    /// The signed-in account that owns the meeting. `None` in local-only
+    /// mode, where meetings belong to no account and all are visible.
+    pub account_id: Option<String>,
+    /// Short-lived Supabase access token inherited by the gateway process and
+    /// exchanged with the Roxi API for an STT provider token. It is never put
+    /// on the command line, where process-list tools could expose it.
+    pub access_token: Option<String>,
 }
 
 pub trait GatewayClient: Send + Sync {

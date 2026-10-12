@@ -1,5 +1,5 @@
 import React from 'react';
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { openExternalUrl } from '../../../services/externalLinks';
 import { ChatSource } from '../../../shared/types';
 import { tokens, radius } from '../../../design-system';
 
@@ -68,9 +68,8 @@ export const SourceChip: React.FC<{ source: ChatSource }> = ({ source }) => {
               : '';
 
   const openSource = () => {
-    if (!source.url) return;
     // Best effort: a card that cannot open must not take the pane down with it.
-    void openUrl(source.url).catch(() => {});
+    openExternalUrl(source.url);
   };
 
   const body = (

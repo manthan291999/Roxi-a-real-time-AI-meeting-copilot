@@ -207,7 +207,10 @@ impl UsageStore {
 
     /// Records an LLM call to SQLite. Best effort — never panics or bubbles errors to caller.
     pub fn record(entry: UsageEntry) {
-        if std::env::var("LLM_USAGE_TRACKING").map(|v| v == "0").unwrap_or(false) {
+        if std::env::var("LLM_USAGE_TRACKING")
+            .map(|v| v == "0")
+            .unwrap_or(false)
+        {
             return;
         }
 
@@ -249,7 +252,9 @@ impl UsageStore {
                 0.0
             };
 
-            let track_payloads = std::env::var("LLM_TRACK_PAYLOADS").map(|v| v != "0").unwrap_or(true);
+            let track_payloads = std::env::var("LLM_TRACK_PAYLOADS")
+                .map(|v| v != "0")
+                .unwrap_or(true);
 
             let request_messages = if track_payloads {
                 let msgs = json!([
@@ -263,12 +268,18 @@ impl UsageStore {
             };
 
             let response_preview = if track_payloads {
-                entry.response_text.as_ref().map(|text| Self::truncate(text, RESPONSE_PREVIEW_MAX))
+                entry
+                    .response_text
+                    .as_ref()
+                    .map(|text| Self::truncate(text, RESPONSE_PREVIEW_MAX))
             } else {
                 None
             };
 
-            let error_message = entry.error_message.as_ref().map(|msg| Self::truncate(msg, ERROR_MESSAGE_MAX));
+            let error_message = entry
+                .error_message
+                .as_ref()
+                .map(|msg| Self::truncate(msg, ERROR_MESSAGE_MAX));
 
             conn.execute(
                 "INSERT INTO llm_requests (

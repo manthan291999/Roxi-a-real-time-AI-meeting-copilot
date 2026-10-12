@@ -1,4 +1,7 @@
-use super::{action_item::ActionItem, agent_error::AgentError, decision::Decision, risk::Risk, context_item::ContextItem};
+use super::{
+    action_item::ActionItem, agent_error::AgentError, context_item::ContextItem,
+    decision::Decision, risk::Risk,
+};
 use crate::agents::brief::model::SharedBrief;
 use crate::domain::project::ProjectId;
 use crate::domain::session::SessionId;
@@ -15,10 +18,10 @@ pub struct ResponseBullet {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum Complexity {
-    Low,     // filler, single fact, pleasantry — run only explanation
+    Low, // filler, single fact, pleasantry — run only explanation
     #[default]
-    Medium,  // discussion, question — run explanation + risk  (SAFE FALLBACK)
-    High,    // decision, multi-domain technical — run all agents
+    Medium, // discussion, question — run explanation + risk  (SAFE FALLBACK)
+    High, // decision, multi-domain technical — run all agents
 }
 
 /// Everything one finalized transcript turn carries through the pipeline.
@@ -87,26 +90,26 @@ impl ChunkState {
             self.conversation_summary = other.conversation_summary;
         }
         self.new_technical_terms.extend(other.new_technical_terms);
-        
+
         if other.explanation.is_some() {
             self.explanation = other.explanation;
         }
         if other.technical_explanation.is_some() {
             self.technical_explanation = other.technical_explanation;
         }
-        
+
         self.decisions.extend(other.decisions);
         self.action_items.extend(other.action_items);
         self.risks.extend(other.risks);
-        
+
         if other.suggested_response.is_some() {
             self.suggested_response = other.suggested_response;
             self.suggested_response_type = other.suggested_response_type;
             self.suggested_bullets = other.suggested_bullets;
         }
-        
+
         self.context_items.extend(other.context_items);
-        
+
         self.errors.extend(other.errors);
     }
 }

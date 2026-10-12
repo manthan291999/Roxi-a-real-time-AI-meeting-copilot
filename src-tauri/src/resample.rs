@@ -107,12 +107,7 @@ impl Resampler {
             // Only take the proportional amount of output (not the padded silence).
             let ratio = self.resampler.output_frames_max() as f64 / self.chunk_size as f64;
             let valid_samples = (remaining as f64 * ratio).ceil() as usize;
-            output.extend(
-                channel_data
-                    .iter()
-                    .take(valid_samples)
-                    .map(|&s| s as f32),
-            );
+            output.extend(channel_data.iter().take(valid_samples).map(|&s| s as f32));
         }
 
         Ok(output)

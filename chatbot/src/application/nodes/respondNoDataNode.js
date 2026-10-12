@@ -9,6 +9,7 @@
  */
 
 const { ROUTES } = require('../graph/constants');
+const { allowedMeetingIds } = require('../meetingScope');
 
 /**
  * @param {{logger?: import('../../domain/ports/ChatLogger').ChatLogger, retriever?: import('../../domain/ports/Retriever').Retriever}} deps
@@ -23,7 +24,7 @@ function createRespondNoDataNode({ logger = null, retriever = null } = {}) {
 
     // Ambiguous question + no match -> offer recent topics, ask what exactly.
     if (state.isAmbiguous && retriever) {
-      const topics = retriever.recentTopics(3);
+      const topics = retriever.recentTopics(3, { meetingIds: allowedMeetingIds(state.meetingScope) });
       if (topics.length > 0) {
         const topicLines = topics
           .map((t) => `- Meeting #${t.meetingId} (${t.meetingDate || 'date n/a'}): ${t.topic}`)

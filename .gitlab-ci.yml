@@ -8,11 +8,14 @@
 stages:
 - test
 - secret-detection
+- package
+- assemble
 sast:
   stage: test
 include:
 - template: Security/SAST.gitlab-ci.yml
 - template: Security/Secret-Detection.gitlab-ci.yml
+- local: .gitlab/ci/release.yml
 variables:
   SECRET_DETECTION_ENABLED: 'true'
 secret_detection:
@@ -74,7 +77,35 @@ rust:tests:
   # Tauri v2 Linux build deps — the crate won't compile without these even
   # just to run unit tests, since it links against webkit2gtk/gtk.
   - apt-get update -qq
-  - apt-get install -y -qq libwebkit2gtk-4.1-dev libssl-dev libgtk-3-dev librsvg2-dev patchelf build-essential curl wget file libxdo-dev libayatana-appindicator3-dev
+  - apt-get install -y -qq libwebkit2gtk-4.1-dev libssl-dev libgtk-3-dev librsvg2-dev patchelf build-essential curl wget file libxdo-dev libayatana-appindicator3-dev libdbus-1-dev pkg-config
   script:
   - cd src-tauri
+  - cargo test --locked
+
+# Cloud API. Pure Rust, no Tauri system deps. The Postgres service lets the
+# tenancy-isolation tests run instead of skipping.
+server:tests:
+  stage: test
+  image: rust:1
+  services:
+  - name: postgres:16
+    alias: postgres
+  variables:
+    POSTGRES_DB: roxi_test
+    POSTGRES_USER: roxi
+    POSTGRES_PASSWORD: roxi
+    # Tests connect as `roxi_app`, a non-superuser created below, like Neon's
+    # neondb_owner. The image's default user is a superuser, which bypasses
+    # RLS and would make the isolation tests pass for the wrong reason.
+    TEST_DATABASE_URL: postgres://roxi_app:roxi_app@postgres/roxi_test
+  cache:
+    key: cargo-server-$CI_COMMIT_REF_SLUG
+    paths:
+    - server/target/
+  before_script:
+  - apt-get update -qq && apt-get install -y -qq postgresql-client
+  - until pg_isready -h postgres -U roxi; do sleep 1; done
+  - PGPASSWORD=roxi psql -h postgres -U roxi -d roxi_test -c "CREATE ROLE roxi_app LOGIN PASSWORD 'roxi_app' NOSUPERUSER; GRANT ALL ON SCHEMA public TO roxi_app;"
+  script:
+  - cd server
   - cargo test --locked

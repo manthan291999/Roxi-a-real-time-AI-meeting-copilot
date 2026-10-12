@@ -67,7 +67,8 @@ impl Agent for ContextManagerAgent {
         if let Some(terms) = json.get("new_technical_terms").and_then(|v| v.as_object()) {
             for (k, v) in terms {
                 if let Some(v_str) = v.as_str() {
-                    next.new_technical_terms.insert(k.clone(), v_str.to_string());
+                    next.new_technical_terms
+                        .insert(k.clone(), v_str.to_string());
                 }
             }
         }
@@ -79,9 +80,9 @@ impl Agent for ContextManagerAgent {
             .and_then(|v| v.as_str())
             .unwrap_or("medium")
         {
-            "low"  => Complexity::Low,
+            "low" => Complexity::Low,
             "high" => Complexity::High,
-            _      => Complexity::Medium,
+            _ => Complexity::Medium,
         };
 
         Ok(next)

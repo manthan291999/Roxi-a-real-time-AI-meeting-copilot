@@ -47,8 +47,12 @@ pub trait LlmClient: Send + Sync {
     /// this is unused — kept because removing it would narrow the port, and an
     /// agent that wants prose rather than JSON is a reasonable thing to add.
     #[allow(dead_code)]
-    async fn complete(&self, system: &str, user: &str, meta: &LlmCallMeta)
-        -> anyhow::Result<String>;
+    async fn complete(
+        &self,
+        system: &str,
+        user: &str,
+        meta: &LlmCallMeta,
+    ) -> anyhow::Result<String>;
 
     async fn complete_json(
         &self,
@@ -70,15 +74,26 @@ mod tests {
             agent_tag: Some("explanation"),
             ..Default::default()
         };
-        assert_eq!(meta.cache_key(), Some(format!("roxi:{session}:explanation")));
+        assert_eq!(
+            meta.cache_key(),
+            Some(format!("roxi:{session}:explanation"))
+        );
         assert_eq!(meta.cache_key(), meta.cache_key());
     }
 
     #[test]
     fn two_agents_in_one_session_get_different_keys() {
         let session = Some(SessionId::mint());
-        let a = LlmCallMeta { session_id: session, agent_tag: Some("explanation"), ..Default::default() };
-        let b = LlmCallMeta { session_id: session, agent_tag: Some("technical"), ..Default::default() };
+        let a = LlmCallMeta {
+            session_id: session,
+            agent_tag: Some("explanation"),
+            ..Default::default()
+        };
+        let b = LlmCallMeta {
+            session_id: session,
+            agent_tag: Some("technical"),
+            ..Default::default()
+        };
         assert_ne!(a.cache_key(), b.cache_key());
     }
 

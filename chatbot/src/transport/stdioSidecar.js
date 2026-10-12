@@ -250,6 +250,8 @@ function startStdioSidecar(container, io = {}) {
             // able to tell "not specified, use the configured default" from
             // "explicitly off".
             webMode: typeof msg.webMode === 'string' ? msg.webMode : undefined,
+            // Whose meetings may be searched; see application/meetingScope.js.
+            scope: msg.scope && typeof msg.scope === 'object' ? msg.scope : undefined,
             onNode: (node) => emit({ type: 'ChatThinking', threadId, node }),
           });
           emit({ type: 'ChatReply', threadId, payload });

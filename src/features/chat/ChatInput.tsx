@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { IconButton, tokens, radius } from '../../design-system';
-import { SendIcon } from '../../design-system/icons';
-import { DocumentUploadButton } from './components/documents/DocumentUploadButton';
+import { tokens, radius, ArrowUpIcon, PaperclipIcon } from '../../design-system';
 
 interface ChatInputProps {
   onSend: (text: string) => void;
@@ -20,9 +18,8 @@ const PLACEHOLDERS = [
 const PLACEHOLDER_INTERVAL_MS = 4000;
 
 /**
- * The single chat composer. This is the polished variant that used to live
- * only in the history pane (rotating placeholder, focus ring, Cmd+Enter); the
- * plainer duplicate in this folder has been retired.
+ * The single chat composer, shared by the Ask tab and the history browser:
+ * rotating placeholder, focus ring, ↵ to send and ⇧↵ for a new line.
  */
 export const ChatInput: React.FC<ChatInputProps> = ({ onSend, isLoading = false, onUpload }) => {
   const [input, setInput] = useState('');
@@ -54,20 +51,28 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, isLoading = false,
   };
 
   return (
-    <div className="p-4 border-t" style={{ borderColor: tokens.hairline, background: tokens.panel }}>
+    <div className="px-4 pt-2 pb-3">
       <div
-        className="relative flex items-end overflow-hidden transition-all duration-300"
+        className="flex items-end gap-1 p-1.5 border transition-[border-color,box-shadow] duration-200"
         style={{
-          background: tokens.panelRaised,
-          border: `1px solid ${isFocused ? tokens.signal : tokens.hairline}`,
-          borderRadius: radius.panel,
-          boxShadow: isFocused ? `0 0 0 1px ${tokens.signalFocus}` : 'none',
+          background: tokens.card,
+          borderColor: isFocused ? tokens.signalLine : tokens.hairline,
+          borderRadius: radius.card,
+          boxShadow: isFocused ? `0 0 0 4px ${tokens.signalFocus}` : tokens.cardInset,
         }}
       >
         {onUpload && (
-          <div className="p-2 shrink-0 self-center border-r" style={{ borderColor: tokens.hairline }}>
-            <DocumentUploadButton onUpload={onUpload} disabled={isLoading} />
-          </div>
+          <button
+            type="button"
+            onClick={onUpload}
+            disabled={isLoading}
+            aria-label="Attach a document"
+            title="Attach a PDF or TXT file"
+            className="w-8 h-8 shrink-0 flex items-center justify-center rounded-[8px] transition-colors hover:enabled:bg-[var(--t-overlay-hover)] disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--t-focus-ring)]"
+            style={{ color: tokens.mute }}
+          >
+            <PaperclipIcon className="w-4 h-4" />
+          </button>
         )}
         <textarea
           value={input}
@@ -76,22 +81,30 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, isLoading = false,
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           placeholder={PLACEHOLDERS[placeholderIdx]}
-          className="flex-1 max-h-[120px] bg-transparent text-[14px] p-3 resize-none focus:outline-none custom-scrollbar placeholder:text-[var(--t-mute-dim)] transition-all"
+          aria-label="Ask Roxi"
+          className="flex-1 min-w-0 max-h-[120px] self-center bg-transparent px-1.5 py-1.5 text-[13px] leading-[20px] resize-none focus:outline-none custom-scrollbar placeholder:text-[var(--t-mute)]"
           style={{ color: tokens.paper }}
           rows={1}
         />
-        <div className="p-2 shrink-0 group relative self-end">
-          <IconButton
-            icon={<SendIcon />}
-            onClick={handleSend}
-            active={canSend}
-            className={!canSend ? 'opacity-50 pointer-events-none' : ''}
-          />
-          <div className="absolute -top-8 right-0 bg-[var(--t-sheet)] backdrop-blur-md text-[10px] text-[var(--t-mute)] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-[var(--t-hairline)]">
-            ⌘↵ to send
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={handleSend}
+          disabled={!canSend}
+          aria-label="Send"
+          title="Send (↵)"
+          className="w-8 h-8 shrink-0 flex items-center justify-center rounded-[8px] transition-[background-color,transform] duration-150 active:enabled:scale-[0.94] disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-focus-ring)]"
+          style={{
+            background: canSend ? tokens.signal : tokens.panelRaised,
+            color: canSend ? tokens.onSignal : tokens.muteDim,
+            boxShadow: canSend ? tokens.signalBevel : 'none',
+          }}
+        >
+          <ArrowUpIcon className="w-4 h-4" />
+        </button>
       </div>
+      <p className="mt-1.5 px-1 text-[11px]" style={{ color: tokens.mute }}>
+        ↵ to send · ⇧↵ for a new line
+      </p>
     </div>
   );
 };

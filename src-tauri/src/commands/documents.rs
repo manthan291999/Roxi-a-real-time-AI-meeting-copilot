@@ -25,9 +25,9 @@ pub async fn pick_document(app_handle: tauri::AppHandle) -> Result<Option<Picked
             .unwrap_or_default()
             .to_string_lossy()
             .to_string();
-        
+
         let bytes = std::fs::metadata(&path_buf).map(|m| m.len()).unwrap_or(0);
-        
+
         Ok(Some(PickedFile {
             path: path_str,
             file_name,

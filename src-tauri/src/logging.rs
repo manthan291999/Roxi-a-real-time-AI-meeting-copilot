@@ -133,9 +133,21 @@ pub fn print_startup_banner() {
     // Mirrors the gateway's own provider precedence (STT_PROVIDER override,
     // then AssemblyAI, then Speechmatics) purely for display — the gateway
     // sidecar still makes the real decision independently.
-    let stt_provider = std::env::var("STT_PROVIDER").ok().filter(|v| !v.trim().is_empty())
-        .or_else(|| std::env::var("ASSEMBLYAI_API_KEY").ok().filter(|v| !v.trim().is_empty()).map(|_| "assemblyai".to_string()))
-        .or_else(|| std::env::var("SPEECHMATICS_API_KEY").ok().filter(|v| !v.trim().is_empty()).map(|_| "speechmatics".to_string()));
+    let stt_provider = std::env::var("STT_PROVIDER")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .or_else(|| {
+            std::env::var("ASSEMBLYAI_API_KEY")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .map(|_| "assemblyai".to_string())
+        })
+        .or_else(|| {
+            std::env::var("SPEECHMATICS_API_KEY")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .map(|_| "speechmatics".to_string())
+        });
 
     let ok = "\x1b[38;5;114m";
     let bad = "\x1b[38;5;210m";
@@ -147,7 +159,9 @@ pub fn print_startup_banner() {
     if openai_configured {
         println!("{accent}│{reset}  {ok}✓{reset} openai         configured");
     } else {
-        println!("{accent}│{reset}  {bad}✗{reset} openai         not set — agents will fail with 401");
+        println!(
+            "{accent}│{reset}  {bad}✗{reset} openai         not set — agents will fail with 401"
+        );
     }
     match stt_provider {
         Some(provider) => println!("{accent}│{reset}  {ok}✓{reset} stt provider   {provider}"),
@@ -167,12 +181,18 @@ pub fn relay_sidecar_log(source: &'static str, line: &str) {
         return;
     }
 
-    let Some(parsed) = serde_json::from_str::<Value>(line).ok().and_then(|v| v.as_object().cloned()) else {
+    let Some(parsed) = serde_json::from_str::<Value>(line)
+        .ok()
+        .and_then(|v| v.as_object().cloned())
+    else {
         emit(source, "warn", line);
         return;
     };
 
-    let level = parsed.get("level").and_then(Value::as_str).unwrap_or("info");
+    let level = parsed
+        .get("level")
+        .and_then(Value::as_str)
+        .unwrap_or("info");
     let event = parsed.get("event").and_then(Value::as_str).unwrap_or("log");
 
     // Gateway's logger flattens extra fields onto the top-level object;
@@ -180,13 +200,17 @@ pub fn relay_sidecar_log(source: &'static str, line: &str) {
     // relay keeps working even if one sidecar's schema drifts from the
     // other's — see gateway/infrastructure/logger.js vs
     // chatbot/src/infrastructure/logging/JsonLineLogger.js.
-    let extra = parsed.get("meta").and_then(Value::as_object).cloned().unwrap_or_else(|| {
-        let mut rest = parsed.clone();
-        for known in ["ts", "level", "component", "scope", "event"] {
-            rest.remove(known);
-        }
-        rest
-    });
+    let extra = parsed
+        .get("meta")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_else(|| {
+            let mut rest = parsed.clone();
+            for known in ["ts", "level", "component", "scope", "event"] {
+                rest.remove(known);
+            }
+            rest
+        });
 
     let kv = extra
         .iter()
@@ -194,7 +218,11 @@ pub fn relay_sidecar_log(source: &'static str, line: &str) {
         .collect::<Vec<_>>()
         .join(" ");
 
-    let message = if kv.is_empty() { event.to_string() } else { format!("{event}  {kv}") };
+    let message = if kv.is_empty() {
+        event.to_string()
+    } else {
+        format!("{event}  {kv}")
+    };
     emit(source, level, &message);
 }
 

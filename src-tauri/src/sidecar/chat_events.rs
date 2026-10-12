@@ -15,7 +15,7 @@ pub struct ChatEvent {
     pub message: Option<String>,
     pub code: Option<String>,
     pub stats: Option<serde_json::Value>,
-    
+
     // Document specific fields
     #[serde(rename = "docId")]
     pub doc_id: Option<String>,
@@ -53,10 +53,7 @@ pub fn route_chat_event(app: &AppHandle, text: &str) {
                     // Merged into the payload rather than wrapped around it, so
                     // the frontend keeps one flat shape to read.
                     if let (Some(obj), Some(thread_id)) = (p.as_object_mut(), event.thread_id) {
-                        obj.insert(
-                            "threadId".to_string(),
-                            serde_json::Value::String(thread_id),
-                        );
+                        obj.insert("threadId".to_string(), serde_json::Value::String(thread_id));
                     }
                     let _ = app.emit("chat_reply", p);
                 }
@@ -97,14 +94,14 @@ pub fn route_chat_event(app: &AppHandle, text: &str) {
                     "message": event.message.unwrap_or_else(|| "Unknown chat error".into()),
                     "code": event.code.unwrap_or_else(|| "UNKNOWN".into()),
                 });
-                
+
                 if let Some(thread_id) = event.thread_id {
                     payload["threadId"] = serde_json::Value::String(thread_id);
                 }
                 if let Some(doc_id) = event.doc_id {
                     payload["docId"] = serde_json::Value::String(doc_id);
                 }
-                
+
                 let _ = app.emit("chat_error", payload);
             }
             "Bye" => {

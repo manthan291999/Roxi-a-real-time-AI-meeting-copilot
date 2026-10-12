@@ -61,8 +61,12 @@ impl StreamingSink {
                 .writer
                 .lock()
                 .map_err(|_| anyhow::anyhow!("Audio writer mutex poisoned"))?;
-            guard.write_all(&header).context("Failed to write chunk header")?;
-            guard.write_all(&payload).context("Failed to write chunk payload")?;
+            guard
+                .write_all(&header)
+                .context("Failed to write chunk header")?;
+            guard
+                .write_all(&payload)
+                .context("Failed to write chunk payload")?;
             guard.flush().context("Failed to flush writer")?;
         }
 
@@ -70,7 +74,11 @@ impl StreamingSink {
         // Every 100 chunks — still one line per 10s of audio, now that a chunk
         // is 100ms rather than 250ms.
         if count % 100 == 0 {
-            debug!("Streaming: {} chunks sent ({:.1}s of audio)", count, count as f64 * CHUNK_MS as f64 / 1000.0);
+            debug!(
+                "Streaming: {} chunks sent ({:.1}s of audio)",
+                count,
+                count as f64 * CHUNK_MS as f64 / 1000.0
+            );
         }
         Ok(())
     }
@@ -91,7 +99,10 @@ impl PcmSink for StreamingSink {
     fn finalize(&mut self) -> Result<()> {
         if !self.buffer.is_empty() {
             let mut remaining: Vec<i16> = self.buffer.drain(..).collect();
-            warn!("Streaming: flushing final short chunk ({} samples)", remaining.len());
+            warn!(
+                "Streaming: flushing final short chunk ({} samples)",
+                remaining.len()
+            );
             // Pad to the provider's 50ms floor rather than sending a chunk it
             // would reject outright with `Input Duration Error`. Silence is the
             // right filler: this is the tail of the meeting, and the padding is
@@ -103,7 +114,12 @@ impl PcmSink for StreamingSink {
         }
 
         let total_chunks = self.chunks_sent.load(Ordering::Relaxed);
-        info!("Streaming: session complete. {} chunks sent, {} total samples ({:.2}s)", total_chunks, self.total_samples, self.total_samples as f64 / 16000.0);
+        info!(
+            "Streaming: session complete. {} chunks sent, {} total samples ({:.2}s)",
+            total_chunks,
+            self.total_samples,
+            self.total_samples as f64 / 16000.0
+        );
         Ok(())
     }
 }

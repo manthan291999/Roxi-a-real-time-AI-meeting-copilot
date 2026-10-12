@@ -6,3 +6,6 @@ export { SpeakerRepository } from './SpeakerRepository';
 export { TauriProjectRepository } from './TauriProjectRepository';
 export { TauriDocumentService } from './TauriDocumentService';
 export { TauriUsageRepository } from './TauriUsageRepository';
+export { TauriAccountService } from './TauriAccountService';
+export { TauriFederatedSignInService } from './TauriFederatedSignInService';
+export { TauriBillingService } from './TauriBillingService';

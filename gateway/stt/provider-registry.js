@@ -17,9 +17,13 @@ const { policyFor } = require('../infrastructure/retry.js');
 
 const REGISTRY = Object.freeze({
   assemblyai: Object.freeze({
-    credential: (sttConfig) => sttConfig.assemblyaiKey,
-    create: (key, sttConfig, meetingConfig) =>
-      new AssemblyAIProvider(key, sttConfig.languages, {
+    credential: (sttConfig) => sttConfig.assemblyaiToken
+      ? { kind: 'token', value: sttConfig.assemblyaiToken }
+      : sttConfig.assemblyaiKey
+        ? { kind: 'apiKey', value: sttConfig.assemblyaiKey }
+        : null,
+    create: (credential, sttConfig, meetingConfig) =>
+      new AssemblyAIProvider(credential, sttConfig.languages, {
         minTurnSilence: sttConfig.minTurnSilence,
         maxTurnSilence: sttConfig.maxTurnSilence,
         maxSpeakers: sttConfig.maxSpeakers,
@@ -33,8 +37,10 @@ const REGISTRY = Object.freeze({
       }),
   }),
   speechmatics: Object.freeze({
-    credential: (sttConfig) => sttConfig.speechmaticsKey,
-    create: (key, sttConfig) => new SpeechmaticsProvider(key, sttConfig.languages),
+    credential: (sttConfig) => sttConfig.speechmaticsKey
+      ? { kind: 'apiKey', value: sttConfig.speechmaticsKey }
+      : null,
+    create: (credential, sttConfig) => new SpeechmaticsProvider(credential.value, sttConfig.languages),
   }),
 });
 
